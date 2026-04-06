@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 216 100% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 216 100% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 216 100% 15%;
+
+    /* JetSmart Cyan */
+    --primary: 192 100% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    /* JetSmart Dark Blue */
+    --secondary: 216 100% 22%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 216 20% 92%;
+    --muted-foreground: 216 20% 45%;
+
+    --accent: 192 100% 44%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 80% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 216 20% 88%;
+    --input: 216 20% 88%;
+    --ring: 192 100% 44%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 216 50% 10%;
+    --foreground: 0 0% 98%;
+
+    --card: 216 40% 14%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 216 40% 14%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 192 100% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 216 100% 22%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 216 30% 20%;
+    --muted-foreground: 216 20% 65%;
+
+    --accent: 192 100% 44%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 216 30% 20%;
+    --input: 216 30% 20%;
+    --ring: 192 100% 44%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border) / 1);
+  }
+
+  body {
+    background-color: hsl(var(--background) / 1);
+    color: hsl(var(--foreground) / 1);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
