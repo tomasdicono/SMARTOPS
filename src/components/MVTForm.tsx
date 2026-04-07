@@ -4,6 +4,7 @@ import { Plus, Trash2, Calculator, CheckCircle2 } from "lucide-react";
 
 interface Props {
     flight: Flight;
+    readOnly?: boolean;
     onSave: (mvtData: Flight["mvtData"]) => void;
 }
 
@@ -65,7 +66,7 @@ const TextInput = ({ label, value, onChange, placeholder = "" }: { label: string
     </div>
 );
 
-export function MVTForm({ flight, onSave }: Props) {
+export function MVTForm({ flight, readOnly, onSave }: Props) {
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(
         flight.mvtData || {
             atd: "",
@@ -128,7 +129,8 @@ export function MVTForm({ flight, onSave }: Props) {
     };
 
     return (
-        <form onSubmit={handleSave} className="space-y-8 pb-8">
+        <form onSubmit={handleSave}>
+          <fieldset disabled={readOnly} className="space-y-8 border-none p-0 m-0 pb-8">
 
             {/* Horarios Básicos */}
             <section className="bg-slate-50/50 p-5 rounded-xl border border-border">
@@ -253,12 +255,15 @@ export function MVTForm({ flight, onSave }: Props) {
                 </div>
             </section>
 
-            <div className="sticky bottom-4 z-10 flex justify-end">
-                <button type="submit" className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg hover:shadow-xl transition-all flex items-center gap-2 hover:-translate-y-0.5 ${flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}>
-                    {flight.mvtData?.atd ? <CheckCircle2 className="w-5 h-5" /> : null}
-                    {flight.mvtData?.atd ? "MVT Enviado / Actualizar" : "Guardar MVT"}
-                </button>
-            </div>
+            {!readOnly && (
+                <div className="sticky bottom-4 z-10 flex justify-end">
+                    <button type="submit" className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg hover:shadow-xl transition-all flex items-center gap-2 hover:-translate-y-0.5 ${flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}>
+                        {flight.mvtData?.atd ? <CheckCircle2 className="w-5 h-5" /> : null}
+                        {flight.mvtData?.atd ? "MVT Enviado / Actualizar" : "Guardar MVT"}
+                    </button>
+                </div>
+            )}
+          </fieldset>
         </form>
     );
 }

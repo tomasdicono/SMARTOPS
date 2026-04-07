@@ -181,8 +181,9 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                     >
                                         <option value="ADMIN">ADMIN</option>
                                         <option value="HCC">HCC</option>
-                                        <option value="SC">SC (Servicios al Cliente)</option>
+                                        <option value="SC">SC (Supervisor de Carga)</option>
                                         <option value="CREW">CREW</option>
+                                        <option value="AJS">AJS (Aeropuertos JetSMART)</option>
                                     </select>
                                 </div>
 
@@ -230,7 +231,8 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                                         <span className={`text-xs font-black px-2.5 py-1 rounded-md shadow-sm uppercase ${u.role === 'ADMIN' ? 'bg-purple-900/50 text-purple-300 border border-purple-700/50' :
                                                             u.role === 'HCC' ? 'bg-cyan-900/50 text-cyan-300 border border-cyan-700/50' :
                                                                 u.role === 'SC' ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50' :
-                                                                    'bg-slate-800 text-slate-300 border border-slate-700'
+                                                                    u.role === 'AJS' ? 'bg-blue-900/50 text-blue-300 border border-blue-700/50' :
+                                                                        'bg-slate-800 text-slate-300 border border-slate-700'
                                                             }`}>
                                                             {u.role}
                                                         </span>

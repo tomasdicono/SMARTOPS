@@ -209,7 +209,7 @@ function App() {
               </button>
             </div>
 
-            {userRole === "ADMIN" && (
+            {(userRole === "ADMIN" || userRole === "AJS") && (
               <button
                 onClick={() => setShowUserManagement(true)}
                 className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-full font-bold shadow-sm transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
@@ -408,7 +408,7 @@ function App() {
         />
       )}
 
-      {showUserManagement && userRole === "ADMIN" && (
+      {showUserManagement && (userRole === "ADMIN" || userRole === "AJS") && (
         <UserManagement onClose={() => setShowUserManagement(false)} />
       )}
     </div>

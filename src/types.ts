@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "HCC" | "SC" | "CREW";
+export type UserRole = "ADMIN" | "HCC" | "SC" | "CREW" | "AJS";
 
 export interface User {
     id: string; // auth uid

@@ -6,10 +6,11 @@ import { Save, AlertCircle, Clock } from "lucide-react";
 
 interface Props {
     flight: Flight;
+    readOnly?: boolean;
     onSave: (hitosData: HitosData) => void;
 }
 
-export function HitosTab({ flight, onSave }: Props) {
+export function HitosTab({ flight, readOnly, onSave }: Props) {
     const [errorMsg, setErrorMsg] = useState("");
     const [data, setData] = useState<HitosData>(flight.hitosData || {
         ganttChartName: "",
@@ -81,7 +82,7 @@ export function HitosTab({ flight, onSave }: Props) {
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50/50 p-6 overflow-y-auto custom-scrollbar">
+        <fieldset disabled={readOnly} className="flex flex-col h-full bg-slate-50/50 p-6 overflow-y-auto custom-scrollbar border-none m-0">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
@@ -187,20 +188,22 @@ export function HitosTab({ flight, onSave }: Props) {
                         })}
                     </div>
 
-                    <div className="pt-6 mt-4 border-t border-slate-100 flex flex-col items-end gap-3">
-                        {errorMsg && (
-                            <div className="text-red-600 font-bold text-sm flex items-center gap-1.5 animate-in slide-in-from-right-2">
-                                <AlertCircle className="w-4 h-4" /> {errorMsg}
-                            </div>
-                        )}
-                        <button
-                            onClick={handleSave}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-xl font-black shadow-md transition-all flex items-center gap-2 hover:-translate-y-0.5"
-                        >
-                            <Save className="w-5 h-5" />
-                            Guardar Hitos
-                        </button>
-                    </div>
+                    {!readOnly && (
+                        <div className="pt-6 mt-4 border-t border-slate-100 flex flex-col items-end gap-3">
+                            {errorMsg && (
+                                <div className="text-red-600 font-bold text-sm flex items-center gap-1.5 animate-in slide-in-from-right-2">
+                                    <AlertCircle className="w-4 h-4" /> {errorMsg}
+                                </div>
+                            )}
+                            <button
+                                onClick={handleSave}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-xl font-black shadow-md transition-all flex items-center gap-2 hover:-translate-y-0.5"
+                            >
+                                <Save className="w-5 h-5" />
+                                Guardar Hitos
+                            </button>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="flex flex-col items-center justify-center flex-1 min-h-0 text-muted-foreground p-8 opacity-60">
@@ -209,6 +212,6 @@ export function HitosTab({ flight, onSave }: Props) {
                     <p className="text-sm">Selecciona una Carta Gantt desde arriba para iniciar el control de hitos.</p>
                 </div>
             )}
-        </div>
+        </fieldset>
     );
 }

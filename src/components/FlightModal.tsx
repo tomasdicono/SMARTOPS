@@ -20,8 +20,9 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
         return userRole === "CREW" ? "CREW" : "MVT";
     });
 
-    const canSeeStandard = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC";
-    const canSeeCrew = userRole === "ADMIN" || userRole === "CREW";
+    const canSeeStandard = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS";
+    const canSeeCrew = userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS";
+    const isReadOnlyView = userRole === "AJS";
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -98,6 +99,7 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                     {activeTab === "MVT" && canSeeStandard && (
                         <MVTForm
                             flight={flight}
+                            readOnly={isReadOnlyView}
                             onSave={(data) => {
                                 onSaveMVT(data);
                             }}
@@ -106,6 +108,7 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                     {activeTab === "HITOS" && canSeeStandard && (
                         <HitosTab
                             flight={flight}
+                            readOnly={isReadOnlyView}
                             onSave={(data) => {
                                 onSaveHitos(data);
                                 onClose();
@@ -115,6 +118,7 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                     {activeTab === "CREW" && canSeeCrew && (
                         <HitosCrewTab
                             flight={flight}
+                            readOnly={isReadOnlyView}
                             onSave={(data) => {
                                 onSaveCrewHitos(data);
                                 onClose();
