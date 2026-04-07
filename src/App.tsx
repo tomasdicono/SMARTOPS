@@ -366,6 +366,30 @@ function App() {
                         </span>
                       </div>
                     </div>
+
+                    {hasMvt && (
+                      <div className="mt-2 pt-2 border-t border-black/10 dark:border-white/10 flex justify-between items-center w-full">
+                         <div className="flex flex-col items-start">
+                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">ATD</span>
+                           <span className="font-bold text-primary dark:text-blue-300">{flight.mvtData?.atd}</span>
+                         </div>
+                         <div className="flex flex-col items-center">
+                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Bags</span>
+                           <span className="font-bold text-slate-700 dark:text-slate-300">{flight.mvtData?.totalBags || "0"}</span>
+                         </div>
+                         <div className="flex flex-col items-end">
+                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Demoras</span>
+                           {flight.mvtData?.dlyCod1 ? (
+                              <div className="flex gap-1">
+                                <span className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded text-xs font-bold">{flight.mvtData.dlyCod1}</span>
+                                {flight.mvtData?.dlyCod2 && <span className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded text-xs font-bold">{flight.mvtData.dlyCod2}</span>}
+                              </div>
+                           ) : (
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs mr-1">- Ninguna -</span>
+                           )}
+                         </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Disclaimers */}
