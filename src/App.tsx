@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { normalizeUserRole, type Flight, type User, type HitosData } from "./types";
+import { useState, useEffect, useMemo } from "react";
+import { normalizeUserRole, type Flight, type User, type HitosData, type PernocteRowState } from "./types";
 import { formatDelayLine, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
@@ -8,7 +8,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb, getHitosDepartureTime } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get } from "firebase/database";
@@ -20,10 +20,12 @@ import { CancelFlightModal } from "./components/CancelFlightModal";
 import { DailyReportView } from "./components/DailyReportView";
 import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
+import { PernocteView } from "./components/PernocteView";
+import { computePernocteRegistrations, coercePernocteRow } from "./lib/pernocteHelpers";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [mainTab, setMainTab] = useState<"tablero" | "control" | "reporte">("tablero");
+  const [mainTab, setMainTab] = useState<"tablero" | "control" | "reporte" | "pernocte">("tablero");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
@@ -32,6 +34,8 @@ function App() {
   const [showOpsMenu, setShowOpsMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  /** pernocte[YYYY-MM-DD][matrícula] */
+  const [pernocteData, setPernocteData] = useState<Record<string, Record<string, PernocteRowState>>>({});
 
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -90,6 +94,27 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const pernocteRef = ref(db, "pernocte");
+    const unsub = onValue(pernocteRef, (snapshot) => {
+      const v = snapshot.val();
+      if (!v || typeof v !== "object") {
+        setPernocteData({});
+        return;
+      }
+      const out: Record<string, Record<string, PernocteRowState>> = {};
+      for (const [dateKey, regs] of Object.entries(v as Record<string, unknown>)) {
+        if (!regs || typeof regs !== "object") continue;
+        out[dateKey] = {};
+        for (const [regKey, row] of Object.entries(regs as Record<string, unknown>)) {
+          out[dateKey][regKey] = coercePernocteRow(row);
+        }
+      }
+      setPernocteData(out);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
     if (!selectedDate) {
       const today = new Date();
       const yyyy = today.getFullYear();
@@ -99,10 +124,10 @@ function App() {
     }
   }, [selectedDate]);
 
-  // Also set an interval to refresh the colors every minute
-  const [, setTick] = useState(0);
+  // Intervalo para refrescar tarjetas (retrasos) y lista de pernocte el día actual
+  const [timeTick, setTimeTick] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setTick((t) => t + 1), 60000);
+    const timer = setInterval(() => setTimeTick((t) => t + 1), 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -209,6 +234,21 @@ function App() {
     const arrU = String(f.arr ?? "").toUpperCase();
     return fltU.includes(sq) || depU.includes(sq) || arrU.includes(sq);
   });
+
+  const pernocteRegistrations = useMemo(
+    () => (selectedDate ? computePernocteRegistrations(flights, selectedDate) : []),
+    [flights, selectedDate, timeTick]
+  );
+
+  const handlePernoctePatch = (reg: string, patch: Partial<PernocteRowState>) => {
+    if (!selectedDate) return;
+    const prev = coercePernocteRow(pernocteData[selectedDate]?.[reg]);
+    const next: PernocteRowState = { ...prev, ...patch };
+    if (patch.precargaQ !== undefined) {
+      next.precargaQ = String(patch.precargaQ).replace(/\D/g, "");
+    }
+    set(ref(db, `pernocte/${selectedDate}/${reg}`), next);
+  };
 
   if (loadingAuth) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-12 h-12 text-cyan-400 animate-spin" /></div>;
@@ -353,6 +393,18 @@ function App() {
               <FileBarChart2 className="w-4 h-4 shrink-0" />
               Reporte Diario
             </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("pernocte")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "pernocte"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Moon className="w-4 h-4 shrink-0" />
+              Pernocte
+            </button>
           </div>
         )}
 
@@ -362,6 +414,8 @@ function App() {
               <>Control operacional</>
             ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
               <>Reporte Diario</>
+            ) : mainTab === "pernocte" && (userRole === "HCC" || userRole === "AJS") ? (
+              <>Pernocte</>
             ) : (
               <>
                 Vuelos
@@ -383,6 +437,13 @@ function App() {
             onUpdateDailyReportObs={handleUpdateDailyReportObs}
             canEditObs={userRole === "HCC" || userRole === "AJS"}
             reportUserName={currentUser?.name ?? ""}
+          />
+        ) : mainTab === "pernocte" && (userRole === "HCC" || userRole === "AJS") ? (
+          <PernocteView
+            selectedDate={selectedDate}
+            registrations={pernocteRegistrations}
+            pernocteByReg={pernocteData[selectedDate] ?? {}}
+            onPatchRow={handlePernoctePatch}
           />
         ) : filteredFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">

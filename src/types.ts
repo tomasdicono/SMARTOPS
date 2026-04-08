@@ -81,3 +81,10 @@ export interface Flight {
     /** Notas libres en Reporte Diario (HCC / AJS). */
     dailyReportObs?: string;
 }
+
+/** Estado por matrícula en pestaña Pernocte (Firebase: pernocte/{fecha}/{matrícula}) */
+export interface PernocteRowState {
+    limpieza: boolean;
+    precargaQ: string;
+    precarga: boolean;
+}
