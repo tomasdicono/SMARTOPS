@@ -14,9 +14,11 @@ import {
     uniqueAirportsFromFlights,
     flightDaySegments,
     clipSegmentToWindow,
-    isFlightLateDeparture,
+    isFlightDemoradoStatusDia,
     hasMvtPaxEntered,
     isAffectedByDelayOrReprogramming,
+    hasMvtAtdForOtp,
+    otpDelayMinutesVsStd,
     rankStringsByFrequency,
 } from "../lib/controlHelpers";
 import {
@@ -33,6 +35,7 @@ import {
     Ban,
     Activity,
     ListOrdered,
+    Target,
 } from "lucide-react";
 
 interface Props {
@@ -175,7 +178,7 @@ export function ControlView({ flights, selectedDate }: Props) {
         const cancelled = dayFlights.filter((f) => f.cancelled);
         const paxTransportadosMvt = operational.reduce((s, f) => s + getMvtPaxOnly(f), 0);
         const hayPaxMvt = operational.some((f) => hasMvtPaxEntered(f));
-        const demorados = operational.filter((f) => isFlightLateDeparture(f));
+        const demorados = operational.filter((f) => isFlightDemoradoStatusDia(f));
         const afectadosDemoras = operational.filter((f) => isAffectedByDelayOrReprogramming(f));
         const paxAfectadosProgramados = afectadosDemoras.reduce((s, f) => s + getScheduledPax(f), 0);
         const reprogramados = dayFlights.filter((f) => f.etd?.trim() || f.rescheduleReason?.trim());
@@ -200,6 +203,20 @@ export function ControlView({ flights, selectedDate }: Props) {
         );
 
         const paxCancelados = cancelled.reduce((s, f) => s + getScheduledPax(f), 0);
+
+        const conMvtOtp = operational.filter((f) => hasMvtAtdForOtp(f));
+        const nMvtOtp = conMvtOtp.length;
+        let otp0Count = 0;
+        let otp15Count = 0;
+        for (const f of conMvtOtp) {
+            const d = otpDelayMinutesVsStd(f);
+            if (d == null) continue;
+            if (d <= 0) otp0Count += 1;
+            else if (d >= 1 && d <= 14) otp15Count += 1;
+        }
+        const otp0Pct = nMvtOtp > 0 ? (otp0Count / nMvtOtp) * 100 : null;
+        const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;
+
         return {
             paxTransportadosMvt,
             hayPaxMvt,
@@ -211,6 +228,9 @@ export function ControlView({ flights, selectedDate }: Props) {
             motivosCancelacionDetalle,
             paxCancelados,
             totalVuelosDia: dayFlights.length,
+            nMvtOtp,
+            otp0Pct,
+            otp15Pct,
         };
     }, [dayFlights]);
 
@@ -538,6 +558,61 @@ export function ControlView({ flights, selectedDate }: Props) {
                         <span className="tabular-nums">{statusDia.totalVuelosDia}</span> vuelo{statusDia.totalVuelosDia !== 1 ? "s" : ""} en calendario
                     </p>
 
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-slate-700">
+                            <Target className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <h4 className="text-sm font-black uppercase tracking-wide">OTP · MVT con ATD</h4>
+                        </div>
+                        <p className="text-xs text-slate-600 font-semibold -mt-1">
+                            Porcentajes sobre vuelos no cancelados con MVT cargado y hora de salida (ATD). Referencia:{" "}
+                            <span className="font-black text-slate-800">STD</span> de programación.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
+                                <p className="text-xs font-black uppercase text-emerald-900 tracking-wide flex items-center gap-2">
+                                    <Percent className="w-4 h-4" />
+                                    OTP 0
+                                </p>
+                                {statusDia.nMvtOtp > 0 && statusDia.otp0Pct != null ? (
+                                    <>
+                                        <p className="text-3xl font-black text-emerald-950 mt-2 tabular-nums">
+                                            {statusDia.otp0Pct.toFixed(1)}%
+                                        </p>
+                                        <p className="text-[11px] text-emerald-900/85 mt-1 font-semibold">
+                                            A horario o antes del STD (ATD ≤ STD)
+                                        </p>
+                                        <p className="text-[10px] text-emerald-800/80 mt-1 font-bold tabular-nums">
+                                            {statusDia.nMvtOtp} MVT con ATD
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin MVT con ATD este día.</p>
+                                )}
+                            </div>
+                            <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm">
+                                <p className="text-xs font-black uppercase text-teal-900 tracking-wide flex items-center gap-2">
+                                    <Percent className="w-4 h-4" />
+                                    OTP 15
+                                </p>
+                                {statusDia.nMvtOtp > 0 && statusDia.otp15Pct != null ? (
+                                    <>
+                                        <p className="text-3xl font-black text-teal-950 mt-2 tabular-nums">
+                                            {statusDia.otp15Pct.toFixed(1)}%
+                                        </p>
+                                        <p className="text-[11px] text-teal-900/85 mt-1 font-semibold">
+                                            Demora de 1 a 14 min respecto del STD
+                                        </p>
+                                        <p className="text-[10px] text-teal-800/80 mt-1 font-bold tabular-nums">
+                                            {statusDia.nMvtOtp} MVT con ATD
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin MVT con ATD este día.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {statusDia.hayPaxMvt ? (
                             <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
@@ -558,7 +633,7 @@ export function ControlView({ flights, selectedDate }: Props) {
                             </p>
                             <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">{statusDia.countDemorados}</p>
                             <p className="text-[11px] text-amber-900/80 mt-1 font-semibold">
-                                ATD posterior al ETD (si hay) o al STD · MVT con hora de salida real
+                                Con ETD cargado, o sin ETD y ATD posterior al STD
                             </p>
                         </div>
                         <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">

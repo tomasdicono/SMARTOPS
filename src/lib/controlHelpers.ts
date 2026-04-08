@@ -1,6 +1,5 @@
 import type { Flight } from "../types";
 import { getAircraftInfo } from "./fleetData";
-import { getHitosDepartureTime } from "./flightHelpers";
 import { parseTimeToMinutes } from "./mvtTime";
 
 /** Convierte fecha de vuelo (DD-MM-YYYY o YYYY-MM-DD) a ISO YYYY-MM-DD */
@@ -146,16 +145,15 @@ export function clipSegmentToWindow(
 }
 
 /**
- * Salida real posterior a la referencia operativa (ETD si hay reprogramación, si no STD).
- * Así el contador de demorados coincide con la reprogramación y no queda en 0 cuando el ATD
- * es tarde respecto al ETD pero no respecto al STD de programación.
+ * Status día: vuelo demorado si tiene ETD (reprogramación) o si el ATD es posterior al STD.
+ * Si hay ETD cargado, cuenta como demorado aunque no exista ATD en MVT.
  */
-export function isFlightLateDeparture(f: Flight): boolean {
+export function isFlightDemoradoStatusDia(f: Flight): boolean {
     if (f.cancelled) return false;
+    if (f.etd?.trim()) return true;
     const atd = f.mvtData?.atd;
     if (!atd || String(atd).replace(/\D/g, "").length < 2) return false;
-    const ref = getHitosDepartureTime(f);
-    return parseTimeToMinutes(atd) > parseTimeToMinutes(ref);
+    return parseTimeToMinutes(atd) > parseTimeToMinutes(f.std);
 }
 
 /** Demora operativa registrada en MVT (código + tiempo). */
@@ -170,6 +168,23 @@ export function hasRecordedMvtDelay(f: Flight): boolean {
 /** Hay PAX declarado en el MVT (casilla PAX actual). */
 export function hasMvtPaxEntered(f: Flight): boolean {
     return (f.mvtData?.paxActual ?? "").trim() !== "";
+}
+
+/** MVT con ATD cargado (suficiente para medir OTP). Denominador “MVT enviados”. */
+export function hasMvtAtdForOtp(f: Flight): boolean {
+    if (f.cancelled) return false;
+    const atd = f.mvtData?.atd;
+    return !!atd && String(atd).replace(/\D/g, "").length >= 3;
+}
+
+/**
+ * Minutos de diferencia ATD − STD (programación). Negativo = salida antes del STD.
+ * OTP del Status día usa siempre el STD, no el ETD.
+ */
+export function otpDelayMinutesVsStd(f: Flight): number | null {
+    if (!hasMvtAtdForOtp(f)) return null;
+    const atd = f.mvtData!.atd!;
+    return parseTimeToMinutes(atd) - parseTimeToMinutes(f.std);
 }
 
 /**
