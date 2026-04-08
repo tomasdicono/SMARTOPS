@@ -18,13 +18,14 @@ interface Props {
     onPatchRow: (reg: string, patch: Partial<PernocteRowState>) => void;
 }
 
-function avionListoLabel(limpieza: boolean, precarga: boolean): { ok: boolean; text: string } {
-    if (limpieza && precarga) return { ok: true, text: "Sí" };
-    const missL = !limpieza;
-    const missP = !precarga;
-    if (missL && missP) return { ok: false, text: "Pendiente Limpieza/Precarga" };
-    if (missL) return { ok: false, text: "Pendiente Limpieza" };
-    return { ok: false, text: "Pendiente Precarga" };
+type AvionListoVariant = "ok" | "partial" | "pending";
+
+function avionListoLabel(limpieza: boolean, precarga: boolean): { variant: AvionListoVariant; text: string } {
+    if (limpieza && precarga) return { variant: "ok", text: "Sí" };
+    if (!limpieza && !precarga) return { variant: "pending", text: "Pendiente Limpieza/Precarga" };
+    /** Solo una de las dos: aviso en amarillo */
+    if (!limpieza) return { variant: "partial", text: "Pendiente Limpieza" };
+    return { variant: "partial", text: "Pendiente Precarga" };
 }
 
 export function PernocteView({
@@ -152,8 +153,12 @@ export function PernocteView({
                                             />
                                         </td>
                                         <td className="px-4 py-3">
-                                            {status.ok ? (
+                                            {status.variant === "ok" ? (
                                                 <span className="inline-flex items-center justify-center rounded-lg border border-emerald-400 bg-emerald-100 px-3 py-1.5 text-sm font-black text-emerald-900">
+                                                    {status.text}
+                                                </span>
+                                            ) : status.variant === "partial" ? (
+                                                <span className="inline-flex items-center justify-center rounded-lg border border-amber-400 bg-amber-100 px-3 py-1.5 text-sm font-black text-amber-950">
                                                     {status.text}
                                                 </span>
                                             ) : (
