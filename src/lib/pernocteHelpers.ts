@@ -1,16 +1,18 @@
 import type { Flight } from "../types";
 import { flightDateToIso } from "./controlHelpers";
-import { getHitosDepartureTime } from "./flightHelpers";
+import { getHitosDepartureTime, isJesFlightNumber } from "./flightHelpers";
 import { parseTimeToMinutes } from "./mvtTime";
 import type { PernocteRowState } from "../types";
 
 /**
- * Matrículas que operaron en la fecha y ya no tienen más sectores programados ese día
- * (última salida anterior al instante actual si la fecha es hoy; todo el día si la fecha es pasada).
- * Fechas futuras: ninguna.
+ * Matrículas del **último vuelo JES** (número 3000–3999) de cada avión en la fecha.
+ * Solo se consideran vuelos JES; por matrícula se usa la última salida JES del día.
+ * Entran si esa última salida JES ya “cerró” el día (fecha pasada, o hoy con hora ≤ ahora).
  */
 export function computePernocteRegistrations(flights: Flight[], selectedIso: string): string[] {
-    const dayFlights = flights.filter((f) => !f.cancelled && flightDateToIso(f) === selectedIso);
+    const dayFlights = flights.filter(
+        (f) => !f.cancelled && flightDateToIso(f) === selectedIso && isJesFlightNumber(f.flt)
+    );
     const byReg = new Map<string, Flight[]>();
     for (const f of dayFlights) {
         const r = String(f.reg ?? "").trim();

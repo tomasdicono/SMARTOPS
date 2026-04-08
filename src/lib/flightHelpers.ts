@@ -107,6 +107,15 @@ export function getAirlinePrefix(flt: string | number): string {
     return "JES"; // Default fallback if outside these ranges
 }
 
+/** Solo números de vuelo JES estrictos (3000–3999). No incluye el fallback genérico de `getAirlinePrefix`. */
+export function isJesFlightNumber(flt: string | number): boolean {
+    const s = String(flt ?? "");
+    const match = s.match(/\d+/);
+    if (!match) return false;
+    const num = parseInt(match[0], 10);
+    return num >= 3000 && num <= 3999;
+}
+
 export const UTC_OFFSETS: Record<string, number> = {
     // Argentina (Add 3)
     AEP: 3, EZE: 3, COR: 3, MDZ: 3, BRC: 3, IGR: 3, SLA: 3, NQN: 3, FTE: 3, USH: 3, TUC: 3, CNQ: 3, PSS: 3, VDM: 3, LUQ: 3, RGL: 3, CRD: 3, JUJ: 3, RVD: 3,

@@ -26,17 +26,18 @@ export function PernocteView({ selectedDate, registrations, pernocteByReg, onPat
                 <div>
                     <p className="text-lg font-black uppercase tracking-wide text-slate-900">Pernocte</p>
                     <p className="text-sm font-semibold text-slate-600 max-w-3xl">
-                        Matrículas que ya volaron y no tienen más salidas programadas el{" "}
-                        <span className="font-black text-slate-900 tabular-nums">{selectedDate}</span>. Fechas pasadas:
-                        todas las que operaron; hoy: desde la última salida de cada avión hasta ahora.
+                        Solo vuelos <span className="font-black text-slate-800">JES</span> (números 3000–3999). Por cada
+                        matrícula se toma el <span className="font-black text-slate-800">último JES</span> del{" "}
+                        <span className="font-black text-slate-900 tabular-nums">{selectedDate}</span>; la lista aplica
+                        cuando esa salida ya cerró (fechas pasadas: todas; hoy: hora actual ≥ salida del último JES).
                     </p>
                 </div>
             </div>
 
             {registrations.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-12 text-center text-slate-600 font-semibold">
-                    No hay matrículas en pernocte para esta fecha (o el día aún no cerró operaciones para las colas
-                    restantes).
+                    No hay matrículas en pernocte para esta fecha: sin vuelos JES cargados, o el último JES de cada cola
+                    aún no alcanzó la hora de cierre.
                 </div>
             ) : (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-md ring-1 ring-slate-200/80">
