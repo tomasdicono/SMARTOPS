@@ -60,7 +60,8 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
     const selectedChart = GANTT_CHARTS.find(c => c.name === data.ganttChartName);
     const is1stWave = selectedChart?.name.includes("1ST WAVE") || false;
 
-    let refMinutes = parseToMins(flight.std.replace(":", ""));
+    const stdSafe = String(flight.std ?? "");
+    let refMinutes = parseToMins(stdSafe.replace(":", ""));
     let etdMinutes: number | null = null;
 
     if (selectedChart && !is1stWave && data.ata.length >= 3) {
@@ -143,9 +144,9 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
                     <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-sm">
                         <div>
                             <span className="text-muted-foreground font-bold mr-2">Referencia Base:</span>
-                            <span className="font-mono bg-primary/10 text-primary px-2 py-1 rounded font-bold">{flight.std} STD</span>
+                            <span className="font-mono bg-primary/10 text-primary px-2 py-1 rounded font-bold">{stdSafe || "—"} STD</span>
                         </div>
-                        {etdMinutes !== null && etdMinutes > parseToMins(flight.std.replace(":", "")) && (
+                        {etdMinutes !== null && etdMinutes > parseToMins(stdSafe.replace(":", "")) && (
                             <div className="flex items-center gap-1.5 text-orange-600 font-bold bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200">
                                 <AlertCircle className="w-4 h-4" />
                                 ETD Ajustado: {formatMins(etdMinutes)} LT

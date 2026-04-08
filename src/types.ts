@@ -1,5 +1,14 @@
 export type UserRole = "ADMIN" | "HCC" | "SC" | "CREW" | "AJS";
 
+/** Alinea roles guardados en Firebase (p. ej. typo ASJ) para que el modal no quede sin pestañas */
+export function normalizeUserRole(role: unknown): UserRole {
+    if (role == null || role === "") return "CREW";
+    let u = String(role).trim().toUpperCase();
+    if (u === "ASJ") u = "AJS";
+    const allowed: UserRole[] = ["ADMIN", "HCC", "SC", "CREW", "AJS"];
+    return (allowed.includes(u as UserRole) ? u : "CREW") as UserRole;
+}
+
 export interface User {
     id: string; // auth uid
     email: string;

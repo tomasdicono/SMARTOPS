@@ -27,6 +27,7 @@ rawData.forEach(([reg, model]) => {
     FLEET_DATA[reg] = { registration: reg, model, capacity };
 });
 
-export const getAircraftInfo = (reg: string): Aircraft | null => {
-    return FLEET_DATA[reg.toUpperCase()] || null;
+export const getAircraftInfo = (reg: string | undefined | null): Aircraft | null => {
+    if (reg == null || String(reg).trim() === "") return null;
+    return FLEET_DATA[String(reg).toUpperCase()] || null;
 };

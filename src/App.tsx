@@ -1,21 +1,25 @@
 import { useState, useEffect } from "react";
-import type { Flight, User, HitosData } from "./types";
-import { formatDelayLine } from "./lib/mvtTime";
+import { normalizeUserRole, type Flight, type User, type HitosData } from "./types";
+import { formatDelayLine, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
 import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
-import { getAirlinePrefix } from "./lib/flightHelpers";
+import { getAirlinePrefix, coerceFlightFromDb } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2 } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download } from "lucide-react";
+import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get } from "firebase/database";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
 import { UserManagement } from "./components/UserManagement";
+import { ControlView } from "./components/ControlView";
+
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [mainTab, setMainTab] = useState<"tablero" | "control">("tablero");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [showParser, setShowParser] = useState(false);
   const [showOpsMenu, setShowOpsMenu] = useState(false);
@@ -27,7 +31,7 @@ function App() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [showUserManagement, setShowUserManagement] = useState(false);
 
-  const userRole = currentUser?.role || "CREW";
+  const userRole = normalizeUserRole(currentUser?.role);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -40,7 +44,8 @@ function App() {
         const userRef = ref(db, `users/${user.uid}`);
         const snapshot = await get(userRef);
         if (snapshot.exists()) {
-          setCurrentUser(snapshot.val() as User);
+          const raw = snapshot.val() as User;
+          setCurrentUser({ ...raw, role: normalizeUserRole(raw.role) });
         } else {
           setCurrentUser(null);
           await signOut(auth);
@@ -61,7 +66,7 @@ function App() {
       const data = snapshot.val();
       if (data) {
         const flightsArray = Array.isArray(data) ? data : Object.values(data);
-        const validFlights = flightsArray.filter(Boolean) as Flight[];
+        const validFlights = (flightsArray.filter(Boolean) as Flight[]).map(coerceFlightFromDb);
         setFlights(validFlights);
 
         // Assure modal stays linked to the latest realtime database version
@@ -95,7 +100,8 @@ function App() {
   }, []);
 
   const handleLoadFlights = (newFlights: Flight[]) => {
-    const updatedFlights = [...flights, ...newFlights];
+    const normalized = newFlights.map(coerceFlightFromDb);
+    const updatedFlights = [...flights, ...normalized];
     set(ref(db, 'flights'), updatedFlights);
     setShowParser(false);
   };
@@ -134,9 +140,10 @@ function App() {
   };
 
   const filteredFlights = flights.filter(f => {
-    let flightIso = f.date;
-    if (f.date && f.date.includes("-")) {
-      const [d, m, y] = f.date.split("-");
+    const dateRaw = String(f.date ?? "");
+    let flightIso = dateRaw;
+    if (dateRaw && dateRaw.includes("-")) {
+      const [d, m, y] = dateRaw.split("-");
       if (y && y.length === 4) {
         flightIso = `${y}-${m}-${d}`;
       }
@@ -144,8 +151,11 @@ function App() {
 
     const matchesDate = selectedDate ? flightIso === selectedDate : true;
     const sq = searchQuery.toUpperCase();
+    const fltU = String(f.flt ?? "").toUpperCase();
+    const depU = String(f.dep ?? "").toUpperCase();
+    const arrU = String(f.arr ?? "").toUpperCase();
     const matchesSearch = sq
-      ? f.flt.includes(sq) || f.dep.includes(sq) || f.arr.includes(sq)
+      ? fltU.includes(sq) || depU.includes(sq) || arrU.includes(sq)
       : true;
     return matchesDate && matchesSearch;
   });
@@ -175,6 +185,7 @@ function App() {
 
         <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">
           {/* Search Bar */}
+          {mainTab === "tablero" && (
           <div className="flex flex-1 md:flex-initial min-w-[140px] items-center gap-2 bg-slate-800 px-3 py-2 rounded-full border border-slate-700 shadow-inner">
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
@@ -185,6 +196,7 @@ function App() {
               className="bg-transparent text-sm font-semibold text-white focus:outline-none placeholder:text-slate-500 w-full md:w-32 focus:w-full md:focus:w-48 transition-all min-w-0"
             />
           </div>
+          )}
 
           {/* Date Picker */}
           <div className="flex shrink-0 items-center gap-2 bg-slate-800 px-3 py-2 rounded-full border border-slate-700 shadow-inner">
@@ -243,16 +255,51 @@ function App() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-4 sm:px-6">
+        {(userRole === "HCC" || userRole === "AJS") && (
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setMainTab("tablero")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "tablero"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Vuelos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("control")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "control"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Tablero Control
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-black text-secondary dark:text-gray-100 flex items-center gap-3">
-            Tablero de Vuelos
-            <span className="text-sm font-bold text-secondary-foreground bg-primary px-3 py-1 rounded-full shadow-sm">
-              {filteredFlights.length}
-            </span>
+          <h2 className="text-3xl font-black text-secondary flex items-center gap-3">
+            {mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
+              <>Control operacional</>
+            ) : (
+              <>
+                Vuelos
+                <span className="text-sm font-bold text-secondary-foreground bg-primary px-3 py-1 rounded-full shadow-sm">
+                  {filteredFlights.length}
+                </span>
+              </>
+            )}
           </h2>
         </div>
 
-        {filteredFlights.length === 0 ? (
+        {mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
+          <ControlView flights={flights} selectedDate={selectedDate} />
+        ) : filteredFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-6">
               <PlaneTakeoff className="w-16 h-16 text-primary/60" />
@@ -263,12 +310,14 @@ function App() {
             <p className="text-md max-w-md mx-auto">
               Usa el botón "Cargar" en la parte superior para pegar la programación de la jornada.
             </p>
+            {(userRole === "ADMIN" || userRole === "HCC") && (
             <button
               onClick={() => setShowParser(true)}
               className="mt-8 bg-primary/10 text-primary px-6 py-2 rounded-full font-bold shadow hover:bg-primary/20 transition-colors"
             >
               Empezar ahora
             </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -312,6 +361,20 @@ function App() {
                   onClick={() => setSelectedFlight(flight)}
                   className={`relative border-2 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1.5 ${cardBg}`}
                 >
+                  {userRole === "AJS" && hasMvt && hasHitos && (
+                    <button
+                      type="button"
+                      title="Descargar informe HTML de hitos (operacionales y tripulación)"
+                      aria-label="Descargar informe HTML de hitos operacionales y de tripulación"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadHitosSummary(flight);
+                      }}
+                      className="absolute top-2 right-2 z-20 inline-flex items-center justify-center rounded-xl border-2 border-emerald-600/40 bg-white/95 p-2 text-emerald-800 shadow-md hover:bg-emerald-50 hover:border-emerald-500 transition-colors"
+                    >
+                      <Download className="w-4 h-4 shrink-0" aria-hidden />
+                    </button>
+                  )}
                   <div className="flex justify-between items-start mb-4">
                     <span className={`text-4xl font-black tracking-tighter flex items-baseline gap-1 ${isLate ? "text-red-700 dark:text-red-100" : "text-secondary dark:text-primary"}`}>
                       <span className="text-lg font-bold opacity-70 tracking-normal text-slate-500 dark:text-slate-400">{getAirlinePrefix(flight.flt)}</span>
@@ -372,7 +435,9 @@ function App() {
                       <div className="mt-2 pt-2 border-t border-black/10 dark:border-white/10 flex justify-between items-center w-full">
                          <div className="flex flex-col items-start">
                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">ATD</span>
-                           <span className="font-bold text-primary dark:text-blue-300">{flight.mvtData?.atd}</span>
+                           <span className="font-bold text-primary dark:text-blue-300 tabular-nums">
+                             {formatMinutesToHHMM(parseTimeToMinutes(flight.mvtData?.atd))}
+                           </span>
                          </div>
                          <div className="flex flex-col items-center">
                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Bags</span>

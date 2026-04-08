@@ -16,30 +16,82 @@ const getClosestHourTime = (dateStr: string, timeStr: string) => {
 };
 
 // Application memory cache to avoid unnecessary calls to the API when switching tabs/render trees.
-const cache: Record<string, any> = {};
+const cache: Record<string, unknown> = {};
+/** Same key in flight → share one network request (many cards, one airport/day). */
+const inflight = new Map<string, Promise<unknown>>();
+
+/** Space out requests so Open-Meteo is not hit with dozens of parallel calls (429 + misleading CORS errors). */
+let fetchChain: Promise<void> = Promise.resolve();
+const MIN_MS_BETWEEN_REQUESTS = 450;
+
+function enqueueWeatherFetch<T>(run: () => Promise<T>): Promise<T> {
+    const next = fetchChain.then(() => new Promise<T>((resolve, reject) => {
+        setTimeout(() => {
+            run().then(resolve, reject);
+        }, MIN_MS_BETWEEN_REQUESTS);
+    }));
+    fetchChain = next.then(
+        () => undefined,
+        () => undefined
+    );
+    return next;
+}
+
+async function fetchForecastJson(lat: number, lon: number, isoDate: string): Promise<unknown> {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=weather_code,visibility,wind_speed_10m,wind_gusts_10m&timezone=auto&start_date=${isoDate}&end_date=${isoDate}`;
+
+    const attempt = async (): Promise<Response> => {
+        return enqueueWeatherFetch(() => fetch(url));
+    };
+
+    let res = await attempt();
+    // 429: rate limited — wait and retry once (server may omit CORS headers on errors, so the browser shows CORS).
+    if (res.status === 429) {
+        const retryAfter = Number(res.headers.get("retry-after"));
+        const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 5000;
+        await new Promise((r) => setTimeout(r, waitMs));
+        res = await attempt();
+    }
+
+    if (!res.ok) {
+        throw new Error(`Weather API ${res.status}`);
+    }
+    return res.json();
+}
 
 export async function fetchWeatherAlert(iata: string, date: string, time: string): Promise<WeatherAlert> {
     const coords = getAirportCoords(iata);
     if (!coords) return { hasAlert: false, messages: [] };
 
     const isoDate = parseDate(date);
-    const cacheKey = `${iata}-${isoDate}`;
+    const cacheKey = `${iata.toUpperCase()}-${isoDate}`;
 
-    let data = cache[cacheKey];
+    let data = cache[cacheKey] as { hourly?: { time?: string[] } } | undefined;
 
     if (!data) {
-        try {
-            // Fetch exact day using open-meteo hourly endpoints
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&hourly=weather_code,visibility,wind_speed_10m,wind_gusts_10m&timezone=auto&start_date=${isoDate}&end_date=${isoDate}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error("API Error");
-            data = await res.json();
-            cache[cacheKey] = data;
-        } catch (e) {
-            console.error("Weather API error", e);
-            return { hasAlert: false, messages: [] };
+        const existing = inflight.get(cacheKey);
+        if (existing) {
+            data = (await existing) as typeof data;
+        } else {
+            const p = (async () => {
+                try {
+                    return await fetchForecastJson(coords.lat, coords.lon, isoDate);
+                } catch {
+                    return null;
+                }
+            })();
+            inflight.set(cacheKey, p);
+            try {
+                const json = await p;
+                if (json) cache[cacheKey] = json;
+                data = json as typeof data;
+            } finally {
+                inflight.delete(cacheKey);
+            }
         }
     }
+
+    if (!data) return { hasAlert: false, messages: [] };
 
     if (!data.hourly || !data.hourly.time) return { hasAlert: false, messages: [] };
 

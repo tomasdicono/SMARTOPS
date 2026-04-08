@@ -2,11 +2,59 @@ import { useState, useMemo } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2 } from "lucide-react";
 import { parseTimeToMinutes, formatMinutesToHHMM } from "../lib/mvtTime";
+import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 
 interface Props {
     flight: Flight;
     readOnly?: boolean;
     onSave: (mvtData: Flight["mvtData"]) => void;
+}
+
+function emptyMvtData(): NonNullable<Flight["mvtData"]> {
+    return {
+        atd: "",
+        off: "",
+        eta: "",
+        dlyCod1: "",
+        dlyTime1: "",
+        dlyCod2: "",
+        dlyTime2: "",
+        observaciones: "",
+        paxActual: "",
+        inf: "",
+        totalBags: "",
+        totalCarga: "",
+        load: "",
+        fob: "",
+        ssee: [],
+        infoSup: "",
+        supervisor: "",
+    };
+}
+
+/** Datos guardados pueden venir sin `ssee` u otros campos (migraciones / API parcial). */
+function normalizeMvtData(raw?: Flight["mvtData"]): NonNullable<Flight["mvtData"]> {
+    const z = (v: string | undefined) => v ?? "";
+    if (!raw) return emptyMvtData();
+    return {
+        atd: z(raw.atd),
+        off: z(raw.off),
+        eta: z(raw.eta),
+        dlyCod1: z(raw.dlyCod1),
+        dlyTime1: z(raw.dlyTime1),
+        dlyCod2: z(raw.dlyCod2),
+        dlyTime2: z(raw.dlyTime2),
+        observaciones: z(raw.observaciones),
+        paxActual: z(raw.paxActual),
+        inf: z(raw.inf),
+        totalBags: z(raw.totalBags),
+        totalCarga: z(raw.totalCarga),
+        load: z(raw.load),
+        fob: z(raw.fob),
+        ssee: Array.isArray(raw.ssee) ? raw.ssee : [],
+        infoSup: z(raw.infoSup),
+        supervisor: z(raw.supervisor),
+    };
 }
 
 // Componentes extraídos para no perder foco
@@ -28,6 +76,38 @@ const NumberInput = ({ label, value, onChange, placeholder = "" }: { label: stri
     </div>
 );
 
+const DelayCodeSelect = ({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    onChange: (val: string) => void;
+}) => {
+    const known = DELAY_CODE_OPTIONS.some((o) => o.code === value);
+    return (
+        <div className="flex flex-col gap-1.5 focus-within:text-blue-600 transition-colors min-w-0">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">{label}</label>
+            <select
+                value={known ? value : ""}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full min-w-0 px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground text-sm transition-all"
+            >
+                <option value="">— Seleccionar código —</option>
+                {!known && value ? (
+                    <option value={value}>{value} (valor guardado)</option>
+                ) : null}
+                {DELAY_CODE_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                        {formatDelayOption(o)}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+};
+
 const TextInput = ({ label, value, onChange, placeholder = "" }: { label: string; value: string; onChange: (val: string) => void; placeholder?: string }) => (
     <div className="flex flex-col gap-1.5 focus-within:text-blue-600 transition-colors">
         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">{label}</label>
@@ -42,27 +122,7 @@ const TextInput = ({ label, value, onChange, placeholder = "" }: { label: string
 );
 
 export function MVTForm({ flight, readOnly, onSave }: Props) {
-    const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(
-        flight.mvtData || {
-            atd: "",
-            off: "",
-            eta: "",
-            dlyCod1: "",
-            dlyTime1: "",
-            dlyCod2: "",
-            dlyTime2: "",
-            observaciones: "",
-            paxActual: "",
-            inf: "",
-            totalBags: "",
-            totalCarga: "",
-            load: "",
-            fob: "",
-            ssee: [],
-            infoSup: "",
-            supervisor: "",
-        }
-    );
+    const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
 
     const handleChange = (field: keyof typeof data, value: string) => {
         setData((prev) => ({ ...prev, [field]: value }));
@@ -71,7 +131,7 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
     const stdMinutes = useMemo(() => parseTimeToMinutes(flight.std), [flight.std]);
     const atdMinutes = useMemo(() => parseTimeToMinutes(data.atd), [data.atd]);
 
-    const isDelayed = data.atd.length >= 3 && atdMinutes > stdMinutes;
+    const isDelayed = (data.atd ?? "").length >= 3 && atdMinutes > stdMinutes;
     const delayMinutes = isDelayed ? atdMinutes - stdMinutes : 0;
 
     const justifiedMinutes = useMemo(() => parseTimeToMinutes(data.dlyTime1) + parseTimeToMinutes(data.dlyTime2), [data.dlyTime1, data.dlyTime2]);
@@ -80,21 +140,21 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
     const handleAddSSEE = () => {
         setData((prev) => ({
             ...prev,
-            ssee: [...prev.ssee, { id: Date.now().toString(), type: "", qty: "" }],
+            ssee: [...(prev.ssee ?? []), { id: Date.now().toString(), type: "", qty: "" }],
         }));
     };
 
     const handleUpdateSSEE = (id: string, field: "type" | "qty", value: string) => {
         setData((prev) => ({
             ...prev,
-            ssee: prev.ssee.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
+            ssee: (prev.ssee ?? []).map((s) => (s.id === id ? { ...s, [field]: value } : s)),
         }));
     };
 
     const handleRemoveSSEE = (id: string) => {
         setData((prev) => ({
             ...prev,
-            ssee: prev.ssee.filter((s) => s.id !== id),
+            ssee: (prev.ssee ?? []).filter((s) => s.id !== id),
         }));
     };
 
@@ -136,9 +196,9 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                         </span>
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <NumberInput label="DLY COD 1" value={data.dlyCod1} onChange={(v) => handleChange("dlyCod1", v)} />
+                        <DelayCodeSelect label="DLY COD 1" value={data.dlyCod1} onChange={(v) => handleChange("dlyCod1", v)} />
                         <NumberInput label="DLY TIME 1" value={data.dlyTime1} onChange={(v) => handleChange("dlyTime1", v)} />
-                        <NumberInput label="DLY COD 2" value={data.dlyCod2} onChange={(v) => handleChange("dlyCod2", v)} />
+                        <DelayCodeSelect label="DLY COD 2" value={data.dlyCod2} onChange={(v) => handleChange("dlyCod2", v)} />
                         <NumberInput label="DLY TIME 2" value={data.dlyTime2} onChange={(v) => handleChange("dlyTime2", v)} />
                     </div>
                     <div className="mt-4 flex flex-col gap-1.5 focus-within:text-red-600 transition-colors">
@@ -176,11 +236,11 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                     </button>
                 </div>
 
-                {data.ssee.length === 0 ? (
+                {(data.ssee ?? []).length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4 bg-background rounded-lg border border-dashed mb-2">No hay servicios especiales registrados.</p>
                 ) : (
                     <div className="space-y-3 mb-4">
-                        {data.ssee.map((s) => (
+                        {(data.ssee ?? []).map((s) => (
                             <div key={s.id} className="flex items-center gap-3 bg-background p-2 rounded-lg border border-border shadow-sm animate-in fade-in slide-in-from-left-2">
                                 <input
                                     type="text"

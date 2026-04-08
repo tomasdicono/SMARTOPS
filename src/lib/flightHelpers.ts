@@ -2,6 +2,26 @@ import type { Flight } from "../types";
 
 const MONTH_ABBRS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
+/**
+ * Firebase a veces devuelve números en campos tipados como string (p. ej. flt: 3010).
+ * Eso rompe `.includes` / `.match` y puede dejar la app en pantalla blanca.
+ */
+export function coerceFlightFromDb(f: Flight): Flight {
+    return {
+        ...f,
+        id: String(f.id ?? ""),
+        flt: String(f.flt ?? ""),
+        dep: String(f.dep ?? ""),
+        arr: String(f.arr ?? ""),
+        reg: String(f.reg ?? ""),
+        date: String(f.date ?? ""),
+        route: String(f.route ?? ""),
+        std: String(f.std ?? ""),
+        sta: String(f.sta ?? ""),
+        pax: String(f.pax ?? ""),
+    };
+}
+
 /** Fecha de vuelo → "04APR" (dd + mes en inglés), acepta DD-MM-YYYY o YYYY-MM-DD */
 export function formatFlightDateDDMMM(dateStr: string): string {
     if (!dateStr) return "";
@@ -22,9 +42,10 @@ export function formatFlightDateDDMMM(dateStr: string): string {
     return `${String(day).padStart(2, "0")}${MONTH_ABBRS[month - 1]}`;
 }
 
-export function getFlightNumberDigits(flt: string): string {
-    const m = flt.match(/\d+/);
-    return m ? m[0] : flt.replace(/\D/g, "") || flt;
+export function getFlightNumberDigits(flt: string | number): string {
+    const s = String(flt ?? "");
+    const m = s.match(/\d+/);
+    return m ? m[0] : s.replace(/\D/g, "") || s;
 }
 
 /** Título listado MVT: MVT OUT JES3102 AEP-COR 04APR */
@@ -35,8 +56,9 @@ export function buildMvtOutListTitle(f: Flight): string {
     return `MVT OUT ${prefix}${num} ${f.dep}-${f.arr} ${dayMonth}`;
 }
 
-export function getAirlinePrefix(flt: string): string {
-    const match = flt.match(/\d+/);
+export function getAirlinePrefix(flt: string | number): string {
+    const s = String(flt ?? "");
+    const match = s.match(/\d+/);
     if (!match) return "JES"; // default fallback
 
     const num = parseInt(match[0], 10);

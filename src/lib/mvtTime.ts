@@ -1,6 +1,6 @@
 /** MVT time fields: digits only, same parsing as MVTForm */
-export function parseTimeToMinutes(timeStr: string): number {
-    const raw = timeStr.replace(/[^0-9]/g, "");
+export function parseTimeToMinutes(timeStr: string | undefined | null): number {
+    const raw = String(timeStr ?? "").replace(/[^0-9]/g, "");
     if (!raw) return 0;
     if (raw.length <= 2) {
         return parseInt(raw, 10);

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { ref, get } from "firebase/database";
-import type { User } from "../types";
+import { normalizeUserRole, type User } from "../types";
 import { PlaneTakeoff, Loader2, AlertCircle } from "lucide-react";
 
 interface LoginProps {
@@ -31,7 +31,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
             if (snapshot.exists()) {
                 const userData = snapshot.val() as User;
-                onLoginSuccess(userData);
+                onLoginSuccess({ ...userData, role: normalizeUserRole(userData.role) });
             } else {
                 // If user doesn't exist in our DB, we give them a default read-only or sign out
                 setError("Usuario no encontrado en la base de datos interna. Contacte a un administrador.");
