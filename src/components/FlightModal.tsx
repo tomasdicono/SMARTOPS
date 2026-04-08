@@ -11,11 +11,13 @@ interface Props {
     userRole: import("../types").UserRole;
     onClose: () => void;
     onSaveMVT: (data: Flight["mvtData"]) => void;
-    onSaveHitos: (data: any) => void;
-    onSaveCrewHitos: (data: any) => void;
+    onSaveHitos: (data: import("../types").HitosData) => void;
+    onPersistHitos?: (data: import("../types").HitosData) => void;
+    onSaveCrewHitos: (data: Record<string, string>) => void;
+    onPersistCrewHitos?: (data: Record<string, string>) => void;
 }
 
-export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos, onSaveCrewHitos }: Props) {
+export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos, onPersistHitos, onSaveCrewHitos, onPersistCrewHitos }: Props) {
     const [activeTab, setActiveTab] = useState<"MVT" | "HITOS" | "CREW">(() => {
         return userRole === "CREW" ? "CREW" : "MVT";
     });
@@ -96,34 +98,44 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
-                    {activeTab === "MVT" && canSeeStandard && (
-                        <MVTForm
-                            flight={flight}
-                            readOnly={isReadOnlyView}
-                            onSave={(data) => {
-                                onSaveMVT(data);
-                            }}
-                        />
+                    {/* Mantener pestañas montadas (hidden) para no perder estado local al cambiar MVT ↔ Hitos */}
+                    {canSeeStandard && (
+                        <>
+                            <div className={activeTab === "MVT" ? "block" : "hidden"} aria-hidden={activeTab !== "MVT"}>
+                                <MVTForm
+                                    key={flight.id}
+                                    flight={flight}
+                                    readOnly={isReadOnlyView}
+                                    onSave={(data) => {
+                                        onSaveMVT(data);
+                                    }}
+                                />
+                            </div>
+                            <div className={activeTab === "HITOS" ? "block" : "hidden"} aria-hidden={activeTab !== "HITOS"}>
+                                <HitosTab
+                                    key={flight.id}
+                                    flight={flight}
+                                    readOnly={isReadOnlyView}
+                                    onPersistHitos={onPersistHitos}
+                                    onSave={(data) => {
+                                        onSaveHitos(data);
+                                    }}
+                                />
+                            </div>
+                        </>
                     )}
-                    {activeTab === "HITOS" && canSeeStandard && (
-                        <HitosTab
-                            flight={flight}
-                            readOnly={isReadOnlyView}
-                            onSave={(data) => {
-                                onSaveHitos(data);
-                                onClose();
-                            }}
-                        />
-                    )}
-                    {activeTab === "CREW" && canSeeCrew && (
-                        <HitosCrewTab
-                            flight={flight}
-                            readOnly={isReadOnlyView}
-                            onSave={(data) => {
-                                onSaveCrewHitos(data);
-                                onClose();
-                            }}
-                        />
+                    {canSeeCrew && (
+                        <div className={activeTab === "CREW" ? "block" : "hidden"} aria-hidden={activeTab !== "CREW"}>
+                            <HitosCrewTab
+                                key={flight.id}
+                                flight={flight}
+                                readOnly={isReadOnlyView}
+                                onPersistCrewHitos={onPersistCrewHitos}
+                                onSave={(data) => {
+                                    onSaveCrewHitos(data);
+                                }}
+                            />
+                        </div>
                     )}
                 </div>
             </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import type { Flight, User } from "./types";
+import type { Flight, User, HitosData } from "./types";
+import { formatDelayLine } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
@@ -104,12 +105,12 @@ function App() {
     set(ref(db, 'flights'), updatedFlights);
   };
 
-  const handleSaveHitos = (id: string, hitosData: any) => {
+  const handleSaveHitos = (id: string, hitosData: HitosData) => {
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData } : f));
     set(ref(db, 'flights'), updatedFlights);
   };
 
-  const handleSaveCrewHitos = (id: string, hitosCrewData: any) => {
+  const handleSaveCrewHitos = (id: string, hitosCrewData: Record<string, string>) => {
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosCrewData } : f));
     set(ref(db, 'flights'), updatedFlights);
   };
@@ -192,7 +193,7 @@ function App() {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-sm font-bold text-white focus:outline-none cursor-pointer [color-scheme:dark] uppercase tracking-wider w-[120px] md:w-auto"
+              className="bg-transparent text-sm font-bold text-white focus:outline-none cursor-pointer [color-scheme:light] uppercase tracking-wider w-[120px] md:w-auto"
             />
           </div>
 
@@ -377,16 +378,32 @@ function App() {
                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Bags</span>
                            <span className="font-bold text-slate-700 dark:text-slate-300">{flight.mvtData?.totalBags || "0"}</span>
                          </div>
-                         <div className="flex flex-col items-end">
+                         <div className="flex flex-col items-end text-right max-w-[min(100%,11rem)]">
                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Demoras</span>
-                           {flight.mvtData?.dlyCod1 ? (
-                              <div className="flex gap-1">
-                                <span className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded text-xs font-bold">{flight.mvtData.dlyCod1}</span>
-                                {flight.mvtData?.dlyCod2 && <span className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded text-xs font-bold">{flight.mvtData.dlyCod2}</span>}
-                              </div>
-                           ) : (
-                              <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs mr-1">- Ninguna -</span>
-                           )}
+                           {(() => {
+                             const m = flight.mvtData;
+                             const lines = [
+                               m?.dlyCod1 ? formatDelayLine(m.dlyCod1, m.dlyTime1 || "") : "",
+                               m?.dlyCod2 ? formatDelayLine(m.dlyCod2, m.dlyTime2 || "") : "",
+                             ].filter(Boolean);
+                             if (lines.length === 0) {
+                               return (
+                                 <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs">- Ninguna -</span>
+                               );
+                             }
+                             return (
+                               <div className="flex flex-col gap-0.5 items-end">
+                                 {lines.map((line, i) => (
+                                   <span
+                                     key={i}
+                                     className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded text-[11px] font-bold leading-tight whitespace-nowrap"
+                                   >
+                                     {line}
+                                   </span>
+                                 ))}
+                               </div>
+                             );
+                           })()}
                          </div>
                       </div>
                     )}
@@ -428,7 +445,9 @@ function App() {
           onClose={() => setSelectedFlight(null)}
           onSaveMVT={(data) => handleSaveMVT(selectedFlight.id, data)}
           onSaveHitos={(data) => handleSaveHitos(selectedFlight.id, data)}
+          onPersistHitos={(data) => handleSaveHitos(selectedFlight.id, data)}
           onSaveCrewHitos={(data) => handleSaveCrewHitos(selectedFlight.id, data)}
+          onPersistCrewHitos={(data) => handleSaveCrewHitos(selectedFlight.id, data)}
         />
       )}
 

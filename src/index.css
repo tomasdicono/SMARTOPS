@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Siempre tema claro: ignorar preferencia oscura del SO (los dark: del proyecto no aplican) */
+@custom-variant dark (&:not(*));
+
 @layer base {
   :root {
     --background: 0 0% 97%;
@@ -67,6 +70,10 @@
 }
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
+
   * {
     border-color: hsl(var(--border) / 1);
   }

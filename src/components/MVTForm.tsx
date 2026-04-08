@@ -1,38 +1,13 @@
 import { useState, useMemo } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2 } from "lucide-react";
+import { parseTimeToMinutes, formatMinutesToHHMM } from "../lib/mvtTime";
 
 interface Props {
     flight: Flight;
     readOnly?: boolean;
     onSave: (mvtData: Flight["mvtData"]) => void;
 }
-
-const parseTimeToMinutes = (timeStr: string) => {
-    // Assuming format HH:mm or HHmm or just MM
-    const raw = timeStr.replace(/[^0-9]/g, "");
-    if (!raw) return 0;
-    if (raw.length <= 2) {
-        return parseInt(raw, 10);
-    }
-    let hh, mm;
-    if (raw.length === 3) {
-        hh = parseInt(raw.substring(0, 1), 10);
-        mm = parseInt(raw.substring(1, 3), 10);
-    } else {
-        hh = parseInt(raw.substring(0, 2), 10);
-        mm = parseInt(raw.substring(2, 4), 10);
-    }
-    return hh * 60 + mm;
-};
-
-const formatMinutesToHHMM = (mins: number) => {
-    const isNegative = mins < 0;
-    const absMins = Math.abs(mins);
-    const h = Math.floor(absMins / 60).toString().padStart(2, '0');
-    const m = (absMins % 60).toString().padStart(2, '0');
-    return `${isNegative ? "-" : ""}${h}:${m}`;
-};
 
 // Componentes extraídos para no perder foco
 const NumberInput = ({ label, value, onChange, placeholder = "" }: { label: string; value: string; onChange: (val: string) => void; placeholder?: string }) => (

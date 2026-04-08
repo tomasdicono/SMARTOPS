@@ -1,3 +1,40 @@
+import type { Flight } from "../types";
+
+const MONTH_ABBRS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
+
+/** Fecha de vuelo → "04APR" (dd + mes en inglés), acepta DD-MM-YYYY o YYYY-MM-DD */
+export function formatFlightDateDDMMM(dateStr: string): string {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-").map((p) => p.trim());
+    if (parts.length !== 3) return dateStr;
+    let day: number;
+    let month: number;
+    if (parts[0].length === 4) {
+        month = parseInt(parts[1], 10);
+        day = parseInt(parts[2], 10);
+    } else {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+    }
+    if (!Number.isFinite(day) || !Number.isFinite(month) || month < 1 || month > 12) {
+        return dateStr;
+    }
+    return `${String(day).padStart(2, "0")}${MONTH_ABBRS[month - 1]}`;
+}
+
+export function getFlightNumberDigits(flt: string): string {
+    const m = flt.match(/\d+/);
+    return m ? m[0] : flt.replace(/\D/g, "") || flt;
+}
+
+/** Título listado MVT: MVT OUT JES3102 AEP-COR 04APR */
+export function buildMvtOutListTitle(f: Flight): string {
+    const prefix = getAirlinePrefix(f.flt);
+    const num = getFlightNumberDigits(f.flt);
+    const dayMonth = formatFlightDateDDMMM(f.date);
+    return `MVT OUT ${prefix}${num} ${f.dep}-${f.arr} ${dayMonth}`;
+}
+
 export function getAirlinePrefix(flt: string): string {
     const match = flt.match(/\d+/);
     if (!match) return "JES"; // default fallback

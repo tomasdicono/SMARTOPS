@@ -1,22 +1,46 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { GANTT_CHARTS } from "../lib/hitosData";
 import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
 import { Save, AlertCircle, Clock } from "lucide-react";
 
+const emptyHitos = (): HitosData => ({
+    ganttChartName: "",
+    ata: "",
+    entries: {}
+});
+
 interface Props {
     flight: Flight;
     readOnly?: boolean;
     onSave: (hitosData: HitosData) => void;
+    /** Guardado automático en Firebase (sin validar) para no perder progreso al refrescar */
+    onPersistHitos?: (hitosData: HitosData) => void;
 }
 
-export function HitosTab({ flight, readOnly, onSave }: Props) {
+export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
     const [errorMsg, setErrorMsg] = useState("");
-    const [data, setData] = useState<HitosData>(flight.hitosData || {
-        ganttChartName: "",
-        ata: "",
-        entries: {}
-    });
+    const [data, setData] = useState<HitosData>(flight.hitosData || emptyHitos());
+    const skipNextPersist = useRef(true);
+    const persistRef = useRef(onPersistHitos);
+    persistRef.current = onPersistHitos;
+
+    useEffect(() => {
+        skipNextPersist.current = true;
+        setData(flight.hitosData || emptyHitos());
+    }, [flight.id]);
+
+    useEffect(() => {
+        if (readOnly || !persistRef.current) return;
+        if (skipNextPersist.current) {
+            skipNextPersist.current = false;
+            return;
+        }
+        const t = window.setTimeout(() => {
+            persistRef.current?.(data);
+        }, 500);
+        return () => window.clearTimeout(t);
+    }, [data, readOnly]);
 
     const parseToMins = (time: string): number => {
         if (!time || time.length !== 4) return 0;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Flight } from "../types";
 import { Clock, Save } from "lucide-react";
 
@@ -6,6 +6,7 @@ interface Props {
     flight: Flight;
     readOnly?: boolean;
     onSave: (data: Record<string, string>) => void;
+    onPersistCrewHitos?: (data: Record<string, string>) => void;
 }
 
 const CREW_MILESTONES = [
@@ -15,9 +16,29 @@ const CREW_MILESTONES = [
     "Cierre puertas"
 ];
 
-export function HitosCrewTab({ flight, readOnly, onSave }: Props) {
+export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: Props) {
     const [data, setData] = useState<Record<string, string>>(flight.hitosCrewData || {});
     const [savedState, setSavedState] = useState(false);
+    const skipNextPersist = useRef(true);
+    const persistRef = useRef(onPersistCrewHitos);
+    persistRef.current = onPersistCrewHitos;
+
+    useEffect(() => {
+        skipNextPersist.current = true;
+        setData(flight.hitosCrewData || {});
+    }, [flight.id]);
+
+    useEffect(() => {
+        if (readOnly || !persistRef.current) return;
+        if (skipNextPersist.current) {
+            skipNextPersist.current = false;
+            return;
+        }
+        const t = window.setTimeout(() => {
+            persistRef.current?.(data);
+        }, 500);
+        return () => window.clearTimeout(t);
+    }, [data, readOnly]);
 
     const handleEntryChange = (name: string, value: string) => {
         // Enforce basic HHMM format natively like the other forms
