@@ -21,7 +21,7 @@ import { DailyReportView } from "./components/DailyReportView";
 import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
-import { computePernocteRegistrations, coercePernocteRow } from "./lib/pernocteHelpers";
+import { computePernocteRows, coercePernocteRow } from "./lib/pernocteHelpers";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -124,8 +124,8 @@ function App() {
     }
   }, [selectedDate]);
 
-  // Intervalo para refrescar tarjetas (retrasos) y lista de pernocte el día actual
-  const [timeTick, setTimeTick] = useState(0);
+  // Intervalo para refrescar tarjetas (retrasos / incompletos)
+  const [, setTimeTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setTimeTick((t) => t + 1), 60000);
     return () => clearInterval(timer);
@@ -235,9 +235,9 @@ function App() {
     return fltU.includes(sq) || depU.includes(sq) || arrU.includes(sq);
   });
 
-  const pernocteRegistrations = useMemo(
-    () => (selectedDate ? computePernocteRegistrations(flights, selectedDate) : []),
-    [flights, selectedDate, timeTick]
+  const pernocteRows = useMemo(
+    () => (selectedDate ? computePernocteRows(flights, selectedDate) : []),
+    [flights, selectedDate]
   );
 
   const handlePernoctePatch = (reg: string, patch: Partial<PernocteRowState>) => {
@@ -441,7 +441,7 @@ function App() {
         ) : mainTab === "pernocte" && (userRole === "HCC" || userRole === "AJS") ? (
           <PernocteView
             selectedDate={selectedDate}
-            registrations={pernocteRegistrations}
+            rows={pernocteRows}
             pernocteByReg={pernocteData[selectedDate] ?? {}}
             onPatchRow={handlePernoctePatch}
           />

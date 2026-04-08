@@ -1,15 +1,20 @@
 import type { Flight } from "../types";
 import { flightDateToIso } from "./controlHelpers";
 import { getHitosDepartureTime, isJesFlightNumber } from "./flightHelpers";
-import { parseTimeToMinutes } from "./mvtTime";
 import type { PernocteRowState } from "../types";
 
+/** Fila de tabla Pernocte derivada de la programación del día */
+export interface PernocteTableRow {
+    reg: string;
+    /** Último aeropuerto de llegada: `arr` del último JES (por hora de salida) de esa matrícula en la fecha */
+    ato: string;
+}
+
 /**
- * Matrículas del **último vuelo JES** (número 3000–3999) de cada avión en la fecha.
- * Solo se consideran vuelos JES; por matrícula se usa la última salida JES del día.
- * Entran si esa última salida JES ya “cerró” el día (fecha pasada, o hoy con hora ≤ ahora).
+ * Todas las matrículas asignadas a vuelos JES (3000–3999) del día, sin repetir.
+ * ATO = aeropuerto de llegada del último sector JES de cada cola (orden por STD/ETD).
  */
-export function computePernocteRegistrations(flights: Flight[], selectedIso: string): string[] {
+export function computePernocteRows(flights: Flight[], selectedIso: string): PernocteTableRow[] {
     const dayFlights = flights.filter(
         (f) => !f.cancelled && flightDateToIso(f) === selectedIso && isJesFlightNumber(f.flt)
     );
@@ -20,26 +25,14 @@ export function computePernocteRegistrations(flights: Flight[], selectedIso: str
         if (!byReg.has(r)) byReg.set(r, []);
         byReg.get(r)!.push(f);
     }
-
-    const now = new Date();
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-
-    const out: string[] = [];
+    const rows: PernocteTableRow[] = [];
     for (const [reg, list] of byReg) {
         const sorted = [...list].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b)));
         const last = sorted[sorted.length - 1];
-        const lastMins = parseTimeToMinutes(getHitosDepartureTime(last));
-
-        if (selectedIso < todayIso) {
-            out.push(reg);
-        } else if (selectedIso > todayIso) {
-            // día futuro: aún no hay aviones “cerrados”
-        } else {
-            if (lastMins <= nowMins) out.push(reg);
-        }
+        const ato = String(last.arr ?? "").trim() || "—";
+        rows.push({ reg, ato });
     }
-    return out.sort((a, b) => a.localeCompare(b));
+    return rows.sort((a, b) => a.reg.localeCompare(b.reg));
 }
 
 export function defaultPernocteRow(): PernocteRowState {
