@@ -1,5 +1,6 @@
 import type { Flight } from "../types";
 import { getAircraftInfo } from "./fleetData";
+import { parseTimeToMinutes } from "./mvtTime";
 
 /** Convierte fecha de vuelo (DD-MM-YYYY o YYYY-MM-DD) a ISO YYYY-MM-DD */
 export function flightDateToIso(f: Flight): string {
@@ -141,4 +142,40 @@ export function clipSegmentToWindow(
         leftPct: ((s - windowStart) / span) * 100,
         widthPct: ((e - s) / span) * 100,
     };
+}
+
+/** Salida real posterior al STD (MVT con ATD cargado). */
+export function isFlightLateDeparture(f: Flight): boolean {
+    if (f.cancelled) return false;
+    const atd = f.mvtData?.atd;
+    if (!atd || String(atd).replace(/\D/g, "").length < 2) return false;
+    return parseTimeToMinutes(atd) > parseTimeToMinutes(f.std);
+}
+
+/** Demora operativa registrada en MVT (código + tiempo). */
+export function hasRecordedMvtDelay(f: Flight): boolean {
+    const m = f.mvtData;
+    if (!m) return false;
+    const d1 = m.dlyCod1?.trim() && m.dlyTime1?.trim();
+    const d2 = m.dlyCod2?.trim() && m.dlyTime2?.trim();
+    return !!(d1 || d2);
+}
+
+/** Agrupa textos por clave normalizada (trim + espacios); orden por frecuencia descendente. */
+export function rankStringsByFrequency(items: (string | undefined | null)[]): { text: string; count: number }[] {
+    const map = new Map<string, { display: string; count: number }>();
+    for (const raw of items) {
+        const t = String(raw ?? "").trim().replace(/\s+/g, " ");
+        const key = t.toLowerCase();
+        const display = t || "(Sin motivo registrado)";
+        const prev = map.get(key);
+        if (prev) {
+            prev.count += 1;
+        } else {
+            map.set(key, { display, count: 1 });
+        }
+    }
+    return [...map.values()]
+        .map(({ display, count }) => ({ text: display, count }))
+        .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
 }

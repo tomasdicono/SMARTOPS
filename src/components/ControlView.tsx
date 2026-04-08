@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, Fragment } from "react";
 import type { Flight } from "../types";
-import { getAirlinePrefix } from "../lib/flightHelpers";
+import { getAirlinePrefix, getHitosDepartureTime } from "../lib/flightHelpers";
 import { getAircraftInfo } from "../lib/fleetData";
 import {
     flightDateToIso,
@@ -14,6 +14,9 @@ import {
     uniqueAirportsFromFlights,
     flightDaySegments,
     clipSegmentToWindow,
+    isFlightLateDeparture,
+    hasRecordedMvtDelay,
+    rankStringsByFrequency,
 } from "../lib/controlHelpers";
 import {
     BarChart3,
@@ -27,6 +30,8 @@ import {
     ChevronRight,
     Clock,
     Ban,
+    Activity,
+    ListOrdered,
 } from "lucide-react";
 
 interface Props {
@@ -45,7 +50,7 @@ function formatHm(minutes: number): string {
     return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
-type ControlSubTab = "timeline" | "obvk" | "stats";
+type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia";
 
 const FLIGHT_CARD_STYLES = [
     "from-cyan-500 via-cyan-600 to-teal-600 shadow-cyan-900/25",
@@ -73,7 +78,10 @@ export function ControlView({ flights, selectedDate }: Props) {
     }, [selectedDate]);
 
     const dayFlights = useMemo(
-        () => flights.filter((f) => flightDateToIso(f) === selectedDate).sort((a, b) => a.std.localeCompare(b.std)),
+        () =>
+            flights
+                .filter((f) => flightDateToIso(f) === selectedDate)
+                .sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))),
         [flights, selectedDate]
     );
 
@@ -92,7 +100,7 @@ export function ControlView({ flights, selectedDate }: Props) {
             m.get(r)!.push(f);
         }
         for (const arr of m.values()) {
-            arr.sort((a, b) => a.std.localeCompare(b.std));
+            arr.sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b)));
         }
         return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     }, [dayFlights]);
@@ -141,7 +149,7 @@ export function ControlView({ flights, selectedDate }: Props) {
         const operational = raw.filter((f) => !f.cancelled);
         const cancelled = filterFlightsForStatsDepartureOnly(flights, statsDate, statsAirport)
             .filter((f) => f.cancelled)
-            .sort((a, b) => a.std.localeCompare(b.std));
+            .sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b)));
         return { raw, operational, cancelled };
     }, [flights, statsDate, statsAirport]);
 
@@ -160,6 +168,46 @@ export function ControlView({ flights, selectedDate }: Props) {
         () => cancelledStatsFlights.reduce((s, f) => s + getScheduledPax(f), 0),
         [cancelledStatsFlights]
     );
+
+    const statusDia = useMemo(() => {
+        const operational = dayFlights.filter((f) => !f.cancelled);
+        const cancelled = dayFlights.filter((f) => f.cancelled);
+        const paxTransportados = operational.reduce((s, f) => s + getPax(f), 0);
+        const demorados = operational.filter((f) => isFlightLateDeparture(f));
+        const conDemoraMvt = operational.filter((f) => hasRecordedMvtDelay(f));
+        const reprogramados = dayFlights.filter((f) => f.etd?.trim() || f.rescheduleReason?.trim());
+        const motivosReprogramacion = rankStringsByFrequency(reprogramados.map((f) => f.rescheduleReason));
+
+        const cancelByKey = new Map<string, { text: string; count: number; pax: number }>();
+        for (const f of cancelled) {
+            const t = String(f.cancellationReason ?? "").trim().replace(/\s+/g, " ");
+            const key = t.toLowerCase();
+            const text = t || "(Sin motivo registrado)";
+            const px = getScheduledPax(f);
+            const prev = cancelByKey.get(key);
+            if (prev) {
+                prev.count += 1;
+                prev.pax += px;
+            } else {
+                cancelByKey.set(key, { text, count: 1, pax: px });
+            }
+        }
+        const motivosCancelacionDetalle = [...cancelByKey.values()].sort(
+            (a, b) => b.count - a.count || a.text.localeCompare(b.text)
+        );
+
+        const paxCancelados = cancelled.reduce((s, f) => s + getScheduledPax(f), 0);
+        return {
+            paxTransportados,
+            countDemorados: demorados.length,
+            countAfectadosDemoras: conDemoraMvt.length,
+            motivosReprogramacion,
+            countCancelados: cancelled.length,
+            motivosCancelacionDetalle,
+            paxCancelados,
+            totalVuelosDia: dayFlights.length,
+        };
+    }, [dayFlights]);
 
     const hourTickLabels = useMemo(() => {
         return Array.from({ length: WINDOW_HOURS + 1 }, (_, i) => windowStartMin + i * 60).map(formatHm);
@@ -188,6 +236,18 @@ export function ControlView({ flights, selectedDate }: Props) {
                     >
                         <BarChart3 className="w-4 h-4 shrink-0" />
                         Estadísticas
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSubTab("statusDia")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                            subTab === "statusDia"
+                                ? "bg-indigo-600 text-white shadow-md"
+                                : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
+                        }`}
+                    >
+                        <Activity className="w-4 h-4 shrink-0" />
+                        Status día
                     </button>
                     <button
                         type="button"
@@ -323,7 +383,7 @@ export function ControlView({ flights, selectedDate }: Props) {
                                                 <div className="absolute left-0 right-0 top-1/2 h-px bg-slate-300/70 z-0" />
 
                                                 {list.map((f, fi) => {
-                                                    const segments = flightDaySegments(f.std, f.sta);
+                                                    const segments = flightDaySegments(getHitosDepartureTime(f), f.sta);
                                                     return segments.map(([segStart, segEnd], si) => {
                                                         const clipped = clipSegmentToWindow(segStart, segEnd, windowStartMin, windowEndMin);
                                                         if (!clipped) return null;
@@ -334,7 +394,7 @@ export function ControlView({ flights, selectedDate }: Props) {
                                                         return (
                                                             <div
                                                                 key={`${f.id}-${f.reg}-${si}-${segStart}`}
-                                                                title={`${label} ${f.dep}→${f.arr} · STD ${f.std} STA ${f.sta}`}
+                                                                title={`${label} ${f.dep}→${f.arr} · STD ${f.std}${f.etd?.trim() ? ` ETD ${f.etd}` : ""} STA ${f.sta}`}
                                                                 className={`absolute top-1/2 z-[1] -translate-y-1/2 min-h-[2.35rem] rounded-lg bg-gradient-to-r ${styleClass} text-white shadow-md border border-white/15 overflow-hidden hover:z-[2] hover:scale-[1.02] transition-transform`}
                                                                 style={{
                                                                     left: `${leftPct}%`,
@@ -460,6 +520,128 @@ export function ControlView({ flights, selectedDate }: Props) {
                             </table>
                         </div>
                     )}
+                </div>
+                </div>
+                )}
+
+                {subTab === "statusDia" && (
+                <div className="animate-in fade-in duration-200">
+                <div className="p-5 space-y-6 bg-gradient-to-b from-indigo-50/40 to-white">
+                    <p className="text-sm font-semibold text-slate-600 max-w-3xl">
+                        Resumen operativo del día <span className="font-black text-slate-900 tabular-nums">{selectedDate}</span>
+                        {" · "}
+                        <span className="tabular-nums">{statusDia.totalVuelosDia}</span> vuelo{statusDia.totalVuelosDia !== 1 ? "s" : ""} en calendario
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
+                            <p className="text-xs font-black uppercase text-indigo-800 tracking-wide flex items-center gap-2">
+                                <Users className="w-4 h-4" />
+                                Pasajeros transportados
+                            </p>
+                            <p className="text-3xl font-black text-indigo-950 mt-2 tabular-nums">{statusDia.paxTransportados}</p>
+                            <p className="text-[11px] text-slate-500 mt-1 font-semibold">
+                                Suma de PAX (MVT actual o programación si no hay MVT) · vuelos no cancelados
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
+                            <p className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-2">
+                                <Clock className="w-4 h-4" />
+                                Vuelos demorados
+                            </p>
+                            <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">{statusDia.countDemorados}</p>
+                            <p className="text-[11px] text-amber-900/80 mt-1 font-semibold">
+                                ATD posterior al STD (salida real tarde, con MVT cargado)
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">
+                            <p className="text-xs font-black uppercase text-orange-900 tracking-wide flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4" />
+                                Afectados por demoras (MVT)
+                            </p>
+                            <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">{statusDia.countAfectadosDemoras}</p>
+                            <p className="text-[11px] text-orange-900/85 mt-1 font-semibold">
+                                Vuelos con código de demora + tiempo registrados en MVT
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="rounded-xl border border-amber-300/80 bg-white p-4 sm:p-5 shadow-sm">
+                            <h4 className="text-sm font-black uppercase tracking-wide text-amber-900 flex items-center gap-2 mb-3">
+                                <ListOrdered className="w-4 h-4 shrink-0" />
+                                Motivos de reprogramación
+                            </h4>
+                            <p className="text-xs text-amber-900/75 font-semibold mb-3">
+                                Ordenados por frecuencia (mayor a menor)
+                            </p>
+                            {statusDia.motivosReprogramacion.length === 0 ? (
+                                <p className="text-sm text-slate-500 py-2">Sin reprogramaciones registradas este día.</p>
+                            ) : (
+                                <ol className="space-y-2 list-decimal list-inside marker:font-black marker:text-amber-700">
+                                    {statusDia.motivosReprogramacion.map((row, i) => (
+                                        <li
+                                            key={`${row.text}-${i}`}
+                                            className="text-sm text-slate-800 pl-1 [&::marker]:text-xs"
+                                        >
+                                            <span className="font-bold tabular-nums text-amber-800">{row.count}×</span>{" "}
+                                            <span className="font-semibold">{row.text}</span>
+                                        </li>
+                                    ))}
+                                </ol>
+                            )}
+                        </div>
+
+                        <div className="rounded-xl border border-rose-300/80 bg-gradient-to-br from-rose-50/90 to-white p-4 sm:p-5 shadow-sm">
+                            <div className="flex flex-wrap items-center gap-2 justify-between mb-3">
+                                <h4 className="text-sm font-black uppercase tracking-wide text-rose-900 flex items-center gap-2">
+                                    <Ban className="w-4 h-4 shrink-0" />
+                                    Cancelaciones
+                                </h4>
+                                <span className="text-xs font-black tabular-nums bg-rose-100 text-rose-950 px-2.5 py-1 rounded-full border border-rose-200">
+                                    {statusDia.countCancelados} vuelo{statusDia.countCancelados !== 1 ? "s" : ""}
+                                </span>
+                            </div>
+                            <p className="text-xs font-bold text-rose-900/90 tabular-nums mb-3">
+                                PAX afectados (programados):{" "}
+                                <span className="text-lg font-black">{statusDia.paxCancelados}</span>
+                            </p>
+                            {statusDia.motivosCancelacionDetalle.length === 0 ? (
+                                <p className="text-sm text-slate-500 py-2">
+                                    {statusDia.countCancelados === 0
+                                        ? "Sin cancelaciones este día."
+                                        : "Ningún motivo de cancelación registrado en las tarjetas."}
+                                </p>
+                            ) : (
+                                <div className="overflow-x-auto rounded-lg border border-rose-100 bg-white">
+                                    <table className="w-full text-sm min-w-[280px]">
+                                        <thead>
+                                            <tr className="bg-rose-50 text-left text-[10px] font-black uppercase tracking-wider text-rose-800">
+                                                <th className="px-3 py-2">Motivo</th>
+                                                <th className="px-3 py-2 text-right whitespace-nowrap">Vuelos</th>
+                                                <th className="px-3 py-2 text-right whitespace-nowrap">PAX afect.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-rose-50">
+                                            {statusDia.motivosCancelacionDetalle.map((row, i) => (
+                                                <tr key={`${row.text}-${i}`} className="hover:bg-rose-50/50">
+                                                    <td className="px-3 py-2 text-slate-800 max-w-[min(100vw,20rem)]">
+                                                        <span className="line-clamp-2">{row.text}</span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right font-black tabular-nums text-rose-900">
+                                                        {row.count}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-800">
+                                                        {row.pax}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
                 </div>
                 )}

@@ -1,5 +1,6 @@
 import type { Flight, HitosData } from "../types";
 import { GANTT_CHARTS } from "./hitosData";
+import { getHitosDepartureTime } from "./flightHelpers";
 
 /**
  * Etiqueta en pestaña Crew → nombre exacto del hito en la carta Gantt (mismo offset T−).
@@ -32,8 +33,8 @@ export function formatMins(mins: number): string {
 
 export function refMinutesForHitos(flight: Flight, data: HitosData, chart: (typeof GANTT_CHARTS)[number]): number {
     const is1stWave = chart.name.includes("1ST WAVE");
-    const stdSafe = String(flight.std ?? "");
-    let refMinutes = parseToMins(stdSafe.replace(":", ""));
+    const depRef = getHitosDepartureTime(flight);
+    let refMinutes = parseToMins(depRef.replace(":", ""));
     if (!is1stWave && (data.ata ?? "").length >= 3) {
         const ataMins = parseToMins(data.ata.padStart(4, "0"));
         const etdMinutes = ataMins + chart.tatMinutes;

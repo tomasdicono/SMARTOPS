@@ -37,8 +37,8 @@ export function RescheduleFlightModal({ flight, onClose, onConfirm }: Props) {
 
     useEffect(() => {
         if (flight) {
-            setEtd(toTimeInputValue(flight.std));
-            setReason("");
+            setEtd(toTimeInputValue(flight.etd || flight.std));
+            setReason(flight.rescheduleReason?.trim() ? flight.rescheduleReason : "");
             setError("");
         }
     }, [flight?.id]);
@@ -108,7 +108,8 @@ export function RescheduleFlightModal({ flight, onClose, onConfirm }: Props) {
 
                 <form onSubmit={handleSubmit} className="p-5 space-y-4">
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                        Se actualizará la hora de salida programada (STD/ETD) para este vuelo. El motivo queda registrado en la tarjeta.
+                        El <span className="font-bold">STD</span> de programación no cambia. Se guarda un{" "}
+                        <span className="font-bold">ETD</span> para hitos y tablero; el MVT sigue comparando demoras contra el STD.
                     </p>
                     <div>
                         <label htmlFor="reschedule-etd" className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
@@ -124,7 +125,16 @@ export function RescheduleFlightModal({ flight, onClose, onConfirm }: Props) {
                             }}
                             className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500"
                         />
-                        <p className="mt-1 text-xs text-slate-500">Actual: {flight.std || "—"}</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">STD programación (fijo):</span>{" "}
+                            {flight.std || "—"}
+                            {flight.etd?.trim() ? (
+                                <>
+                                    {" "}
+                                    · <span className="font-semibold">ETD vigente:</span> {flight.etd}
+                                </>
+                            ) : null}
+                        </p>
                     </div>
                     <div>
                         <label htmlFor="reschedule-reason" className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">

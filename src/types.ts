@@ -38,6 +38,8 @@ export interface Flight {
     dep: string;
     arr: string;
     std: string;
+    /** Salida reprogramada (ETD). Si existe, los hitos usan ETD; el STD sigue siendo el de programación (MVT / demoras). */
+    etd?: string;
     sta: string;
     pax: string;
 
@@ -72,7 +74,7 @@ export interface Flight {
     cancelled?: boolean;
     cancellationReason?: string;
 
-    /** Reprogramación (HCC / AJS): STD anterior y motivo al cambiar ETD. */
+    /** Legado: antes el STD se sobrescribía al reprogramar; `coerceFlightFromDb` migra a std+etd. */
     previousStd?: string;
     rescheduleReason?: string;
 

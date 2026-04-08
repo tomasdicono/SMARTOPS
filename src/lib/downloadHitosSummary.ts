@@ -47,6 +47,7 @@ interface HitosSummaryPayload {
         arr: string;
         reg: string;
         std: string;
+        etd?: string;
         sta: string;
     };
     operational: {
@@ -74,6 +75,7 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
         arr: flight.arr,
         reg: flight.reg || "—",
         std: flight.std,
+        etd: flight.etd?.trim() || undefined,
         sta: flight.sta,
     };
 
@@ -487,6 +489,7 @@ export function buildHitosSummaryHtml(flight: Flight): string {
         <div><span>Ruta</span><span class="v">${escapeHtml(m.dep)} → ${escapeHtml(m.arr)}</span></div>
         <div><span>Matrícula</span><span class="v mono">${escapeHtml(m.reg)}</span></div>
         <div><span>STD</span><span class="v mono">${escapeHtml(m.std)}</span></div>
+        ${m.etd ? `<div><span>ETD</span><span class="v mono">${escapeHtml(m.etd)}</span></div>` : ""}
         <div><span>STA</span><span class="v mono">${escapeHtml(m.sta)}</span></div>
       </div>
     </header>

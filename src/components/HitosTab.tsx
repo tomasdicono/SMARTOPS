@@ -3,6 +3,7 @@ import { GANTT_CHARTS } from "../lib/hitosData";
 import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
+import { getHitosDepartureTime } from "../lib/flightHelpers";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 import { Save, AlertCircle, Clock } from "lucide-react";
 
@@ -45,15 +46,16 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
     const selectedChart = GANTT_CHARTS.find(c => c.name === data.ganttChartName);
     const is1stWave = selectedChart?.name.includes("1ST WAVE") || false;
 
-    const stdSafe = String(flight.std ?? "");
-    let refMinutes = parseToMins(stdSafe.replace(":", ""));
-    let etdMinutes: number | null = null;
+    const hitosRefTime = getHitosDepartureTime(flight);
+    const stdProg = String(flight.std ?? "");
+    let refMinutes = parseToMins(hitosRefTime.replace(":", ""));
+    let etdFromAtaMinutes: number | null = null;
 
     if (selectedChart && !is1stWave && (data.ata ?? "").length >= 3) {
         const ataMins = parseToMins(data.ata.padStart(4, "0"));
-        etdMinutes = ataMins + selectedChart.tatMinutes;
-        if (etdMinutes > refMinutes) {
-            refMinutes = etdMinutes;
+        etdFromAtaMinutes = ataMins + selectedChart.tatMinutes;
+        if (etdFromAtaMinutes > refMinutes) {
+            refMinutes = etdFromAtaMinutes;
         }
     }
 
@@ -126,15 +128,24 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
                 </div>
 
                 {selectedChart && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-sm">
-                        <div>
-                            <span className="text-muted-foreground font-bold mr-2">Referencia Base:</span>
-                            <span className="font-mono bg-primary/10 text-primary px-2 py-1 rounded font-bold">{stdSafe || "—"} STD</span>
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm">
+                        <div className="flex flex-col gap-1">
+                            <div>
+                                <span className="text-muted-foreground font-bold mr-2">Referencia hitos (ETD o STD):</span>
+                                <span className="font-mono bg-primary/10 text-primary px-2 py-1 rounded font-bold">
+                                    {hitosRefTime || "—"}{flight.etd?.trim() ? " ETD" : " STD"}
+                                </span>
+                            </div>
+                            {flight.etd?.trim() ? (
+                                <p className="text-xs text-slate-500 font-semibold">
+                                    STD programación (MVT): <span className="font-mono text-slate-700">{stdProg || "—"}</span>
+                                </p>
+                            ) : null}
                         </div>
-                        {etdMinutes !== null && etdMinutes > parseToMins(stdSafe.replace(":", "")) && (
-                            <div className="flex items-center gap-1.5 text-orange-600 font-bold bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200">
+                        {etdFromAtaMinutes !== null && etdFromAtaMinutes > parseToMins(hitosRefTime.replace(":", "")) && (
+                            <div className="flex items-center gap-1.5 text-orange-600 font-bold bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 shrink-0">
                                 <AlertCircle className="w-4 h-4" />
-                                ETD Ajustado: {formatMins(etdMinutes)} LT
+                                ETD desde ATA+TAT: {formatMins(etdFromAtaMinutes)} LT
                             </div>
                         )}
                     </div>

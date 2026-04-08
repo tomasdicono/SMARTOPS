@@ -37,13 +37,26 @@ export function coerceFlightFromDb(f: Flight): Flight {
     if (f.dailyReportObs != null) {
         base.dailyReportObs = String(f.dailyReportObs);
     }
-    if (f.previousStd != null) {
-        base.previousStd = String(f.previousStd);
+    const explicitEtd = f.etd != null && String(f.etd).trim() !== "";
+    if (explicitEtd) {
+        base.etd = String(f.etd).trim();
+    } else if (f.previousStd) {
+        /** Legado: STD contenía el horario reprogramado; previousStd era el programado original. */
+        base.etd = base.std;
+        base.std = String(f.previousStd);
     }
     if (f.rescheduleReason != null) {
         base.rescheduleReason = String(f.rescheduleReason);
     }
+    delete base.previousStd;
     return base;
+}
+
+/** Referencia de salida para hitos y línea de tiempo operativa: ETD si hay reprogramación, si no STD. */
+export function getHitosDepartureTime(f: Flight): string {
+    const e = String(f.etd ?? "").trim();
+    if (e) return e;
+    return String(f.std ?? "").trim();
 }
 
 /** Fecha de vuelo → "04APR" (dd + mes en inglés), acepta DD-MM-YYYY o YYYY-MM-DD */

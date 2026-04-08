@@ -19,10 +19,15 @@ interface Props {
 
 export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos, onPersistHitos, onSaveCrewHitos, onPersistCrewHitos }: Props) {
     const [activeTab, setActiveTab] = useState<"MVT" | "HITOS" | "CREW">(() => {
-        return userRole === "CREW" ? "CREW" : "MVT";
+        if (userRole === "CREW") return "HITOS";
+        return "MVT";
     });
 
-    const canSeeStandard = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS";
+    /** MVT: operaciones / supervisión de carga */
+    const canSeeMvt = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS";
+    /** Hitos (Gantt + ATA): SC y también CREW de forma independiente */
+    const canSeeHitos =
+        userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS" || userRole === "CREW";
     const canSeeCrew = userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS";
     const isReadOnlyView = !!flight.cancelled;
 
@@ -47,8 +52,14 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                             </div>
                             <div>
                                 <p className="text-xs text-muted-foreground">STD</p>
-                                <p className="font-bold text-sm md:text-base">{flight.std}</p>
+                                <p className="font-bold text-sm md:text-base tabular-nums">{flight.std}</p>
                             </div>
+                            {flight.etd?.trim() ? (
+                                <div>
+                                    <p className="text-xs text-amber-700 dark:text-amber-300 font-semibold">ETD</p>
+                                    <p className="font-bold text-sm md:text-base tabular-nums text-amber-800 dark:text-amber-200">{flight.etd}</p>
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                     <button
@@ -76,27 +87,27 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
 
                 {/* Tabs */}
                 <div className="flex px-6 border-b border-border bg-slate-50/50">
-                    {canSeeStandard && (
-                        <>
-                            <button
-                                onClick={() => setActiveTab("MVT")}
-                                className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "MVT" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
-                            >
-                                MVT
-                                {activeTab === "MVT" && (
-                                    <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
-                                )}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("HITOS")}
-                                className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "HITOS" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
-                            >
-                                Hitos
-                                {activeTab === "HITOS" && (
-                                    <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
-                                )}
-                            </button>
-                        </>
+                    {canSeeMvt && (
+                        <button
+                            onClick={() => setActiveTab("MVT")}
+                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "MVT" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                            MVT
+                            {activeTab === "MVT" && (
+                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
+                            )}
+                        </button>
+                    )}
+                    {canSeeHitos && (
+                        <button
+                            onClick={() => setActiveTab("HITOS")}
+                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "HITOS" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                            Hitos
+                            {activeTab === "HITOS" && (
+                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
+                            )}
+                        </button>
                     )}
                     {canSeeCrew && (
                         <button
@@ -113,31 +124,31 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
-                    {/* Mantener pestañas montadas (hidden) para no perder estado local al cambiar MVT ↔ Hitos */}
-                    {canSeeStandard && (
-                        <>
-                            <div className={activeTab === "MVT" ? "block" : "hidden"} aria-hidden={activeTab !== "MVT"}>
-                                <MVTForm
-                                    key={flight.id}
-                                    flight={flight}
-                                    readOnly={isReadOnlyView}
-                                    onSave={(data) => {
-                                        onSaveMVT(data);
-                                    }}
-                                />
-                            </div>
-                            <div className={activeTab === "HITOS" ? "block" : "hidden"} aria-hidden={activeTab !== "HITOS"}>
-                                <HitosTab
-                                    key={flight.id}
-                                    flight={flight}
-                                    readOnly={isReadOnlyView}
-                                    onPersistHitos={onPersistHitos}
-                                    onSave={(data) => {
-                                        onSaveHitos(data);
-                                    }}
-                                />
-                            </div>
-                        </>
+                    {/* Mantener pestañas montadas (hidden) para no perder estado local al cambiar de pestaña */}
+                    {canSeeMvt && (
+                        <div className={activeTab === "MVT" ? "block" : "hidden"} aria-hidden={activeTab !== "MVT"}>
+                            <MVTForm
+                                key={flight.id}
+                                flight={flight}
+                                readOnly={isReadOnlyView}
+                                onSave={(data) => {
+                                    onSaveMVT(data);
+                                }}
+                            />
+                        </div>
+                    )}
+                    {canSeeHitos && (
+                        <div className={activeTab === "HITOS" ? "block" : "hidden"} aria-hidden={activeTab !== "HITOS"}>
+                            <HitosTab
+                                key={flight.id}
+                                flight={flight}
+                                readOnly={isReadOnlyView}
+                                onPersistHitos={onPersistHitos}
+                                onSave={(data) => {
+                                    onSaveHitos(data);
+                                }}
+                            />
+                        </div>
                     )}
                     {canSeeCrew && (
                         <div className={activeTab === "CREW" ? "block" : "hidden"} aria-hidden={activeTab !== "CREW"}>

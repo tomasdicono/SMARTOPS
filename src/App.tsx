@@ -5,7 +5,7 @@ import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
 import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
-import { getAirlinePrefix, coerceFlightFromDb } from "./lib/flightHelpers";
+import { getAirlinePrefix, coerceFlightFromDb, getHitosDepartureTime } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
 import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock } from "lucide-react";
@@ -161,8 +161,7 @@ function App() {
       if (f.id !== id) return f;
       return {
         ...f,
-        previousStd: f.std,
-        std: newEtd,
+        etd: newEtd,
         rescheduleReason: reason,
       };
     });
@@ -407,7 +406,7 @@ function App() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...filteredFlights].sort((a, b) => a.std.localeCompare(b.std)).map((flight) => {
+            {[...filteredFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
               const isCancelled = !!flight.cancelled;
               const isLate = !isCancelled && isFlightIncompleteAndLate(flight);
               const hasMvt = !!flight.mvtData?.atd;
@@ -475,10 +474,18 @@ function App() {
                   </div>
 
                   <div className="flex items-center justify-between font-bold mb-6">
-                    <div className="flex flex-col items-start leading-tight relative">
+                    <div className="flex flex-col items-start leading-tight relative gap-0.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">STD</span>
                       <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.std} align="left" />
                       <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.dep}</span>
-                      <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70">{flight.std}</span>
+                      <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70 tabular-nums">{flight.std}</span>
+                      {flight.etd?.trim() ? (
+                        <div className="mt-1.5 pt-1.5 border-t border-dashed border-amber-300/80 dark:border-amber-700/60 w-full">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">ETD</span>
+                          <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.etd} align="left" />
+                          <span className="text-sm font-black text-amber-900 dark:text-amber-200 tabular-nums">{flight.etd}</span>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex-1 flex flex-col items-center justify-center px-4">
                       <div className={`w-full h-px ${isLate ? "bg-red-300 dark:bg-red-800/50" : "bg-border"}`}></div>
@@ -592,9 +599,11 @@ function App() {
                       Cancelar vuelo
                     </button>
                   )}
-                  {!isCancelled && flight.rescheduleReason && flight.previousStd && (
+                  {!isCancelled && flight.rescheduleReason?.trim() && (
                     <p className="mt-2 text-xs text-amber-900/90 dark:text-amber-200/90 line-clamp-4 border-t border-amber-200/80 dark:border-amber-800/80 pt-2 text-left">
-                      <span className="font-bold text-amber-800 dark:text-amber-300">Reprogramado (ex-STD {flight.previousStd}): </span>
+                      <span className="font-bold text-amber-800 dark:text-amber-300">
+                        Reprogramación{flight.etd?.trim() ? ` · ETD ${flight.etd}` : ""}:{" "}
+                      </span>
                       {flight.rescheduleReason}
                     </p>
                   )}

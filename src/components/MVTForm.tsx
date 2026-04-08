@@ -133,10 +133,22 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
 
             {/* Horarios Básicos */}
             <section className="bg-slate-50/50 p-5 rounded-xl border border-border">
-                <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
+                <h3
+                    className={`text-sm font-bold text-foreground uppercase tracking-wider flex flex-wrap items-center gap-2 ${flight.etd?.trim() ? "mb-2" : "mb-4"}`}
+                >
                     Horarios
                     <span className="text-xs font-normal text-muted-foreground bg-primary/10 px-2 py-0.5 rounded-full">STD: {flight.std}</span>
+                    {flight.etd?.trim() ? (
+                        <span className="text-xs font-normal text-amber-800 dark:text-amber-200 bg-amber-100/80 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-300/60">
+                            ETD: {flight.etd}
+                        </span>
+                    ) : null}
                 </h3>
+                {flight.etd?.trim() ? (
+                    <p className="text-xs text-muted-foreground mb-4 font-medium">
+                        Demoras y comparación ATD vs referencia usan el <span className="font-bold">STD</span> de programación, no el ETD.
+                    </p>
+                ) : null}
                 <div className="grid grid-cols-3 gap-4">
                     <NumberInput label="ATD" value={data.atd} onChange={(v) => handleChange("atd", v)} placeholder="Ej: 1430" />
                     <NumberInput label="OFF" value={data.off} onChange={(v) => handleChange("off", v)} placeholder="Ej: 1445" />
