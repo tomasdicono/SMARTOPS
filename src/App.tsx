@@ -213,6 +213,17 @@ function App() {
     set(ref(db, 'flights'), updatedFlights);
   };
 
+  const handleUpdateFlightRoute = (id: string, field: "dep" | "arr", value: string) => {
+    const v = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    const updatedFlights = flights.map((f) => {
+      if (f.id !== id) return f;
+      const dep = field === "dep" ? v : String(f.dep ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+      const arr = field === "arr" ? v : String(f.arr ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+      return { ...f, [field]: v, route: `${dep}-${arr}` };
+    });
+    set(ref(db, "flights"), updatedFlights);
+  };
+
   const flightsForSelectedDate = flights.filter((f) => {
     const dateRaw = String(f.date ?? "");
     let flightIso = dateRaw;
@@ -535,10 +546,27 @@ function App() {
                   </div>
 
                   <div className="flex items-center justify-between font-bold mb-6">
-                    <div className="flex flex-col items-start leading-tight relative gap-0.5">
+                    <div
+                      className="flex flex-col items-start leading-tight relative gap-0.5 min-w-0 max-w-[45%]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">STD</span>
                       <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.std} align="left" />
-                      <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.dep}</span>
+                      {(userRole === "ADMIN" || userRole === "HCC") ? (
+                        <input
+                          type="text"
+                          value={flight.dep}
+                          onChange={(e) => handleUpdateFlightRoute(flight.id, "dep", e.target.value)}
+                          maxLength={4}
+                          autoComplete="off"
+                          spellCheck={false}
+                          title="Origen (IATA)"
+                          aria-label="Aeropuerto de origen"
+                          className={`w-full min-w-[2.5rem] max-w-[5rem] text-2xl font-black bg-transparent border-b-2 border-dashed border-slate-300 dark:border-slate-600 pb-0.5 focus:outline-none focus:border-primary focus:ring-0 cursor-text ${isLate ? "dark:text-white text-red-900" : "text-slate-800 dark:text-slate-100"}`}
+                        />
+                      ) : (
+                        <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.dep}</span>
+                      )}
                       <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70 tabular-nums">{flight.std}</span>
                       {flight.etd?.trim() ? (
                         <div className="mt-1.5 pt-1.5 border-t border-dashed border-amber-300/80 dark:border-amber-700/60 w-full">
@@ -551,9 +579,26 @@ function App() {
                     <div className="flex-1 flex flex-col items-center justify-center px-4">
                       <div className={`w-full h-px ${isLate ? "bg-red-300 dark:bg-red-800/50" : "bg-border"}`}></div>
                     </div>
-                    <div className="flex flex-col items-end leading-tight relative">
+                    <div
+                      className="flex flex-col items-end leading-tight relative min-w-0 max-w-[45%]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <WeatherIndicator iata={flight.arr} date={flight.date} time={flight.sta} align="right" />
-                      <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.arr}</span>
+                      {(userRole === "ADMIN" || userRole === "HCC") ? (
+                        <input
+                          type="text"
+                          value={flight.arr}
+                          onChange={(e) => handleUpdateFlightRoute(flight.id, "arr", e.target.value)}
+                          maxLength={4}
+                          autoComplete="off"
+                          spellCheck={false}
+                          title="Destino (IATA)"
+                          aria-label="Aeropuerto de destino"
+                          className={`w-full min-w-[2.5rem] max-w-[5rem] text-2xl font-black text-right bg-transparent border-b-2 border-dashed border-slate-300 dark:border-slate-600 pb-0.5 focus:outline-none focus:border-primary focus:ring-0 cursor-text ${isLate ? "dark:text-white text-red-900" : "text-slate-800 dark:text-slate-100"}`}
+                        />
+                      ) : (
+                        <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.arr}</span>
+                      )}
                       <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70">{flight.sta}</span>
                     </div>
                   </div>
