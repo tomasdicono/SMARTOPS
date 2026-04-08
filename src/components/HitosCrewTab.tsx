@@ -27,7 +27,7 @@ export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: P
     }, [flight.id]);
 
     useDebouncedFlightPersist(data, readOnly ? undefined : onPersistCrewHitos, {
-        readOnly,
+        readOnly: !!readOnly,
         flightId: flight.id,
     });
 

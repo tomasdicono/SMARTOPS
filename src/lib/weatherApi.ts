@@ -66,7 +66,14 @@ export async function fetchWeatherAlert(iata: string, date: string, time: string
     const isoDate = parseDate(date);
     const cacheKey = `${iata.toUpperCase()}-${isoDate}`;
 
-    let data = cache[cacheKey] as { hourly?: { time?: string[] } } | undefined;
+    type HourlyForecast = {
+        time?: string[];
+        weather_code?: (number | null)[];
+        visibility?: (number | null)[];
+        wind_speed_10m?: (number | null)[];
+        wind_gusts_10m?: (number | null)[];
+    };
+    let data = cache[cacheKey] as { hourly?: HourlyForecast } | undefined;
 
     if (!data) {
         const existing = inflight.get(cacheKey);
@@ -100,22 +107,26 @@ export async function fetchWeatherAlert(iata: string, date: string, time: string
 
     if (index === -1) return { hasAlert: false, messages: [] };
 
-    const code = data.hourly.weather_code[index];
-    const vis = data.hourly.visibility[index];
-    const wind = data.hourly.wind_speed_10m[index];
-    const gusts = data.hourly.wind_gusts_10m[index];
+    const wc = data.hourly.weather_code;
+    const visArr = data.hourly.visibility;
+    const ws = data.hourly.wind_speed_10m;
+    const wg = data.hourly.wind_gusts_10m;
+    const code = wc?.[index];
+    const vis = visArr?.[index];
+    const wind = ws?.[index];
+    const gusts = wg?.[index];
 
     const messages: string[] = [];
 
     // WMO Weather interpretation codes mapping
-    if ([65, 67].includes(code)) messages.push("Lluvia fuerte detectada");
-    if ([71, 73, 75, 77].includes(code)) messages.push("Nevada moderada/fuerte");
-    if ([95, 96, 99].includes(code)) messages.push("Tormentas eléctricas esperadas");
-    if ([45, 48].includes(code)) messages.push("Niebla pesada (Escarcha)");
+    if (code != null && [65, 67].includes(code)) messages.push("Lluvia fuerte detectada");
+    if (code != null && [71, 73, 75, 77].includes(code)) messages.push("Nevada moderada/fuerte");
+    if (code != null && [95, 96, 99].includes(code)) messages.push("Tormentas eléctricas esperadas");
+    if (code != null && [45, 48].includes(code)) messages.push("Niebla pesada (Escarcha)");
 
-    if (vis !== null && vis < 1500) messages.push(`Baja visibilidad (${vis}m)`);
-    if (wind !== null && wind > 40) messages.push(`Vientos fuertes sostenidos (${wind} km/h)`);
-    if (gusts !== null && gusts > 60) messages.push(`Ráfagas intensas (${gusts} km/h)`);
+    if (vis != null && vis < 1500) messages.push(`Baja visibilidad (${vis}m)`);
+    if (wind != null && wind > 40) messages.push(`Vientos fuertes sostenidos (${wind} km/h)`);
+    if (gusts != null && gusts > 60) messages.push(`Ráfagas intensas (${gusts} km/h)`);
 
     return {
         hasAlert: messages.length > 0,

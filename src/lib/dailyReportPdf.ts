@@ -137,8 +137,8 @@ export async function downloadDailyReportPdf(
             overflow: "linebreak",
             valign: "middle",
             minCellHeight: 4.5,
-            textColor: JS.text,
-            lineColor: JS.border,
+            textColor: [...JS.text] as [number, number, number],
+            lineColor: [...JS.border] as [number, number, number],
             lineWidth: 0.15,
         },
         headStyles: {

@@ -3,7 +3,6 @@ import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2 } from "lucide-react";
 import { parseTimeToMinutes, formatMinutesToHHMM } from "../lib/mvtTime";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
-import { normalizeMvtData } from "../lib/flightDataNormalize";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
 
 interface Props {
