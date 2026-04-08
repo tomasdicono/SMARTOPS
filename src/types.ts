@@ -72,6 +72,10 @@ export interface Flight {
     cancelled?: boolean;
     cancellationReason?: string;
 
+    /** Reprogramación (HCC / AJS): STD anterior y motivo al cambiar ETD. */
+    previousStd?: string;
+    rescheduleReason?: string;
+
     /** Notas libres en Reporte Diario (HCC / AJS). */
     dailyReportObs?: string;
 }

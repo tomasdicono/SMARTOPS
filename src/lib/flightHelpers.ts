@@ -37,6 +37,12 @@ export function coerceFlightFromDb(f: Flight): Flight {
     if (f.dailyReportObs != null) {
         base.dailyReportObs = String(f.dailyReportObs);
     }
+    if (f.previousStd != null) {
+        base.previousStd = String(f.previousStd);
+    }
+    if (f.rescheduleReason != null) {
+        base.rescheduleReason = String(f.rescheduleReason);
+    }
     return base;
 }
 

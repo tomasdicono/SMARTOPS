@@ -8,7 +8,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get } from "firebase/database";
@@ -19,12 +19,14 @@ import { ControlView } from "./components/ControlView";
 import { CancelFlightModal } from "./components/CancelFlightModal";
 import { DailyReportView } from "./components/DailyReportView";
 import { ManualFlightModal } from "./components/ManualFlightModal";
+import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<"tablero" | "control" | "reporte">("tablero");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
+  const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
   const [showParser, setShowParser] = useState(false);
   const [showManualFlight, setShowManualFlight] = useState(false);
   const [showOpsMenu, setShowOpsMenu] = useState(false);
@@ -151,6 +153,21 @@ function App() {
     );
     set(ref(db, "flights"), updatedFlights);
     setCancelModalFlight(null);
+    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
+  };
+
+  const handleRescheduleFlight = (id: string, newEtd: string, reason: string) => {
+    const updatedFlights = flights.map((f) => {
+      if (f.id !== id) return f;
+      return {
+        ...f,
+        previousStd: f.std,
+        std: newEtd,
+        rescheduleReason: reason,
+      };
+    });
+    set(ref(db, "flights"), updatedFlights);
+    setRescheduleModalFlight(null);
     setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
   };
 
@@ -549,6 +566,19 @@ function App() {
                     )}
                   </div>
 
+                  {(userRole === "HCC" || userRole === "AJS") && !isCancelled && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRescheduleModalFlight(flight);
+                      }}
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide text-amber-900 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                    >
+                      <CalendarClock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                      Reprogramar vuelo
+                    </button>
+                  )}
                   {!isCancelled && (
                     <button
                       type="button"
@@ -561,6 +591,12 @@ function App() {
                       <Ban className="w-3.5 h-3.5 shrink-0" aria-hidden />
                       Cancelar vuelo
                     </button>
+                  )}
+                  {!isCancelled && flight.rescheduleReason && flight.previousStd && (
+                    <p className="mt-2 text-xs text-amber-900/90 dark:text-amber-200/90 line-clamp-4 border-t border-amber-200/80 dark:border-amber-800/80 pt-2 text-left">
+                      <span className="font-bold text-amber-800 dark:text-amber-300">Reprogramado (ex-STD {flight.previousStd}): </span>
+                      {flight.rescheduleReason}
+                    </p>
                   )}
                   {isCancelled && flight.cancellationReason && (
                     <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 line-clamp-4 border-t border-slate-200 dark:border-slate-600 pt-2 text-left">
@@ -617,6 +653,14 @@ function App() {
           flight={cancelModalFlight}
           onClose={() => setCancelModalFlight(null)}
           onConfirm={(reason) => handleCancelFlight(cancelModalFlight.id, reason)}
+        />
+      )}
+
+      {rescheduleModalFlight && (
+        <RescheduleFlightModal
+          flight={rescheduleModalFlight}
+          onClose={() => setRescheduleModalFlight(null)}
+          onConfirm={(etd, reason) => handleRescheduleFlight(rescheduleModalFlight.id, etd, reason)}
         />
       )}
 
