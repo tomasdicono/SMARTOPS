@@ -19,15 +19,14 @@ interface Props {
 
 export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos, onPersistHitos, onSaveCrewHitos, onPersistCrewHitos }: Props) {
     const [activeTab, setActiveTab] = useState<"MVT" | "HITOS" | "CREW">(() => {
-        if (userRole === "CREW") return "HITOS";
+        if (userRole === "CREW") return "CREW";
         return "MVT";
     });
 
     /** MVT: operaciones / supervisión de carga */
     const canSeeMvt = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS";
-    /** Hitos (Gantt + ATA): SC y también CREW de forma independiente */
-    const canSeeHitos =
-        userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS" || userRole === "CREW";
+    /** Hitos (Gantt + ATA): sin acceso CREW (solo Hitos Crew) */
+    const canSeeHitos = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS";
     const canSeeCrew = userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS";
     const isReadOnlyView = !!flight.cancelled;
 
