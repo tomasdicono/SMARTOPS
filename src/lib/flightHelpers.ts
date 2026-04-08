@@ -100,7 +100,7 @@ export function getAirlinePrefix(flt: string | number): string {
 
     const num = parseInt(match[0], 10);
 
-    if (num >= 0 && num <= 1000) return "JAT";
+    if (num >= 0 && num <= 1500) return "JAT";
     if (num >= 3000 && num <= 3999) return "JES";
     if (num >= 7000 && num <= 8000) return "JAP";
 
