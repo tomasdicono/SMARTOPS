@@ -197,6 +197,30 @@ export function isAffectedByDelayOrReprogramming(f: Flight): boolean {
     return !!f.etd?.trim();
 }
 
+/** Códigos de demora en MVT (dlyCod1 / dlyCod2); porcentajes sobre el total de códigos registrados en el día. */
+export interface DelayCodeShare {
+    code: string;
+    count: number;
+    pct: number;
+}
+
+export function rankDelayCodesByShare(flights: Flight[]): DelayCodeShare[] {
+    const counts = new Map<string, number>();
+    for (const f of flights) {
+        const m = f.mvtData;
+        if (!m) continue;
+        const c1 = String(m.dlyCod1 ?? "").trim();
+        const c2 = String(m.dlyCod2 ?? "").trim();
+        if (c1) counts.set(c1, (counts.get(c1) ?? 0) + 1);
+        if (c2) counts.set(c2, (counts.get(c2) ?? 0) + 1);
+    }
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    if (total <= 0) return [];
+    return [...counts.entries()]
+        .map(([code, count]) => ({ code, count, pct: (count / total) * 100 }))
+        .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+}
+
 /** Agrupa textos por clave normalizada (trim + espacios); orden por frecuencia descendente. */
 export function rankStringsByFrequency(items: (string | undefined | null)[]): { text: string; count: number }[] {
     const map = new Map<string, { display: string; count: number }>();

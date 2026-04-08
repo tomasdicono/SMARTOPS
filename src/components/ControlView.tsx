@@ -15,11 +15,10 @@ import {
     flightDaySegments,
     clipSegmentToWindow,
     isFlightDemoradoStatusDia,
-    hasMvtPaxEntered,
-    isAffectedByDelayOrReprogramming,
     hasMvtAtdForOtp,
     otpDelayMinutesVsStd,
     rankStringsByFrequency,
+    rankDelayCodesByShare,
 } from "../lib/controlHelpers";
 import {
     BarChart3,
@@ -36,6 +35,7 @@ import {
     Activity,
     ListOrdered,
     Target,
+    BarChartHorizontal,
 } from "lucide-react";
 
 interface Props {
@@ -176,13 +176,14 @@ export function ControlView({ flights, selectedDate }: Props) {
     const statusDia = useMemo(() => {
         const operational = dayFlights.filter((f) => !f.cancelled);
         const cancelled = dayFlights.filter((f) => f.cancelled);
-        const paxTransportadosMvt = operational.reduce((s, f) => s + getMvtPaxOnly(f), 0);
-        const hayPaxMvt = operational.some((f) => hasMvtPaxEntered(f));
         const demorados = operational.filter((f) => isFlightDemoradoStatusDia(f));
-        const afectadosDemoras = operational.filter((f) => isAffectedByDelayOrReprogramming(f));
-        const paxAfectadosProgramados = afectadosDemoras.reduce((s, f) => s + getScheduledPax(f), 0);
-        const reprogramados = dayFlights.filter((f) => f.etd?.trim() || f.rescheduleReason?.trim());
-        const motivosReprogramacion = rankStringsByFrequency(reprogramados.map((f) => f.rescheduleReason));
+        /** Solo vuelos con ETD (reprogramación): PAX programados; sin contar afectación solo por demoras MVT */
+        const conEtd = operational.filter((f) => f.etd?.trim());
+        const paxAfectadosReprogramacion = conEtd.reduce((s, f) => s + getScheduledPax(f), 0);
+        const countVuelosReprogramados = conEtd.length;
+        const motivosReprogramacion = rankStringsByFrequency(conEtd.map((f) => f.rescheduleReason));
+
+        const demoraCodigos = rankDelayCodesByShare(operational);
 
         const cancelByKey = new Map<string, { text: string; count: number; pax: number }>();
         for (const f of cancelled) {
@@ -218,12 +219,11 @@ export function ControlView({ flights, selectedDate }: Props) {
         const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;
 
         return {
-            paxTransportadosMvt,
-            hayPaxMvt,
             countDemorados: demorados.length,
-            paxAfectadosProgramados,
-            countVuelosAfectados: afectadosDemoras.length,
+            paxAfectadosReprogramacion,
+            countVuelosReprogramados,
             motivosReprogramacion,
+            demoraCodigos,
             countCancelados: cancelled.length,
             motivosCancelacionDetalle,
             paxCancelados,
@@ -613,19 +613,7 @@ export function ControlView({ flights, selectedDate }: Props) {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {statusDia.hayPaxMvt ? (
-                            <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
-                                <p className="text-xs font-black uppercase text-indigo-800 tracking-wide flex items-center gap-2">
-                                    <Users className="w-4 h-4" />
-                                    Pasajeros transportados
-                                </p>
-                                <p className="text-3xl font-black text-indigo-950 mt-2 tabular-nums">{statusDia.paxTransportadosMvt}</p>
-                                <p className="text-[11px] text-slate-500 mt-1 font-semibold">
-                                    Suma PAX según MVT (casilla PAX actual) · vuelos no cancelados
-                                </p>
-                            </div>
-                        ) : null}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-2">
                                 <Clock className="w-4 h-4" />
@@ -639,96 +627,133 @@ export function ControlView({ flights, selectedDate }: Props) {
                         <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-orange-900 tracking-wide flex items-center gap-2">
                                 <AlertTriangle className="w-4 h-4" />
-                                Afectados por demoras
+                                Afectados por reprogramaciones
                             </p>
-                            <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">{statusDia.paxAfectadosProgramados}</p>
+                            <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">
+                                {statusDia.paxAfectadosReprogramacion}
+                            </p>
                             <p className="text-[11px] text-orange-900/85 mt-1 font-semibold">
-                                PAX programados en vuelos con demora MVT y/o reprogramación (ETD)
-                                {statusDia.countVuelosAfectados > 0 ? (
+                                Suma de PAX programados en vuelos con ETD (no se incluyen pasajeros afectados solo por demoras
+                                registradas en MVT)
+                                {statusDia.countVuelosReprogramados > 0 ? (
                                     <span className="block mt-1 text-orange-800/90">
-                                        {statusDia.countVuelosAfectados} vuelo{statusDia.countVuelosAfectados !== 1 ? "s" : ""} afectado
-                                        {statusDia.countVuelosAfectados !== 1 ? "s" : ""}
+                                        {statusDia.countVuelosReprogramados} vuelo
+                                        {statusDia.countVuelosReprogramados !== 1 ? "s" : ""} con ETD
                                     </span>
                                 ) : null}
                             </p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="rounded-xl border border-amber-300/80 bg-white p-4 sm:p-5 shadow-sm">
-                            <h4 className="text-sm font-black uppercase tracking-wide text-amber-900 flex items-center gap-2 mb-3">
-                                <ListOrdered className="w-4 h-4 shrink-0" />
-                                Motivos de reprogramación
-                            </h4>
-                            <p className="text-xs text-amber-900/75 font-semibold mb-3">
-                                Ordenados por frecuencia (mayor a menor)
+                    <div className="rounded-xl border border-amber-300/80 bg-white p-4 sm:p-5 shadow-sm">
+                        <h4 className="text-sm font-black uppercase tracking-wide text-amber-900 flex items-center gap-2 mb-3">
+                            <ListOrdered className="w-4 h-4 shrink-0" />
+                            Motivos de reprogramación
+                        </h4>
+                        <p className="text-xs text-amber-900/75 font-semibold mb-3">
+                            Vuelos con ETD · ordenados por frecuencia (mayor a menor)
+                        </p>
+                        {statusDia.motivosReprogramacion.length === 0 ? (
+                            <p className="text-sm text-slate-500 py-2">
+                                Sin vuelos con ETD este día, o sin motivos cargados.
                             </p>
-                            {statusDia.motivosReprogramacion.length === 0 ? (
-                                <p className="text-sm text-slate-500 py-2">Sin reprogramaciones registradas este día.</p>
-                            ) : (
-                                <ol className="space-y-2 list-decimal list-inside marker:font-black marker:text-amber-700">
-                                    {statusDia.motivosReprogramacion.map((row, i) => (
-                                        <li
-                                            key={`${row.text}-${i}`}
-                                            className="text-sm text-slate-800 pl-1 [&::marker]:text-xs"
-                                        >
-                                            <span className="font-bold tabular-nums text-amber-800">{row.count}×</span>{" "}
-                                            <span className="font-semibold">{row.text}</span>
-                                        </li>
-                                    ))}
-                                </ol>
-                            )}
-                        </div>
+                        ) : (
+                            <ol className="space-y-2 list-decimal list-inside marker:font-black marker:text-amber-700">
+                                {statusDia.motivosReprogramacion.map((row, i) => (
+                                    <li
+                                        key={`${row.text}-${i}`}
+                                        className="text-sm text-slate-800 pl-1 [&::marker]:text-xs"
+                                    >
+                                        <span className="font-bold tabular-nums text-amber-800">{row.count}×</span>{" "}
+                                        <span className="font-semibold">{row.text}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                    </div>
 
-                        <div className="rounded-xl border border-rose-300/80 bg-gradient-to-br from-rose-50/90 to-white p-4 sm:p-5 shadow-sm">
-                            <div className="flex flex-wrap items-center gap-2 justify-between mb-3">
-                                <h4 className="text-sm font-black uppercase tracking-wide text-rose-900 flex items-center gap-2">
-                                    <Ban className="w-4 h-4 shrink-0" />
-                                    Cancelaciones
-                                </h4>
-                                <span className="text-xs font-black tabular-nums bg-rose-100 text-rose-950 px-2.5 py-1 rounded-full border border-rose-200">
-                                    {statusDia.countCancelados} vuelo{statusDia.countCancelados !== 1 ? "s" : ""}
-                                </span>
-                            </div>
-                            <p className="text-xs font-bold text-rose-900/90 tabular-nums mb-3">
-                                PAX afectados (programados):{" "}
-                                <span className="text-lg font-black">{statusDia.paxCancelados}</span>
-                            </p>
-                            {statusDia.motivosCancelacionDetalle.length === 0 ? (
-                                <p className="text-sm text-slate-500 py-2">
-                                    {statusDia.countCancelados === 0
-                                        ? "Sin cancelaciones este día."
-                                        : "Ningún motivo de cancelación registrado en las tarjetas."}
-                                </p>
-                            ) : (
-                                <div className="overflow-x-auto rounded-lg border border-rose-100 bg-white">
-                                    <table className="w-full text-sm min-w-[280px]">
-                                        <thead>
-                                            <tr className="bg-rose-50 text-left text-[10px] font-black uppercase tracking-wider text-rose-800">
-                                                <th className="px-3 py-2">Motivo</th>
-                                                <th className="px-3 py-2 text-right whitespace-nowrap">Vuelos</th>
-                                                <th className="px-3 py-2 text-right whitespace-nowrap">PAX afect.</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-rose-50">
-                                            {statusDia.motivosCancelacionDetalle.map((row, i) => (
-                                                <tr key={`${row.text}-${i}`} className="hover:bg-rose-50/50">
-                                                    <td className="px-3 py-2 text-slate-800 max-w-[min(100vw,20rem)]">
-                                                        <span className="line-clamp-2">{row.text}</span>
-                                                    </td>
-                                                    <td className="px-3 py-2 text-right font-black tabular-nums text-rose-900">
-                                                        {row.count}
-                                                    </td>
-                                                    <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-800">
-                                                        {row.pax}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                    <div className="rounded-xl border border-violet-300/80 bg-gradient-to-br from-violet-50/90 to-white p-4 sm:p-5 shadow-sm">
+                        <h4 className="text-sm font-black uppercase tracking-wide text-violet-950 flex items-center gap-2 mb-2">
+                            <BarChartHorizontal className="w-4 h-4 shrink-0" />
+                            Motivos demoras (MVT)
+                        </h4>
+                        <p className="text-xs text-violet-900/80 font-semibold mb-4">
+                            Códigos dlyCod1 / dlyCod2 del día: participación sobre el total de códigos registrados
+                        </p>
+                        {statusDia.demoraCodigos.length === 0 ? (
+                            <p className="text-sm text-slate-500 py-2">Sin códigos de demora en MVT este día.</p>
+                        ) : (
+                            <ul className="space-y-3">
+                                {statusDia.demoraCodigos.map((row, i) => (
+                                    <li key={`${row.code}-${i}`} className="space-y-1">
+                                        <div className="flex justify-between gap-3 text-xs font-bold text-slate-800">
+                                            <span className="font-mono tabular-nums truncate" title={row.code}>
+                                                {row.code}
+                                            </span>
+                                            <span className="shrink-0 tabular-nums text-violet-900">
+                                                {row.pct.toFixed(1)}% · {row.count}×
+                                            </span>
+                                        </div>
+                                        <div className="h-2.5 rounded-full bg-violet-100/80 overflow-hidden border border-violet-200/60">
+                                            <div
+                                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 min-w-[2px]"
+                                                style={{ width: `${Math.min(100, row.pct)}%` }}
+                                            />
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+
+                    <div className="rounded-xl border border-rose-300/80 bg-gradient-to-br from-rose-50/90 to-white p-4 sm:p-5 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2 justify-between mb-3">
+                            <h4 className="text-sm font-black uppercase tracking-wide text-rose-900 flex items-center gap-2">
+                                <Ban className="w-4 h-4 shrink-0" />
+                                Cancelaciones
+                            </h4>
+                            <span className="text-xs font-black tabular-nums bg-rose-100 text-rose-950 px-2.5 py-1 rounded-full border border-rose-200">
+                                {statusDia.countCancelados} vuelo{statusDia.countCancelados !== 1 ? "s" : ""}
+                            </span>
                         </div>
+                        <p className="text-xs font-bold text-rose-900/90 tabular-nums mb-3">
+                            PAX afectados (programados):{" "}
+                            <span className="text-lg font-black">{statusDia.paxCancelados}</span>
+                        </p>
+                        {statusDia.motivosCancelacionDetalle.length === 0 ? (
+                            <p className="text-sm text-slate-500 py-2">
+                                {statusDia.countCancelados === 0
+                                    ? "Sin cancelaciones este día."
+                                    : "Ningún motivo de cancelación registrado en las tarjetas."}
+                            </p>
+                        ) : (
+                            <div className="overflow-x-auto rounded-lg border border-rose-100 bg-white">
+                                <table className="w-full text-sm min-w-[280px]">
+                                    <thead>
+                                        <tr className="bg-rose-50 text-left text-[10px] font-black uppercase tracking-wider text-rose-800">
+                                            <th className="px-3 py-2">Motivo</th>
+                                            <th className="px-3 py-2 text-right whitespace-nowrap">Vuelos</th>
+                                            <th className="px-3 py-2 text-right whitespace-nowrap">PAX afect.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-rose-50">
+                                        {statusDia.motivosCancelacionDetalle.map((row, i) => (
+                                            <tr key={`${row.text}-${i}`} className="hover:bg-rose-50/50">
+                                                <td className="px-3 py-2 text-slate-800 max-w-[min(100vw,20rem)]">
+                                                    <span className="line-clamp-2">{row.text}</span>
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-black tabular-nums text-rose-900">
+                                                    {row.count}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-800">
+                                                    {row.pax}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
                 </div>
