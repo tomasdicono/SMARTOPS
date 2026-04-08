@@ -15,7 +15,8 @@ import {
     flightDaySegments,
     clipSegmentToWindow,
     isFlightLateDeparture,
-    hasRecordedMvtDelay,
+    hasMvtPaxEntered,
+    isAffectedByDelayOrReprogramming,
     rankStringsByFrequency,
 } from "../lib/controlHelpers";
 import {
@@ -61,7 +62,7 @@ const FLIGHT_CARD_STYLES = [
 ];
 
 export function ControlView({ flights, selectedDate }: Props) {
-    const [subTab, setSubTab] = useState<ControlSubTab>("stats");
+    const [subTab, setSubTab] = useState<ControlSubTab>("statusDia");
     const [statsDate, setStatsDate] = useState(selectedDate);
     const [statsAirport, setStatsAirport] = useState("");
     /** Inicio de la ventana visible en la línea de tiempo (0, 8 o 16 h) */
@@ -172,9 +173,10 @@ export function ControlView({ flights, selectedDate }: Props) {
     const statusDia = useMemo(() => {
         const operational = dayFlights.filter((f) => !f.cancelled);
         const cancelled = dayFlights.filter((f) => f.cancelled);
-        const paxTransportados = operational.reduce((s, f) => s + getPax(f), 0);
+        const paxTransportadosMvt = operational.reduce((s, f) => s + getMvtPaxOnly(f), 0);
+        const hayPaxMvt = operational.some((f) => hasMvtPaxEntered(f));
         const demorados = operational.filter((f) => isFlightLateDeparture(f));
-        const conDemoraMvt = operational.filter((f) => hasRecordedMvtDelay(f));
+        const afectadosDemoras = operational.filter((f) => isAffectedByDelayOrReprogramming(f));
         const reprogramados = dayFlights.filter((f) => f.etd?.trim() || f.rescheduleReason?.trim());
         const motivosReprogramacion = rankStringsByFrequency(reprogramados.map((f) => f.rescheduleReason));
 
@@ -198,9 +200,10 @@ export function ControlView({ flights, selectedDate }: Props) {
 
         const paxCancelados = cancelled.reduce((s, f) => s + getScheduledPax(f), 0);
         return {
-            paxTransportados,
+            paxTransportadosMvt,
+            hayPaxMvt,
             countDemorados: demorados.length,
-            countAfectadosDemoras: conDemoraMvt.length,
+            countAfectadosDemoras: afectadosDemoras.length,
             motivosReprogramacion,
             countCancelados: cancelled.length,
             motivosCancelacionDetalle,
@@ -227,18 +230,6 @@ export function ControlView({ flights, selectedDate }: Props) {
                 <div className="flex flex-wrap gap-1 px-3 sm:px-4 py-2 bg-slate-100/80 border-b border-slate-200">
                     <button
                         type="button"
-                        onClick={() => setSubTab("stats")}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
-                            subTab === "stats"
-                                ? "bg-slate-800 text-white shadow-md"
-                                : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
-                        }`}
-                    >
-                        <BarChart3 className="w-4 h-4 shrink-0" />
-                        Estadísticas
-                    </button>
-                    <button
-                        type="button"
                         onClick={() => setSubTab("statusDia")}
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
                             subTab === "statusDia"
@@ -248,6 +239,18 @@ export function ControlView({ flights, selectedDate }: Props) {
                     >
                         <Activity className="w-4 h-4 shrink-0" />
                         Status día
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSubTab("stats")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                            subTab === "stats"
+                                ? "bg-slate-800 text-white shadow-md"
+                                : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
+                        }`}
+                    >
+                        <BarChart3 className="w-4 h-4 shrink-0" />
+                        Estadísticas
                     </button>
                     <button
                         type="button"
@@ -534,16 +537,18 @@ export function ControlView({ flights, selectedDate }: Props) {
                     </p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
-                            <p className="text-xs font-black uppercase text-indigo-800 tracking-wide flex items-center gap-2">
-                                <Users className="w-4 h-4" />
-                                Pasajeros transportados
-                            </p>
-                            <p className="text-3xl font-black text-indigo-950 mt-2 tabular-nums">{statusDia.paxTransportados}</p>
-                            <p className="text-[11px] text-slate-500 mt-1 font-semibold">
-                                Suma de PAX (MVT actual o programación si no hay MVT) · vuelos no cancelados
-                            </p>
-                        </div>
+                        {statusDia.hayPaxMvt ? (
+                            <div className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
+                                <p className="text-xs font-black uppercase text-indigo-800 tracking-wide flex items-center gap-2">
+                                    <Users className="w-4 h-4" />
+                                    Pasajeros transportados
+                                </p>
+                                <p className="text-3xl font-black text-indigo-950 mt-2 tabular-nums">{statusDia.paxTransportadosMvt}</p>
+                                <p className="text-[11px] text-slate-500 mt-1 font-semibold">
+                                    Suma PAX según MVT (casilla PAX actual) · vuelos no cancelados
+                                </p>
+                            </div>
+                        ) : null}
                         <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-2">
                                 <Clock className="w-4 h-4" />
@@ -557,11 +562,11 @@ export function ControlView({ flights, selectedDate }: Props) {
                         <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-orange-900 tracking-wide flex items-center gap-2">
                                 <AlertTriangle className="w-4 h-4" />
-                                Afectados por demoras (MVT)
+                                Afectados por demoras
                             </p>
                             <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">{statusDia.countAfectadosDemoras}</p>
                             <p className="text-[11px] text-orange-900/85 mt-1 font-semibold">
-                                Vuelos con código de demora + tiempo registrados en MVT
+                                Códigos de demora en MVT, o vuelos con ETD (reprogramados) aunque aún no haya MVT
                             </p>
                         </div>
                     </div>

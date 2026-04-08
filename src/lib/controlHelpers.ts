@@ -161,6 +161,21 @@ export function hasRecordedMvtDelay(f: Flight): boolean {
     return !!(d1 || d2);
 }
 
+/** Hay PAX declarado en el MVT (casilla PAX actual). */
+export function hasMvtPaxEntered(f: Flight): boolean {
+    return (f.mvtData?.paxActual ?? "").trim() !== "";
+}
+
+/**
+ * Vuelo operado con impacto por demora registrada en MVT o por reprogramación (ETD),
+ * contando casos programados aunque aún no haya MVT de demoras.
+ */
+export function isAffectedByDelayOrReprogramming(f: Flight): boolean {
+    if (f.cancelled) return false;
+    if (hasRecordedMvtDelay(f)) return true;
+    return !!f.etd?.trim();
+}
+
 /** Agrupa textos por clave normalizada (trim + espacios); orden por frecuencia descendente. */
 export function rankStringsByFrequency(items: (string | undefined | null)[]): { text: string; count: number }[] {
     const map = new Map<string, { display: string; count: number }>();
