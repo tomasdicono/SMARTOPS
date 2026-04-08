@@ -8,7 +8,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2 } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get } from "firebase/database";
@@ -17,10 +17,11 @@ import { Login } from "./components/Login";
 import { UserManagement } from "./components/UserManagement";
 import { ControlView } from "./components/ControlView";
 import { CancelFlightModal } from "./components/CancelFlightModal";
+import { DailyReportView } from "./components/DailyReportView";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [mainTab, setMainTab] = useState<"tablero" | "control">("tablero");
+  const [mainTab, setMainTab] = useState<"tablero" | "control" | "reporte">("tablero");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [showParser, setShowParser] = useState(false);
@@ -123,6 +124,11 @@ function App() {
     set(ref(db, 'flights'), updatedFlights);
   };
 
+  const handleUpdateDailyReportObs = (id: string, text: string) => {
+    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, dailyReportObs: text } : f));
+    set(ref(db, "flights"), updatedFlights);
+  };
+
   const handleCancelFlight = (id: string, reason: string) => {
     const updatedFlights = flights.map((f) =>
       f.id === id ? { ...f, cancelled: true, cancellationReason: reason } : f
@@ -150,7 +156,7 @@ function App() {
     set(ref(db, 'flights'), updatedFlights);
   };
 
-  const filteredFlights = flights.filter(f => {
+  const flightsForSelectedDate = flights.filter((f) => {
     const dateRaw = String(f.date ?? "");
     let flightIso = dateRaw;
     if (dateRaw && dateRaw.includes("-")) {
@@ -159,16 +165,17 @@ function App() {
         flightIso = `${y}-${m}-${d}`;
       }
     }
+    return selectedDate ? flightIso === selectedDate : true;
+  });
 
-    const matchesDate = selectedDate ? flightIso === selectedDate : true;
+  /** Tablero: fecha + buscador de tarjetas (independiente del buscador del modal MVT) */
+  const filteredFlights = flightsForSelectedDate.filter((f) => {
     const sq = searchQuery.toUpperCase();
+    if (!sq) return true;
     const fltU = String(f.flt ?? "").toUpperCase();
     const depU = String(f.dep ?? "").toUpperCase();
     const arrU = String(f.arr ?? "").toUpperCase();
-    const matchesSearch = sq
-      ? fltU.includes(sq) || depU.includes(sq) || arrU.includes(sq)
-      : true;
-    return matchesDate && matchesSearch;
+    return fltU.includes(sq) || depU.includes(sq) || arrU.includes(sq);
   });
 
   if (loadingAuth) {
@@ -290,6 +297,18 @@ function App() {
             >
               Tablero Control
             </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("reporte")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "reporte"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <FileBarChart2 className="w-4 h-4 shrink-0" />
+              Reporte Diario
+            </button>
           </div>
         )}
 
@@ -297,6 +316,8 @@ function App() {
           <h2 className="text-3xl font-black text-secondary flex items-center gap-3">
             {mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
               <>Control operacional</>
+            ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
+              <>Reporte Diario</>
             ) : (
               <>
                 Vuelos
@@ -310,6 +331,15 @@ function App() {
 
         {mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
           <ControlView flights={flights} selectedDate={selectedDate} />
+        ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
+          <DailyReportView
+            flights={flights}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            onUpdateDailyReportObs={handleUpdateDailyReportObs}
+            canEditObs={userRole === "HCC" || userRole === "AJS"}
+            reportUserName={currentUser?.name ?? ""}
+          />
         ) : filteredFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-6">
@@ -541,7 +571,7 @@ function App() {
 
       {showOpsMenu && (
         <OperationsMenu
-          flights={filteredFlights}
+          flights={flightsForSelectedDate}
           onClose={() => setShowOpsMenu(false)}
         />
       )}

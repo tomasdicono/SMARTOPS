@@ -71,4 +71,7 @@ export interface Flight {
     /** Vuelo anulado operativamente (motivo obligatorio al cancelar desde el tablero). */
     cancelled?: boolean;
     cancellationReason?: string;
+
+    /** Notas libres en Reporte Diario (HCC / AJS). */
+    dailyReportObs?: string;
 }

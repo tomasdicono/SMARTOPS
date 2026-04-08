@@ -34,6 +34,9 @@ export function coerceFlightFromDb(f: Flight): Flight {
         base.cancelled = true;
         base.cancellationReason = f.cancellationReason != null ? String(f.cancellationReason) : "";
     }
+    if (f.dailyReportObs != null) {
+        base.dailyReportObs = String(f.dailyReportObs);
+    }
     return base;
 }
 
