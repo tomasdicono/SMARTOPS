@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import type { PernocteRowState } from "../types";
 import { coercePernocteRow, defaultPernocteRow, type PernocteTableRow } from "../lib/pernocteHelpers";
 import { Moon } from "lucide-react";
@@ -19,6 +20,16 @@ function avionListoLabel(limpieza: boolean, precarga: boolean): { ok: boolean; t
 }
 
 export function PernocteView({ selectedDate, rows, pernocteByReg, onPatchRow }: Props) {
+    /**
+     * Borrador local solo para filas que el usuario está editando (evita lag del round-trip a Firebase).
+     * Si no hay borrador para esa matrícula, se muestra el valor guardado en `pernocteByReg`.
+     */
+    const [precargaQDraft, setPrecargaQDraft] = useState<Record<string, string | undefined>>({});
+
+    useEffect(() => {
+        setPrecargaQDraft({});
+    }, [selectedDate]);
+
     return (
         <div className="space-y-4 animate-in fade-in duration-200">
             <div className="flex flex-wrap items-center gap-3 text-slate-700">
@@ -76,10 +87,16 @@ export function PernocteView({ selectedDate, rows, pernocteByReg, onPatchRow }: 
                                                 type="text"
                                                 inputMode="numeric"
                                                 pattern="[0-9]*"
-                                                value={row.precargaQ}
-                                                onChange={(e) =>
-                                                    onPatchRow(reg, { precargaQ: e.target.value.replace(/\D/g, "") })
+                                                value={
+                                                    precargaQDraft[reg] !== undefined
+                                                        ? precargaQDraft[reg]!
+                                                        : row.precargaQ
                                                 }
+                                                onChange={(e) => {
+                                                    const v = e.target.value.replace(/\D/g, "");
+                                                    setPrecargaQDraft((prev) => ({ ...prev, [reg]: v }));
+                                                    onPatchRow(reg, { precargaQ: v });
+                                                }}
                                                 placeholder="—"
                                                 className="w-full max-w-[10rem] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono font-bold tabular-nums text-slate-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                                                 aria-label={`Precarga Q ${reg}`}
