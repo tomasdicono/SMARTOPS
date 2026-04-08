@@ -8,7 +8,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get } from "firebase/database";
@@ -16,11 +16,13 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
 import { UserManagement } from "./components/UserManagement";
 import { ControlView } from "./components/ControlView";
+import { CancelFlightModal } from "./components/CancelFlightModal";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<"tablero" | "control">("tablero");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
+  const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [showParser, setShowParser] = useState(false);
   const [showOpsMenu, setShowOpsMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
@@ -119,6 +121,15 @@ function App() {
   const handleSaveCrewHitos = (id: string, hitosCrewData: Record<string, string>) => {
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosCrewData } : f));
     set(ref(db, 'flights'), updatedFlights);
+  };
+
+  const handleCancelFlight = (id: string, reason: string) => {
+    const updatedFlights = flights.map((f) =>
+      f.id === id ? { ...f, cancelled: true, cancellationReason: reason } : f
+    );
+    set(ref(db, "flights"), updatedFlights);
+    setCancelModalFlight(null);
+    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
   };
 
   const handleUpdateRegistration = (id: string, newReg: string) => {
@@ -322,7 +333,8 @@ function App() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...filteredFlights].sort((a, b) => a.std.localeCompare(b.std)).map((flight) => {
-              const isLate = isFlightIncompleteAndLate(flight);
+              const isCancelled = !!flight.cancelled;
+              const isLate = !isCancelled && isFlightIncompleteAndLate(flight);
               const hasMvt = !!flight.mvtData?.atd;
               const hasHitos = !!flight.hitosData?.ganttChartName;
 
@@ -330,7 +342,12 @@ function App() {
               let badgeText = "";
               let badgeColor = "";
 
-              if (hasMvt && hasHitos) {
+              if (isCancelled) {
+                cardBg =
+                  "bg-slate-100 dark:bg-slate-900/95 border-slate-400 dark:border-slate-600 shadow-slate-900/10 hover:border-slate-500";
+                badgeText = "VUELO CANCELADO";
+                badgeColor = "bg-slate-700 border-white dark:border-slate-900 text-white";
+              } else if (hasMvt && hasHitos) {
                 cardBg = "bg-emerald-50 dark:bg-[#064e3b] border-emerald-400 dark:border-emerald-500 shadow-emerald-900/20";
                 badgeText = "MVT COMPLETADO";
                 badgeColor = "bg-emerald-500 border-white dark:border-[#064e3b] text-white";
@@ -361,7 +378,7 @@ function App() {
                   onClick={() => setSelectedFlight(flight)}
                   className={`relative border-2 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1.5 ${cardBg}`}
                 >
-                  {userRole === "AJS" && hasMvt && hasHitos && (
+                  {userRole === "AJS" && hasMvt && hasHitos && !isCancelled && (
                     <button
                       type="button"
                       title="Descargar informe HTML de hitos (operacionales y tripulación)"
@@ -474,10 +491,36 @@ function App() {
                     )}
                   </div>
 
+                  {!isCancelled && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCancelModalFlight(flight);
+                      }}
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors"
+                    >
+                      <Ban className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                      Cancelar vuelo
+                    </button>
+                  )}
+                  {isCancelled && flight.cancellationReason && (
+                    <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 line-clamp-4 border-t border-slate-200 dark:border-slate-600 pt-2 text-left">
+                      <span className="font-bold text-slate-500 dark:text-slate-500">Motivo: </span>
+                      {flight.cancellationReason}
+                    </p>
+                  )}
+
                   {/* Disclaimers */}
                   {badgeText && (
                     <div className={`absolute -top-3 left-1/2 -translate-x-1/2 border-2 text-[10px] font-black tracking-widest uppercase px-3 py-1 rounded-full shadow flex items-center gap-1.5 whitespace-nowrap ${badgeColor}`}>
-                      {badgeText === "MVT COMPLETADO" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                      {badgeText === "VUELO CANCELADO" ? (
+                        <Ban className="w-3.5 h-3.5" />
+                      ) : badgeText === "MVT COMPLETADO" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5" />
+                      )}
                       {badgeText}
                     </div>
                   )}
@@ -500,6 +543,14 @@ function App() {
         <OperationsMenu
           flights={filteredFlights}
           onClose={() => setShowOpsMenu(false)}
+        />
+      )}
+
+      {cancelModalFlight && (
+        <CancelFlightModal
+          flight={cancelModalFlight}
+          onClose={() => setCancelModalFlight(null)}
+          onConfirm={(reason) => handleCancelFlight(cancelModalFlight.id, reason)}
         />
       )}
 

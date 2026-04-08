@@ -34,7 +34,7 @@ export function refMinutesForHitos(flight: Flight, data: HitosData, chart: (type
     const is1stWave = chart.name.includes("1ST WAVE");
     const stdSafe = String(flight.std ?? "");
     let refMinutes = parseToMins(stdSafe.replace(":", ""));
-    if (!is1stWave && data.ata.length >= 3) {
+    if (!is1stWave && (data.ata ?? "").length >= 3) {
         const ataMins = parseToMins(data.ata.padStart(4, "0"));
         const etdMinutes = ataMins + chart.tatMinutes;
         if (etdMinutes > refMinutes) {

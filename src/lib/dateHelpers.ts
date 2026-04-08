@@ -2,6 +2,7 @@ import type { Flight } from "../types";
 import { parse, addHours, isAfter } from "date-fns";
 
 export function isFlightIncompleteAndLate(flight: Flight): boolean {
+    if (flight.cancelled) return false;
     if (flight.mvtData) return false;
 
     try {

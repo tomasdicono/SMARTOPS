@@ -34,6 +34,12 @@ export function getMvtPaxOnly(f: Flight): number {
     return parseInt(f.mvtData?.paxActual || "0", 10) || 0;
 }
 
+/** PAX planificados según la programación (campo `pax` del vuelo), independiente del MVT */
+export function getScheduledPax(f: Flight): number {
+    const raw = String(f.pax ?? "").replace(/\D/g, "");
+    return parseInt(raw || "0", 10) || 0;
+}
+
 export function getBags(f: Flight): number {
     return parseInt(f.mvtData?.totalBags || "0", 10) || 0;
 }
@@ -51,6 +57,15 @@ export function filterFlightsForStats(flights: Flight[], isoDate: string, airpor
     let list = flights.filter((f) => flightDateToIso(f) === isoDate);
     if (airport) {
         list = list.filter((f) => f.dep === airport || f.arr === airport);
+    }
+    return list;
+}
+
+/** Misma fecha ISO; filtro aeropuerto solo por origen (dep). Usado p. ej. en vuelos cancelados. */
+export function filterFlightsForStatsDepartureOnly(flights: Flight[], isoDate: string, airport: string | ""): Flight[] {
+    let list = flights.filter((f) => flightDateToIso(f) === isoDate);
+    if (airport) {
+        list = list.filter((f) => f.dep === airport);
     }
     return list;
 }

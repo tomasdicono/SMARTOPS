@@ -1,4 +1,5 @@
-import type { Flight } from "../types";
+import type { Flight, HitosData } from "../types";
+import { normalizeHitosCrewData, normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
 
 const MONTH_ABBRS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
@@ -7,7 +8,7 @@ const MONTH_ABBRS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SE
  * Eso rompe `.includes` / `.match` y puede dejar la app en pantalla blanca.
  */
 export function coerceFlightFromDb(f: Flight): Flight {
-    return {
+    const base: Flight = {
         ...f,
         id: String(f.id ?? ""),
         flt: String(f.flt ?? ""),
@@ -20,6 +21,20 @@ export function coerceFlightFromDb(f: Flight): Flight {
         sta: String(f.sta ?? ""),
         pax: String(f.pax ?? ""),
     };
+    if (f.mvtData != null && typeof f.mvtData === "object") {
+        base.mvtData = normalizeMvtData(f.mvtData);
+    }
+    if (f.hitosData != null && typeof f.hitosData === "object") {
+        base.hitosData = normalizeHitosData(f.hitosData as HitosData);
+    }
+    if (f.hitosCrewData != null && typeof f.hitosCrewData === "object" && !Array.isArray(f.hitosCrewData)) {
+        base.hitosCrewData = normalizeHitosCrewData(f.hitosCrewData as Record<string, string>);
+    }
+    if (f.cancelled) {
+        base.cancelled = true;
+        base.cancellationReason = f.cancellationReason != null ? String(f.cancellationReason) : "";
+    }
+    return base;
 }
 
 /** Fecha de vuelo → "04APR" (dd + mes en inglés), acepta DD-MM-YYYY o YYYY-MM-DD */

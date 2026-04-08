@@ -1,60 +1,15 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2 } from "lucide-react";
 import { parseTimeToMinutes, formatMinutesToHHMM } from "../lib/mvtTime";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
+import { normalizeMvtData } from "../lib/flightDataNormalize";
+import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
 
 interface Props {
     flight: Flight;
     readOnly?: boolean;
     onSave: (mvtData: Flight["mvtData"]) => void;
-}
-
-function emptyMvtData(): NonNullable<Flight["mvtData"]> {
-    return {
-        atd: "",
-        off: "",
-        eta: "",
-        dlyCod1: "",
-        dlyTime1: "",
-        dlyCod2: "",
-        dlyTime2: "",
-        observaciones: "",
-        paxActual: "",
-        inf: "",
-        totalBags: "",
-        totalCarga: "",
-        load: "",
-        fob: "",
-        ssee: [],
-        infoSup: "",
-        supervisor: "",
-    };
-}
-
-/** Datos guardados pueden venir sin `ssee` u otros campos (migraciones / API parcial). */
-function normalizeMvtData(raw?: Flight["mvtData"]): NonNullable<Flight["mvtData"]> {
-    const z = (v: string | undefined) => v ?? "";
-    if (!raw) return emptyMvtData();
-    return {
-        atd: z(raw.atd),
-        off: z(raw.off),
-        eta: z(raw.eta),
-        dlyCod1: z(raw.dlyCod1),
-        dlyTime1: z(raw.dlyTime1),
-        dlyCod2: z(raw.dlyCod2),
-        dlyTime2: z(raw.dlyTime2),
-        observaciones: z(raw.observaciones),
-        paxActual: z(raw.paxActual),
-        inf: z(raw.inf),
-        totalBags: z(raw.totalBags),
-        totalCarga: z(raw.totalCarga),
-        load: z(raw.load),
-        fob: z(raw.fob),
-        ssee: Array.isArray(raw.ssee) ? raw.ssee : [],
-        infoSup: z(raw.infoSup),
-        supervisor: z(raw.supervisor),
-    };
 }
 
 // Componentes extraídos para no perder foco
@@ -122,7 +77,16 @@ const TextInput = ({ label, value, onChange, placeholder = "" }: { label: string
 );
 
 export function MVTForm({ flight, readOnly, onSave }: Props) {
-    const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
+    const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => getInitialMvtFormData(flight));
+
+    /** Borrador solo en el navegador (no sube a servidor hasta Enviar MVT) */
+    useEffect(() => {
+        if (readOnly) return;
+        const t = window.setTimeout(() => {
+            persistMvtDraft(flight.id, data);
+        }, 400);
+        return () => window.clearTimeout(t);
+    }, [data, flight.id, readOnly]);
 
     const handleChange = (field: keyof typeof data, value: string) => {
         setData((prev) => ({ ...prev, [field]: value }));
@@ -161,6 +125,7 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         onSave(data);
+        clearMvtDraft(flight.id);
     };
 
     return (
@@ -294,7 +259,7 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                 <div className="sticky bottom-4 z-10 flex justify-end">
                     <button type="submit" className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg hover:shadow-xl transition-all flex items-center gap-2 hover:-translate-y-0.5 ${flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}>
                         {flight.mvtData?.atd ? <CheckCircle2 className="w-5 h-5" /> : null}
-                        {flight.mvtData?.atd ? "MVT Enviado / Actualizar" : "Guardar MVT"}
+                        {flight.mvtData?.atd ? "Actualizar MVT" : "Enviar MVT"}
                     </button>
                 </div>
             )}

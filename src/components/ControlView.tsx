@@ -7,7 +7,9 @@ import {
     getPax,
     getBags,
     getMvtPaxOnly,
+    getScheduledPax,
     filterFlightsForStats,
+    filterFlightsForStatsDepartureOnly,
     computeFleetMixShare,
     uniqueAirportsFromFlights,
     flightDaySegments,
@@ -24,6 +26,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
+    Ban,
 } from "lucide-react";
 
 interface Props {
@@ -133,10 +136,18 @@ export function ControlView({ flights, selectedDate }: Props) {
 
     const airportOptions = useMemo(() => uniqueAirportsFromFlights(flights), [flights]);
 
-    const statsFlights = useMemo(
-        () => filterFlightsForStats(flights, statsDate, statsAirport),
-        [flights, statsDate, statsAirport]
-    );
+    const statsScope = useMemo(() => {
+        const raw = filterFlightsForStats(flights, statsDate, statsAirport);
+        const operational = raw.filter((f) => !f.cancelled);
+        const cancelled = filterFlightsForStatsDepartureOnly(flights, statsDate, statsAirport)
+            .filter((f) => f.cancelled)
+            .sort((a, b) => a.std.localeCompare(b.std));
+        return { raw, operational, cancelled };
+    }, [flights, statsDate, statsAirport]);
+
+    const statsFlights = statsScope.operational;
+    const cancelledStatsFlights = statsScope.cancelled;
+    const statsFlightsAnyInFilter = statsScope.raw.length > 0;
 
     const mix320 = useMemo(() => computeFleetMixShare(statsFlights, "A320"), [statsFlights]);
     const mix321 = useMemo(() => computeFleetMixShare(statsFlights, "A321"), [statsFlights]);
@@ -144,6 +155,11 @@ export function ControlView({ flights, selectedDate }: Props) {
     const totalBags = useMemo(() => statsFlights.reduce((s, f) => s + getBags(f), 0), [statsFlights]);
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
+
+    const cancelledScheduledPaxTotal = useMemo(
+        () => cancelledStatsFlights.reduce((s, f) => s + getScheduledPax(f), 0),
+        [cancelledStatsFlights]
+    );
 
     const hourTickLabels = useMemo(() => {
         return Array.from({ length: WINDOW_HOURS + 1 }, (_, i) => windowStartMin + i * 60).map(formatHm);
@@ -530,7 +546,69 @@ export function ControlView({ flights, selectedDate }: Props) {
                         </div>
                     </div>
 
-                    {statsFlights.length === 0 && (
+                    {statsFlightsAnyInFilter && cancelledStatsFlights.length === 0 && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 flex items-center gap-2 text-sm text-slate-600">
+                            <Ban className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
+                            <span className="font-semibold">Sin vuelos cancelados en este Aeropuerto.</span>
+                        </div>
+                    )}
+
+                    {cancelledStatsFlights.length > 0 && (
+                        <div className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50/80 to-white p-4 sm:p-5 space-y-3 shadow-sm">
+                            <div className="flex flex-wrap items-center gap-2 justify-between">
+                                <h4 className="text-sm font-black uppercase tracking-wide text-rose-900 flex items-center gap-2">
+                                    <Ban className="w-4 h-4 shrink-0" aria-hidden />
+                                    Vuelos cancelados
+                                </h4>
+                                <span className="text-xs font-black tabular-nums bg-rose-100 text-rose-900 px-2.5 py-1 rounded-full border border-rose-200">
+                                    {cancelledStatsFlights.length} en el filtro
+                                </span>
+                            </div>
+                            <div className="overflow-x-auto rounded-lg border border-rose-100 bg-white shadow-inner">
+                                <table className="w-full text-sm min-w-[640px]">
+                                    <thead>
+                                        <tr className="bg-rose-50/90 text-left text-[10px] font-black uppercase tracking-wider text-rose-800 border-b border-rose-100">
+                                            <th className="px-3 py-2">Vuelo</th>
+                                            <th className="px-3 py-2">Ruta</th>
+                                            <th className="px-3 py-2 whitespace-nowrap">STD</th>
+                                            <th className="px-3 py-2 text-right whitespace-nowrap">PAX</th>
+                                            <th className="px-3 py-2">Motivo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-rose-50">
+                                        {cancelledStatsFlights.map((f) => (
+                                            <tr key={f.id} className="hover:bg-rose-50/50">
+                                                <td className="px-3 py-2 font-black text-slate-900 whitespace-nowrap">
+                                                    <span className="text-slate-500 font-bold">{getAirlinePrefix(f.flt)}</span>
+                                                    {f.flt}
+                                                </td>
+                                                <td className="px-3 py-2 font-semibold text-slate-800 whitespace-nowrap">
+                                                    {f.dep} → {f.arr}
+                                                </td>
+                                                <td className="px-3 py-2 tabular-nums font-mono text-slate-700">{f.std || "—"}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums font-bold text-slate-800">
+                                                    {getScheduledPax(f)}
+                                                </td>
+                                                <td className="px-3 py-2 text-slate-700 max-w-md">
+                                                    {f.cancellationReason?.trim() ? (
+                                                        <span className="line-clamp-3">{f.cancellationReason}</span>
+                                                    ) : (
+                                                        <span className="text-slate-400 italic">Sin motivo registrado</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p className="text-xs font-bold text-rose-900/90 tabular-nums">
+                                Total PAX (cancelaciones en filtro):{" "}
+                                <span className="text-base font-black">{cancelledScheduledPaxTotal}</span>
+                            </p>
+                        </div>
+                    )}
+
+                    {!statsFlightsAnyInFilter && (
                         <p className="text-center text-slate-500 py-4">No hay vuelos para fecha y aeropuerto seleccionados.</p>
                     )}
                 </div>

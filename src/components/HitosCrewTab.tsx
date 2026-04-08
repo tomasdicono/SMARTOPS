@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import type { Flight } from "../types";
 import { Clock, Save, AlertCircle } from "lucide-react";
 import { getCrewTargetInfo, parseToMins } from "../lib/hitosReference";
+import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 
 interface Props {
     flight: Flight;
@@ -20,26 +21,15 @@ const CREW_MILESTONES = [
 export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: Props) {
     const [data, setData] = useState<Record<string, string>>(flight.hitosCrewData || {});
     const [savedState, setSavedState] = useState(false);
-    const skipNextPersist = useRef(true);
-    const persistRef = useRef(onPersistCrewHitos);
-    persistRef.current = onPersistCrewHitos;
 
     useEffect(() => {
-        skipNextPersist.current = true;
         setData(flight.hitosCrewData || {});
     }, [flight.id]);
 
-    useEffect(() => {
-        if (readOnly || !persistRef.current) return;
-        if (skipNextPersist.current) {
-            skipNextPersist.current = false;
-            return;
-        }
-        const t = window.setTimeout(() => {
-            persistRef.current?.(data);
-        }, 500);
-        return () => window.clearTimeout(t);
-    }, [data, readOnly]);
+    useDebouncedFlightPersist(data, readOnly ? undefined : onPersistCrewHitos, {
+        readOnly,
+        flightId: flight.id,
+    });
 
     const handleEntryChange = (name: string, value: string) => {
         // Enforce basic HHMM format natively like the other forms
@@ -123,7 +113,10 @@ export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: P
             </div>
 
             {!readOnly && (
-                <div className="pt-6 mt-4 border-t border-slate-200 flex justify-end">
+                <div className="pt-6 mt-4 border-t border-slate-200 flex flex-col items-end gap-2">
+                    <p className="text-xs text-slate-500 w-full text-right">
+                        Progreso guardado automáticamente; al actualizar la página no se pierde.
+                    </p>
                     <button
                         onClick={handleSave}
                         className={`px-8 py-4 w-full sm:w-auto rounded-xl font-black shadow-md transition-all flex items-center justify-center gap-2 ${savedState

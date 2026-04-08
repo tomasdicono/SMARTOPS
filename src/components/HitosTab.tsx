@@ -1,14 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { GANTT_CHARTS } from "../lib/hitosData";
 import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
+import { normalizeHitosData } from "../lib/flightDataNormalize";
+import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 import { Save, AlertCircle, Clock } from "lucide-react";
-
-const emptyHitos = (): HitosData => ({
-    ganttChartName: "",
-    ata: "",
-    entries: {}
-});
 
 interface Props {
     flight: Flight;
@@ -20,27 +16,16 @@ interface Props {
 
 export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
     const [errorMsg, setErrorMsg] = useState("");
-    const [data, setData] = useState<HitosData>(flight.hitosData || emptyHitos());
-    const skipNextPersist = useRef(true);
-    const persistRef = useRef(onPersistHitos);
-    persistRef.current = onPersistHitos;
+    const [data, setData] = useState<HitosData>(() => normalizeHitosData(flight.hitosData));
 
     useEffect(() => {
-        skipNextPersist.current = true;
-        setData(flight.hitosData || emptyHitos());
+        setData(normalizeHitosData(flight.hitosData));
     }, [flight.id]);
 
-    useEffect(() => {
-        if (readOnly || !persistRef.current) return;
-        if (skipNextPersist.current) {
-            skipNextPersist.current = false;
-            return;
-        }
-        const t = window.setTimeout(() => {
-            persistRef.current?.(data);
-        }, 500);
-        return () => window.clearTimeout(t);
-    }, [data, readOnly]);
+    useDebouncedFlightPersist(data, readOnly ? undefined : onPersistHitos, {
+        readOnly,
+        flightId: flight.id,
+    });
 
     const parseToMins = (time: string): number => {
         if (!time || time.length !== 4) return 0;
@@ -64,7 +49,7 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
     let refMinutes = parseToMins(stdSafe.replace(":", ""));
     let etdMinutes: number | null = null;
 
-    if (selectedChart && !is1stWave && data.ata.length >= 3) {
+    if (selectedChart && !is1stWave && (data.ata ?? "").length >= 3) {
         const ataMins = parseToMins(data.ata.padStart(4, "0"));
         etdMinutes = ataMins + selectedChart.tatMinutes;
         if (etdMinutes > refMinutes) {
@@ -215,6 +200,9 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
 
                     {!readOnly && (
                         <div className="pt-6 mt-4 border-t border-slate-100 flex flex-col items-end gap-3">
+                            <p className="text-xs text-slate-500 w-full text-right">
+                                Progreso guardado automáticamente; al actualizar la página no se pierde.
+                            </p>
                             {errorMsg && (
                                 <div className="text-red-600 font-bold text-sm flex items-center gap-1.5 animate-in slide-in-from-right-2">
                                     <AlertCircle className="w-4 h-4" /> {errorMsg}

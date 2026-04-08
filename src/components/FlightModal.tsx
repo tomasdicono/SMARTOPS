@@ -4,7 +4,7 @@ import { MVTForm } from "./MVTForm";
 import { HitosTab } from "./HitosTab";
 import { HitosCrewTab } from "./HitosCrewTab";
 import { getAirlinePrefix } from "../lib/flightHelpers";
-import { X } from "lucide-react";
+import { X, Ban } from "lucide-react";
 
 interface Props {
     flight: Flight;
@@ -24,7 +24,7 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
 
     const canSeeStandard = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS";
     const canSeeCrew = userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS";
-    const isReadOnlyView = userRole === "AJS";
+    const isReadOnlyView = !!flight.cancelled;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -58,6 +58,21 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                         <X className="w-5 h-5" />
                     </button>
                 </div>
+
+                {flight.cancelled && (
+                    <div className="px-4 sm:px-6 py-3 bg-rose-50 border-b border-rose-200 flex items-start gap-3">
+                        <Ban className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" aria-hidden />
+                        <div className="min-w-0">
+                            <p className="text-sm font-black text-rose-900 uppercase tracking-wide">Vuelo cancelado</p>
+                            {flight.cancellationReason ? (
+                                <p className="text-sm text-rose-800 mt-1 whitespace-pre-wrap">{flight.cancellationReason}</p>
+                            ) : (
+                                <p className="text-sm text-rose-700 mt-1">Sin motivo registrado.</p>
+                            )}
+                            <p className="text-xs text-rose-700/80 mt-2">Los formularios están bloqueados; solo lectura.</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tabs */}
                 <div className="flex px-6 border-b border-border bg-slate-50/50">

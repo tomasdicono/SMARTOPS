@@ -67,4 +67,8 @@ export interface Flight {
 
     // Crew specifically isolated milestones
     hitosCrewData?: Record<string, string>;
+
+    /** Vuelo anulado operativamente (motivo obligatorio al cancelar desde el tablero). */
+    cancelled?: boolean;
+    cancellationReason?: string;
 }
