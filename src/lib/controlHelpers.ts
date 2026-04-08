@@ -1,5 +1,6 @@
 import type { Flight } from "../types";
 import { getAircraftInfo } from "./fleetData";
+import { getHitosDepartureTime } from "./flightHelpers";
 import { parseTimeToMinutes } from "./mvtTime";
 
 /** Convierte fecha de vuelo (DD-MM-YYYY o YYYY-MM-DD) a ISO YYYY-MM-DD */
@@ -144,12 +145,17 @@ export function clipSegmentToWindow(
     };
 }
 
-/** Salida real posterior al STD (MVT con ATD cargado). */
+/**
+ * Salida real posterior a la referencia operativa (ETD si hay reprogramación, si no STD).
+ * Así el contador de demorados coincide con la reprogramación y no queda en 0 cuando el ATD
+ * es tarde respecto al ETD pero no respecto al STD de programación.
+ */
 export function isFlightLateDeparture(f: Flight): boolean {
     if (f.cancelled) return false;
     const atd = f.mvtData?.atd;
     if (!atd || String(atd).replace(/\D/g, "").length < 2) return false;
-    return parseTimeToMinutes(atd) > parseTimeToMinutes(f.std);
+    const ref = getHitosDepartureTime(f);
+    return parseTimeToMinutes(atd) > parseTimeToMinutes(ref);
 }
 
 /** Demora operativa registrada en MVT (código + tiempo). */

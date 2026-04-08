@@ -177,6 +177,7 @@ export function ControlView({ flights, selectedDate }: Props) {
         const hayPaxMvt = operational.some((f) => hasMvtPaxEntered(f));
         const demorados = operational.filter((f) => isFlightLateDeparture(f));
         const afectadosDemoras = operational.filter((f) => isAffectedByDelayOrReprogramming(f));
+        const paxAfectadosProgramados = afectadosDemoras.reduce((s, f) => s + getScheduledPax(f), 0);
         const reprogramados = dayFlights.filter((f) => f.etd?.trim() || f.rescheduleReason?.trim());
         const motivosReprogramacion = rankStringsByFrequency(reprogramados.map((f) => f.rescheduleReason));
 
@@ -203,7 +204,8 @@ export function ControlView({ flights, selectedDate }: Props) {
             paxTransportadosMvt,
             hayPaxMvt,
             countDemorados: demorados.length,
-            countAfectadosDemoras: afectadosDemoras.length,
+            paxAfectadosProgramados,
+            countVuelosAfectados: afectadosDemoras.length,
             motivosReprogramacion,
             countCancelados: cancelled.length,
             motivosCancelacionDetalle,
@@ -556,7 +558,7 @@ export function ControlView({ flights, selectedDate }: Props) {
                             </p>
                             <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">{statusDia.countDemorados}</p>
                             <p className="text-[11px] text-amber-900/80 mt-1 font-semibold">
-                                ATD posterior al STD (salida real tarde, con MVT cargado)
+                                ATD posterior al ETD (si hay) o al STD · MVT con hora de salida real
                             </p>
                         </div>
                         <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">
@@ -564,9 +566,15 @@ export function ControlView({ flights, selectedDate }: Props) {
                                 <AlertTriangle className="w-4 h-4" />
                                 Afectados por demoras
                             </p>
-                            <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">{statusDia.countAfectadosDemoras}</p>
+                            <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">{statusDia.paxAfectadosProgramados}</p>
                             <p className="text-[11px] text-orange-900/85 mt-1 font-semibold">
-                                Códigos de demora en MVT, o vuelos con ETD (reprogramados) aunque aún no haya MVT
+                                PAX programados en vuelos con demora MVT y/o reprogramación (ETD)
+                                {statusDia.countVuelosAfectados > 0 ? (
+                                    <span className="block mt-1 text-orange-800/90">
+                                        {statusDia.countVuelosAfectados} vuelo{statusDia.countVuelosAfectados !== 1 ? "s" : ""} afectado
+                                        {statusDia.countVuelosAfectados !== 1 ? "s" : ""}
+                                    </span>
+                                ) : null}
                             </p>
                         </div>
                     </div>
