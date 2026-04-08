@@ -1,11 +1,13 @@
-import type { Flight } from "../types";
+import type { Flight, HitosData } from "../types";
 import { GANTT_CHARTS } from "./hitosData";
+import { normalizeHitosData } from "./flightDataNormalize";
 import {
     parseToMins,
     formatMins,
     refMinutesForHitos,
     demoraOperacional,
     getCrewTargetInfo,
+    CREW_STORAGE_KEYS,
 } from "./hitosReference";
 
 /** Debe coincidir con HitosCrewTab */
@@ -144,14 +146,22 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
 
     const crewRows: HitosSummaryRow[] = [];
     const crew = flight.hitosCrewData || {};
-    const hData = flight.hitosData;
-    const opChartResolved = hData?.ganttChartName
-        ? GANTT_CHARTS.find((c) => c.name === hData.ganttChartName)
+    const crewOwnChart = (crew[CREW_STORAGE_KEYS.gantt] ?? "").trim();
+    const crewHitosForRef: HitosData | undefined = crewOwnChart
+        ? normalizeHitosData({
+              ganttChartName: crewOwnChart,
+              ata: crew[CREW_STORAGE_KEYS.ata] ?? "",
+              entries: Object.fromEntries(CREW_HITO_LABELS.map((label) => [label, crew[label] ?? ""])),
+          })
+        : flight.hitosData;
+    const opChartResolved = flight.hitosData?.ganttChartName
+        ? GANTT_CHARTS.find((c) => c.name === flight.hitosData!.ganttChartName)
         : null;
+    const crewChartResolved = crewOwnChart ? GANTT_CHARTS.find((c) => c.name === crewOwnChart) : null;
 
     for (const label of CREW_HITO_LABELS) {
         const v = crew[label];
-        const targetInfo = getCrewTargetInfo(flight, hData, label);
+        const targetInfo = getCrewTargetInfo(flight, crewHitosForRef, label);
         let esperado = "—";
         let real = "—";
         let demora = "—";
@@ -167,11 +177,15 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
         }
         crewRows.push(row(label, esperado, real, demora));
     }
-    const knownCrew = new Set<string>(CREW_HITO_LABELS);
+    const knownCrew = new Set<string>([
+        ...CREW_HITO_LABELS,
+        CREW_STORAGE_KEYS.gantt,
+        CREW_STORAGE_KEYS.ata,
+    ]);
     const extraKeys = Object.keys(crew).filter((k) => !knownCrew.has(k));
     for (const k of extraKeys.sort()) {
         const v = crew[k];
-        const targetInfo = getCrewTargetInfo(flight, hData, k);
+        const targetInfo = getCrewTargetInfo(flight, crewHitosForRef, k);
         let esperado = "—";
         let real = "—";
         let demora = "—";
@@ -188,9 +202,11 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
         crewRows.push(row(k, esperado, real, demora));
     }
 
-    const crewSubtitle = opChartResolved
-        ? "Los horarios esperados coinciden con la carta Gantt y la referencia del vuelo (mismo criterio que hitos operacionales)."
-        : "Definí hitos operacionales con carta Gantt para obtener horarios esperados y demoras de referencia en tripulación.";
+    const crewSubtitle = crewChartResolved
+        ? "Los horarios esperados usan la carta Gantt y la referencia del vuelo definidas en tripulación (mismo criterio que operacionales)."
+        : opChartResolved
+          ? "Los horarios esperados coinciden con la carta Gantt y la referencia del vuelo de hitos operacionales."
+          : "Elegí carta Gantt en tripulación o completá hitos operacionales para obtener horarios esperados y demoras de referencia.";
 
     return {
         meta,

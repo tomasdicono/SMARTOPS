@@ -13,6 +13,12 @@ export const CREW_LABEL_TO_GANTT_MILESTONE: Record<string, string> = {
     "Cierre puertas": "Cierre de puerta principal",
 };
 
+/** Claves reservadas en `hitosCrewData` para carta y ATA elegidos por tripulación */
+export const CREW_STORAGE_KEYS = {
+    gantt: "__crewGanttChartName",
+    ata: "__crewAta",
+} as const;
+
 /** Igual que HitosTab */
 export function parseToMins(time: string): number {
     if (!time || time.length !== 4) return 0;
