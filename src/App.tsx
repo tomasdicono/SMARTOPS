@@ -36,6 +36,9 @@ function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   /** pernocte[YYYY-MM-DD][matrícula] */
   const [pernocteData, setPernocteData] = useState<Record<string, Record<string, PernocteRowState>>>({});
+  /** Fecha vista en Pernocte (vacío = misma que el selector del header) */
+  const [pernocteFilterDate, setPernocteFilterDate] = useState("");
+  const pernocteDateEffective = pernocteFilterDate || selectedDate;
 
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -247,18 +250,18 @@ function App() {
   });
 
   const pernocteRows = useMemo(
-    () => (selectedDate ? computePernocteRows(flights, selectedDate) : []),
-    [flights, selectedDate]
+    () => (pernocteDateEffective ? computePernocteRows(flights, pernocteDateEffective) : []),
+    [flights, pernocteDateEffective]
   );
 
   const handlePernoctePatch = (reg: string, patch: Partial<PernocteRowState>) => {
-    if (!selectedDate) return;
-    const prev = coercePernocteRow(pernocteData[selectedDate]?.[reg]);
+    if (!pernocteDateEffective) return;
+    const prev = coercePernocteRow(pernocteData[pernocteDateEffective]?.[reg]);
     const next: PernocteRowState = { ...prev, ...patch };
     if (patch.precargaQ !== undefined) {
       next.precargaQ = String(patch.precargaQ).replace(/\D/g, "");
     }
-    set(ref(db, `pernocte/${selectedDate}/${reg}`), next);
+    set(ref(db, `pernocte/${pernocteDateEffective}/${reg}`), next);
   };
 
   if (loadingAuth) {
@@ -451,9 +454,13 @@ function App() {
           />
         ) : mainTab === "pernocte" && (userRole === "HCC" || userRole === "AJS") ? (
           <PernocteView
-            selectedDate={selectedDate}
+            filterDate={pernocteDateEffective}
+            headerDate={selectedDate}
+            filterFollowsHeader={!pernocteFilterDate}
+            onFilterDateChange={setPernocteFilterDate}
+            onFollowHeaderDate={() => setPernocteFilterDate("")}
             rows={pernocteRows}
-            pernocteByReg={pernocteData[selectedDate] ?? {}}
+            pernocteByReg={pernocteData[pernocteDateEffective] ?? {}}
             onPatchRow={handlePernoctePatch}
           />
         ) : filteredFlights.length === 0 ? (
