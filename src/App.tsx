@@ -8,7 +8,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2 } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get } from "firebase/database";
@@ -18,6 +18,7 @@ import { UserManagement } from "./components/UserManagement";
 import { ControlView } from "./components/ControlView";
 import { CancelFlightModal } from "./components/CancelFlightModal";
 import { DailyReportView } from "./components/DailyReportView";
+import { ManualFlightModal } from "./components/ManualFlightModal";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -25,6 +26,7 @@ function App() {
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [showParser, setShowParser] = useState(false);
+  const [showManualFlight, setShowManualFlight] = useState(false);
   const [showOpsMenu, setShowOpsMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -107,6 +109,20 @@ function App() {
     const updatedFlights = [...flights, ...normalized];
     set(ref(db, 'flights'), updatedFlights);
     setShowParser(false);
+  };
+
+  const handleManualFlightAdd = (flight: Flight) => {
+    const normalized = coerceFlightFromDb(flight);
+    set(ref(db, "flights"), [...flights, normalized]);
+    setShowManualFlight(false);
+    const raw = normalized.date;
+    if (raw && raw.includes("-")) {
+      const parts = raw.split("-");
+      if (parts.length === 3 && parts[2].length === 4) {
+        const [d, m, y] = parts;
+        setSelectedDate(`${y}-${m}-${d}`);
+      }
+    }
   };
 
   const handleSaveMVT = (id: string, mvtData: Flight["mvtData"]) => {
@@ -266,6 +282,18 @@ function App() {
               >
                 <ClipboardPaste className="w-4 h-4" />
                 <span>Cargar</span>
+              </button>
+            )}
+            {userRole === "HCC" && (
+              <button
+                type="button"
+                onClick={() => setShowManualFlight(true)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+                title="Cargar un vuelo completando los datos a mano"
+              >
+                <CirclePlus className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Alta manual</span>
+                <span className="sm:hidden">Manual</span>
               </button>
             )}
           </div>
@@ -566,6 +594,14 @@ function App() {
         <ScheduleParser
           onLoadFlights={handleLoadFlights}
           onClose={() => setShowParser(false)}
+        />
+      )}
+
+      {showManualFlight && userRole === "HCC" && (
+        <ManualFlightModal
+          initialDateIso={selectedDate}
+          onClose={() => setShowManualFlight(false)}
+          onSubmit={handleManualFlightAdd}
         />
       )}
 
