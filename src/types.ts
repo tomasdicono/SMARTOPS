@@ -98,6 +98,13 @@ export interface RouteAfectacionEntry {
     by: string;
 }
 
+/** Diferido global por matrícula (Firebase: diferidos/{matrícula}) — visible en todas las fechas hasta quitarlo */
+export interface DiferidoEntry {
+    text: string;
+    updatedAt?: string;
+    updatedBy?: string;
+}
+
 /** Estado por matrícula en pestaña Pernocte (Firebase: pernocte/{fecha}/{matrícula}) */
 export interface PernocteRowState {
     limpieza: boolean;

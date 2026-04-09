@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { normalizeUserRole, type Flight, type User, type HitosData, type PernocteRowState, type RouteAfectacionEntry } from "./types";
+import { normalizeUserRole, type Flight, type User, type HitosData, type PernocteRowState, type RouteAfectacionEntry, type DiferidoEntry } from "./types";
 import { formatDelayLine, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
@@ -8,10 +8,10 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb, getHitosDepartureTime } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2 } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
-import { ref, onValue, set, get, push } from "firebase/database";
+import { ref, onValue, set, get, push, remove } from "firebase/database";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
 import { UserManagement } from "./components/UserManagement";
@@ -21,6 +21,7 @@ import { DailyReportView } from "./components/DailyReportView";
 import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
+import { DiferidosView } from "./components/DiferidosView";
 import { computePernocteRows, coercePernocteRow } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
 import { normalizeMvtData } from "./lib/flightDataNormalize";
@@ -34,15 +35,18 @@ import {
     applyGestionesRowToFlight,
     type ParseGestionesResult,
 } from "./lib/gestionesTableParse";
+import { coerceDiferido, getDiferidoTextForReg, normalizeRegDiferido } from "./lib/diferidosHelpers";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [mainTab, setMainTab] = useState<"tablero" | "control" | "reporte" | "pernocte">("tablero");
+  const [mainTab, setMainTab] = useState<"tablero" | "control" | "reporte" | "pernocte" | "diferidos">("tablero");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
   const [routeModalFlight, setRouteModalFlight] = useState<Flight | null>(null);
   const [routeAfectaciones, setRouteAfectaciones] = useState<RouteAfectacionEntry[]>([]);
+  /** Matrícula → texto (Firebase: diferidos/{matrícula}) */
+  const [diferidosMap, setDiferidosMap] = useState<Record<string, DiferidoEntry>>({});
   const [showParser, setShowParser] = useState(false);
   const [showGestiones, setShowGestiones] = useState(false);
   const [showManualFlight, setShowManualFlight] = useState(false);
@@ -156,6 +160,23 @@ function App() {
         }
       }
       setPernocteData(out);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const dRef = ref(db, "diferidos");
+    const unsub = onValue(dRef, (snapshot) => {
+      const v = snapshot.val();
+      if (!v || typeof v !== "object") {
+        setDiferidosMap({});
+        return;
+      }
+      const out: Record<string, DiferidoEntry> = {};
+      for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+        out[String(k).trim().toUpperCase()] = coerceDiferido(raw);
+      }
+      setDiferidosMap(out);
     });
     return () => unsub();
   }, []);
@@ -322,6 +343,34 @@ function App() {
       await set(ref(db, "flights"), forFirebaseDb(next));
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleSaveDiferido = async (regRaw: string, text: string) => {
+    const reg = normalizeRegDiferido(regRaw);
+    const t = text.trim();
+    if (!reg || !t) return;
+    try {
+      await set(
+        ref(db, `diferidos/${reg}`),
+        forFirebaseDb({
+          text: t,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.name?.trim() || currentUser?.email || "",
+        })
+      );
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleRemoveDiferido = async (regRaw: string) => {
+    const reg = normalizeRegDiferido(regRaw);
+    if (!reg) return;
+    try {
+      await remove(ref(db, `diferidos/${reg}`));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -532,12 +581,28 @@ function App() {
               <Moon className="w-4 h-4 shrink-0" />
               Pernocte
             </button>
+            {userRole === "HCC" && (
+              <button
+                type="button"
+                onClick={() => setMainTab("diferidos")}
+                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                  mainTab === "diferidos"
+                    ? "bg-amber-500 text-slate-900 shadow-md"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <FileWarning className="w-4 h-4 shrink-0" />
+                Diferidos
+              </button>
+            )}
           </div>
         )}
 
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-black text-secondary flex items-center gap-3">
-            {mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
+            {mainTab === "diferidos" && userRole === "HCC" ? (
+              <>Diferidos</>
+            ) : mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
               <>Control operacional</>
             ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
               <>Reporte Diario</>
@@ -554,7 +619,9 @@ function App() {
           </h2>
         </div>
 
-        {mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
+        {mainTab === "diferidos" && userRole === "HCC" ? (
+          <DiferidosView diferidos={diferidosMap} onSave={handleSaveDiferido} onRemove={handleRemoveDiferido} />
+        ) : mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
           <ControlView flights={flights} selectedDate={selectedDate} routeAfectaciones={routeAfectaciones} />
         ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
           <DailyReportView
@@ -637,6 +704,7 @@ function App() {
               const paxNum = parseInt(paxStr, 10) || 0;
               const acInfo = getAircraftInfo(flight.reg);
               const paxExcess = acInfo ? paxNum - acInfo.capacity : 0;
+              const diferidoTxt = getDiferidoTextForReg(diferidosMap, flight.reg);
 
               return (
                 <div
@@ -741,6 +809,15 @@ function App() {
                         </span>
                       </div>
                     </div>
+
+                    {diferidoTxt ? (
+                      <div className="mt-2 pt-2 border-t border-amber-300/50 dark:border-amber-700/50 w-full" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-0.5">Diferido</p>
+                        <p className="text-xs font-semibold text-amber-950 dark:text-amber-100 leading-snug line-clamp-5" title={diferidoTxt}>
+                          {diferidoTxt}
+                        </p>
+                      </div>
+                    ) : null}
 
                     {hasMvt && (
                       <div className="mt-2 pt-2 border-t border-black/10 dark:border-white/10 flex justify-between items-center w-full">

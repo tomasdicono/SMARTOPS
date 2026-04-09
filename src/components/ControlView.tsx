@@ -565,10 +565,6 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             <Target className="w-4 h-4 text-emerald-600 shrink-0" />
                             <h4 className="text-sm font-black uppercase tracking-wide">OTP · MVT con ATD</h4>
                         </div>
-                        <p className="text-xs text-slate-600 font-semibold -mt-1">
-                            Porcentajes sobre vuelos no cancelados con MVT cargado y hora de salida (ATD). Referencia:{" "}
-                            <span className="font-black text-slate-800">STD</span> de programación.
-                        </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
                                 <p className="text-xs font-black uppercase text-emerald-900 tracking-wide flex items-center gap-2">
@@ -580,15 +576,9 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                         <p className="text-3xl font-black text-emerald-950 mt-2 tabular-nums">
                                             {statusDia.otp0Pct.toFixed(1)}%
                                         </p>
-                                        <p className="text-[11px] text-emerald-900/85 mt-1 font-semibold">
-                                            A horario o antes del STD (ATD ≤ STD)
-                                        </p>
-                                        <p className="text-[10px] text-emerald-800/80 mt-1 font-bold tabular-nums">
-                                            {statusDia.nMvtOtp} MVT con ATD
-                                        </p>
                                     </>
                                 ) : (
-                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin MVT con ATD este día.</p>
+                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin datos.</p>
                                 )}
                             </div>
                             <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm">
@@ -601,15 +591,9 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                         <p className="text-3xl font-black text-teal-950 mt-2 tabular-nums">
                                             {statusDia.otp15Pct.toFixed(1)}%
                                         </p>
-                                        <p className="text-[11px] text-teal-900/85 mt-1 font-semibold">
-                                            Demora de 1 a 14 min respecto del STD
-                                        </p>
-                                        <p className="text-[10px] text-teal-800/80 mt-1 font-bold tabular-nums">
-                                            {statusDia.nMvtOtp} MVT con ATD
-                                        </p>
                                     </>
                                 ) : (
-                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin MVT con ATD este día.</p>
+                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin datos.</p>
                                 )}
                             </div>
                         </div>
@@ -622,9 +606,6 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 Vuelos reprogramados
                             </p>
                             <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">{statusDia.countVuelosReprogramados}</p>
-                            <p className="text-[11px] text-amber-900/80 mt-1 font-semibold">
-                                Solo cuentan vuelos con ETD cargado (salida reprogramada respecto del STD de programación).
-                            </p>
                         </div>
                         <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-orange-900 tracking-wide flex items-center gap-2">
@@ -634,16 +615,6 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">
                                 {statusDia.paxAfectadosReprogramacion}
                             </p>
-                            <p className="text-[11px] text-orange-900/85 mt-1 font-semibold">
-                                Suma de PAX programados en vuelos con ETD (no se incluyen pasajeros afectados solo por demoras
-                                registradas en MVT)
-                                {statusDia.countVuelosReprogramados > 0 ? (
-                                    <span className="block mt-1 text-orange-800/90">
-                                        {statusDia.countVuelosReprogramados} vuelo
-                                        {statusDia.countVuelosReprogramados !== 1 ? "s" : ""} con ETD
-                                    </span>
-                                ) : null}
-                            </p>
                         </div>
                         <div className="rounded-xl border border-cyan-200 bg-cyan-50/50 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
                             <p className="text-xs font-black uppercase text-cyan-900 tracking-wide flex items-center gap-2">
@@ -651,9 +622,6 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 Afectaciones de ruta
                             </p>
                             <p className="text-3xl font-black text-cyan-950 mt-2 tabular-nums">{statusDia.countAfectacionesRuta}</p>
-                            <p className="text-[11px] text-cyan-900/85 mt-1 font-semibold">
-                                Cambios de origen o destino registrados desde el tablero (HCC / Admin)
-                            </p>
                         </div>
                     </div>
 
@@ -668,7 +636,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             </span>
                         </div>
                         {routeAfectaciones.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">Sin cambios de ruta registrados este día.</p>
+                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
                         ) : (
                             <div className="overflow-x-auto rounded-lg border border-cyan-100 bg-white">
                                 <table className="w-full text-sm min-w-[640px]">
@@ -731,13 +699,8 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             <ListOrdered className="w-4 h-4 shrink-0" />
                             Motivos de reprogramación
                         </h4>
-                        <p className="text-xs text-amber-900/75 font-semibold mb-3">
-                            Vuelos con ETD · ordenados por frecuencia (mayor a menor)
-                        </p>
                         {statusDia.motivosReprogramacion.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">
-                                Sin vuelos con ETD este día, o sin motivos cargados.
-                            </p>
+                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
                         ) : (
                             <ol className="space-y-2 list-decimal list-inside marker:font-black marker:text-amber-700">
                                 {statusDia.motivosReprogramacion.map((row, i) => (
@@ -754,15 +717,12 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                     </div>
 
                     <div className="rounded-xl border border-violet-300/80 bg-gradient-to-br from-violet-50/90 to-white p-4 sm:p-5 shadow-sm">
-                        <h4 className="text-sm font-black uppercase tracking-wide text-violet-950 flex items-center gap-2 mb-2">
+                        <h4 className="text-sm font-black uppercase tracking-wide text-violet-950 flex items-center gap-2 mb-4">
                             <BarChartHorizontal className="w-4 h-4 shrink-0" />
                             Motivos demoras (MVT)
                         </h4>
-                        <p className="text-xs text-violet-900/80 font-semibold mb-4">
-                            Códigos dlyCod1 / dlyCod2 del día: participación sobre el total de códigos registrados
-                        </p>
                         {statusDia.demoraCodigos.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">Sin códigos de demora en MVT este día.</p>
+                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
                         ) : (
                             <ul className="space-y-3">
                                 {statusDia.demoraCodigos.map((row, i) => (
@@ -797,16 +757,12 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 {statusDia.countCancelados} vuelo{statusDia.countCancelados !== 1 ? "s" : ""}
                             </span>
                         </div>
-                        <p className="text-xs font-bold text-rose-900/90 tabular-nums mb-3">
-                            PAX afectados (programados):{" "}
-                            <span className="text-lg font-black">{statusDia.paxCancelados}</span>
+                        <p className="text-xs font-black uppercase tracking-wide text-rose-800 mb-3 tabular-nums">
+                            PAX{" "}
+                            <span className="text-lg font-black text-rose-950">{statusDia.paxCancelados}</span>
                         </p>
                         {statusDia.motivosCancelacionDetalle.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">
-                                {statusDia.countCancelados === 0
-                                    ? "Sin cancelaciones este día."
-                                    : "Ningún motivo de cancelación registrado en las tarjetas."}
-                            </p>
+                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
                         ) : (
                             <div className="overflow-x-auto rounded-lg border border-rose-100 bg-white">
                                 <table className="w-full text-sm min-w-[280px]">
