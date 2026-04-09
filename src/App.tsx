@@ -811,12 +811,19 @@ function App() {
                     </div>
 
                     {diferidoTxt ? (
-                      <div className="mt-2 pt-2 border-t border-amber-300/50 dark:border-amber-700/50 w-full" onClick={(e) => e.stopPropagation()}>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-0.5">Diferido</p>
-                        <p className="text-xs font-semibold text-amber-950 dark:text-amber-100 leading-snug line-clamp-5" title={diferidoTxt}>
-                          {diferidoTxt}
-                        </p>
-                      </div>
+                      <ul className="mt-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+                        <li className="flex items-start gap-1.5 text-[10px] leading-tight text-amber-900/90 dark:text-amber-100/85">
+                          <span className="text-amber-600 dark:text-amber-500 shrink-0 select-none" aria-hidden>
+                            •
+                          </span>
+                          <span className="min-w-0">
+                            <span className="font-bold text-amber-800 dark:text-amber-400">Diferido: </span>
+                            <span className="font-medium line-clamp-2" title={diferidoTxt}>
+                              {diferidoTxt}
+                            </span>
+                          </span>
+                        </li>
+                      </ul>
                     ) : null}
 
                     {hasMvt && (
