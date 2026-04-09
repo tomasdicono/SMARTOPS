@@ -1,3 +1,19 @@
+import type { SSEE } from "../types";
+
+/** Resumen compacto de filas SSEE para tarjetas (p. ej. "WCHS 2 · BLND 1"). */
+export function formatMvtSseeSummary(ssee: SSEE[] | undefined): string {
+    if (!ssee?.length) return "—";
+    const parts = ssee
+        .filter((s) => {
+            const t = String(s.type ?? "").trim();
+            const q = String(s.qty ?? "").trim();
+            if (!t || !q || q === "0") return false;
+            return true;
+        })
+        .map((s) => `${String(s.type).trim()} ${String(s.qty).trim()}`);
+    return parts.length ? parts.join(" · ") : "—";
+}
+
 /** MVT time fields: digits only, same parsing as MVTForm */
 export function parseTimeToMinutes(timeStr: string | undefined | null): number {
     const raw = String(timeStr ?? "").replace(/[^0-9]/g, "");

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { normalizeUserRole, type Flight, type User, type HitosData, type PernocteRowState, type RouteAfectacionEntry, type DiferidoEntry } from "./types";
-import { formatDelayLine, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
+import { formatDelayLine, formatMvtSseeSummary, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
@@ -8,7 +8,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb, getHitosDepartureTime } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get, push, remove } from "firebase/database";
@@ -247,6 +247,15 @@ function App() {
     );
     set(ref(db, "flights"), forFirebaseDb(updatedFlights));
     setCancelModalFlight(null);
+    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
+  };
+
+  const handleReactivateFlight = (id: string) => {
+    if (!window.confirm("¿Reactivar este vuelo? Dejará de figurar como cancelado.")) return;
+    const updatedFlights = flights.map((f) =>
+      f.id === id ? { ...f, cancelled: false, cancellationReason: "" } : f
+    );
+    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
     setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
   };
 
@@ -712,7 +721,7 @@ function App() {
                   onClick={() => setSelectedFlight(flight)}
                   className={`relative border-2 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1.5 ${cardBg}`}
                 >
-                  {userRole === "AJS" && hasMvt && hasHitos && !isCancelled && (
+                  {(userRole === "AJS" || userRole === "HCC") && hasMvt && hasHitos && !isCancelled && (
                     <button
                       type="button"
                       title="Descargar informe HTML de hitos (operacionales y tripulación)"
@@ -827,44 +836,61 @@ function App() {
                     ) : null}
 
                     {hasMvt && (
-                      <div className="mt-2 pt-2 border-t border-black/10 dark:border-white/10 flex justify-between items-center w-full">
-                         <div className="flex flex-col items-start">
-                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">ATD</span>
-                           <span className="font-bold text-primary dark:text-blue-300 tabular-nums">
-                             {formatMinutesToHHMM(parseTimeToMinutes(flight.mvtData?.atd))}
-                           </span>
-                         </div>
-                         <div className="flex flex-col items-center">
-                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Bags</span>
-                           <span className="font-bold text-slate-700 dark:text-slate-300">{flight.mvtData?.totalBags || "0"}</span>
-                         </div>
-                         <div className="flex flex-col items-end text-right max-w-[min(100%,11rem)]">
-                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Demoras</span>
-                           {(() => {
-                             const m = flight.mvtData;
-                             const lines = [
-                               m?.dlyCod1 ? formatDelayLine(m.dlyCod1, m.dlyTime1 || "") : "",
-                               m?.dlyCod2 ? formatDelayLine(m.dlyCod2, m.dlyTime2 || "") : "",
-                             ].filter(Boolean);
-                             if (lines.length === 0) {
-                               return (
-                                 <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs">- Ninguna -</span>
-                               );
-                             }
-                             return (
-                               <div className="flex flex-col gap-0.5 items-end">
-                                 {lines.map((line, i) => (
-                                   <span
-                                     key={i}
-                                     className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded text-[11px] font-bold leading-tight whitespace-nowrap"
-                                   >
-                                     {line}
-                                   </span>
-                                 ))}
-                               </div>
-                             );
-                           })()}
-                         </div>
+                      <div className="mt-2 pt-2 border-t border-black/10 dark:border-white/10 w-full space-y-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-2 gap-y-2 w-full">
+                          <div className="flex flex-col items-start min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">ATD</span>
+                            <span className="font-bold text-primary dark:text-blue-300 tabular-nums">
+                              {formatMinutesToHHMM(parseTimeToMinutes(flight.mvtData?.atd))}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-center min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">PAX (MVT)</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                              {flight.mvtData?.paxActual?.trim() || flight.pax || "—"}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-center min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">SSEE</span>
+                            <span
+                              className="font-bold text-slate-700 dark:text-slate-300 text-xs leading-snug line-clamp-2 break-words w-full"
+                              title={formatMvtSseeSummary(flight.mvtData?.ssee)}
+                            >
+                              {formatMvtSseeSummary(flight.mvtData?.ssee)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Bags</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300 tabular-nums">{flight.mvtData?.totalBags || "0"}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-stretch text-left w-full pt-1 border-t border-black/5 dark:border-white/5">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Demoras</span>
+                          {(() => {
+                            const m = flight.mvtData;
+                            const lines = [
+                              m?.dlyCod1 ? formatDelayLine(m.dlyCod1, m.dlyTime1 || "") : "",
+                              m?.dlyCod2 ? formatDelayLine(m.dlyCod2, m.dlyTime2 || "") : "",
+                            ].filter(Boolean);
+                            if (lines.length === 0) {
+                              return (
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs">- Ninguna -</span>
+                              );
+                            }
+                            return (
+                              <div className="flex flex-wrap gap-1 justify-start">
+                                {lines.map((line, i) => (
+                                  <span
+                                    key={i}
+                                    className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded text-[11px] font-bold leading-tight"
+                                  >
+                                    {line}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -908,6 +934,19 @@ function App() {
                       <span className="font-bold text-slate-500 dark:text-slate-500">Motivo: </span>
                       {flight.cancellationReason}
                     </p>
+                  )}
+                  {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && isCancelled && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReactivateFlight(flight.id);
+                      }}
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                      Reactivar vuelo
+                    </button>
                   )}
 
                   {/* Disclaimers */}
