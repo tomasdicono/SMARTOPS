@@ -1,0 +1,7 @@
+# Proxy hacia NOAA Aviation Weather (sin CORS en el navegador).
+# Misma ruta que usa `weatherApi.ts` en producción: `/api/aviation/...` → `https://aviationweather.gov/...`
+[[redirects]]
+  from = "/api/aviation/*"
+  to = "https://aviationweather.gov/:splat"
+  status = 200
+  force = true

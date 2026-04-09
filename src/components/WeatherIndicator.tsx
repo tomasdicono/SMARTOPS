@@ -26,7 +26,7 @@ export function WeatherIndicator({ iata, date, time, align = "left" }: Props) {
             {/* Tooltip */}
             <div className={`absolute opacity-0 group-hover:opacity-100 transition-opacity bottom-full mb-2 ${align === "left" ? "left-0" : "right-0"} w-56 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl pointer-events-none z-50`}>
                 <div className="font-bold border-b border-slate-700 pb-1.5 mb-2 text-cyan-400">
-                    Alerta Met. en {iata} ({time} LT)
+                    METAR · {iata} ({time} LT)
                 </div>
                 <ul className="list-disc pl-4 space-y-1 mt-1 text-slate-200">
                     {alert.messages.map((m, i) => <li key={i}>{m}</li>)}
