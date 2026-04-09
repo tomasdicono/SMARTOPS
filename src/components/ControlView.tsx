@@ -14,7 +14,6 @@ import {
     uniqueAirportsFromFlights,
     flightDaySegments,
     clipSegmentToWindow,
-    isFlightDemoradoStatusDia,
     hasMvtAtdForOtp,
     otpDelayMinutesVsStd,
     rankStringsByFrequency,
@@ -31,6 +30,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
+    CalendarClock,
     Ban,
     Activity,
     ListOrdered,
@@ -179,8 +179,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const statusDia = useMemo(() => {
         const operational = dayFlights.filter((f) => !f.cancelled);
         const cancelled = dayFlights.filter((f) => f.cancelled);
-        const demorados = operational.filter((f) => isFlightDemoradoStatusDia(f));
-        /** Solo vuelos con ETD (reprogramación): PAX programados; sin contar afectación solo por demoras MVT */
+        /** Vuelos con ETD cargado (reprogramación de salida) */
         const conEtd = operational.filter((f) => f.etd?.trim());
         const paxAfectadosReprogramacion = conEtd.reduce((s, f) => s + getScheduledPax(f), 0);
         const countVuelosReprogramados = conEtd.length;
@@ -222,7 +221,6 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;
 
         return {
-            countDemorados: demorados.length,
             paxAfectadosReprogramacion,
             countVuelosReprogramados,
             motivosReprogramacion,
@@ -620,12 +618,12 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-2">
-                                <Clock className="w-4 h-4" />
-                                Vuelos demorados
+                                <CalendarClock className="w-4 h-4" />
+                                Vuelos reprogramados
                             </p>
-                            <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">{statusDia.countDemorados}</p>
+                            <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">{statusDia.countVuelosReprogramados}</p>
                             <p className="text-[11px] text-amber-900/80 mt-1 font-semibold">
-                                Con ETD cargado, o sin ETD y ATD posterior al STD
+                                Solo cuentan vuelos con ETD cargado (salida reprogramada respecto del STD de programación).
                             </p>
                         </div>
                         <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">

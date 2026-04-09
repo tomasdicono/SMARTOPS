@@ -8,7 +8,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb, getHitosDepartureTime } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2 } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get, push } from "firebase/database";
@@ -25,9 +25,15 @@ import { computePernocteRows, coercePernocteRow } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
 import { normalizeMvtData } from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
+import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
 import { coerceRouteAfectacion, normalizeAirportCode } from "./lib/routeAfectaciones";
 import { forFirebaseDb } from "./lib/forFirebaseDb";
+import {
+    findFlightForGestiones,
+    applyGestionesRowToFlight,
+    type ParseGestionesResult,
+} from "./lib/gestionesTableParse";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -38,6 +44,7 @@ function App() {
   const [routeModalFlight, setRouteModalFlight] = useState<Flight | null>(null);
   const [routeAfectaciones, setRouteAfectaciones] = useState<RouteAfectacionEntry[]>([]);
   const [showParser, setShowParser] = useState(false);
+  const [showGestiones, setShowGestiones] = useState(false);
   const [showManualFlight, setShowManualFlight] = useState(false);
   const [showOpsMenu, setShowOpsMenu] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
@@ -296,6 +303,28 @@ function App() {
     setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
   };
 
+  const handleGestionesApply = async (
+    parsed: ParseGestionesResult,
+    opts: { syncStdSta: boolean; defaultRescheduleReason: string }
+  ) => {
+    let next = [...flights];
+    for (const row of parsed.rows) {
+      const f = findFlightForGestiones(next, row);
+      if (!f) continue;
+      const i = next.findIndex((x) => x.id === f.id);
+      if (i === -1) continue;
+      next[i] = applyGestionesRowToFlight(next[i], row, {
+        syncStdSta: opts.syncStdSta,
+        defaultRescheduleReason: opts.defaultRescheduleReason,
+      });
+    }
+    try {
+      await set(ref(db, "flights"), forFirebaseDb(next));
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const flightsForSelectedDate = flights.filter((f) => {
     const dateRaw = String(f.date ?? "");
     let flightIso = dateRaw;
@@ -418,13 +447,25 @@ function App() {
             </button>
 
             {(userRole === "ADMIN" || userRole === "HCC") && (
-              <button
-                onClick={() => setShowParser(true)}
-                className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-              >
-                <ClipboardPaste className="w-4 h-4" />
-                <span>Cargar</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowGestiones(true)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+                  title="Pegar tabla de gestiones (matrículas, ETD/ETA, etc.)"
+                >
+                  <Table2 className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">Gestiones</span>
+                  <span className="sm:hidden">Gest.</span>
+                </button>
+                <button
+                  onClick={() => setShowParser(true)}
+                  className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+                >
+                  <ClipboardPaste className="w-4 h-4" />
+                  <span>Cargar</span>
+                </button>
+              </>
             )}
             {userRole === "HCC" && (
               <button
@@ -850,6 +891,10 @@ function App() {
           onClose={() => setRouteModalFlight(null)}
           onConfirm={handleRouteChangeConfirm}
         />
+      )}
+
+      {showGestiones && (userRole === "ADMIN" || userRole === "HCC") && (
+        <GestionesModal flights={flights} onClose={() => setShowGestiones(false)} onApply={handleGestionesApply} />
       )}
 
       {selectedFlight && (
