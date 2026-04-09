@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, Fragment } from "react";
-import type { Flight } from "../types";
+import type { Flight, RouteAfectacionEntry } from "../types";
 import { getAirlinePrefix, getHitosDepartureTime } from "../lib/flightHelpers";
 import { getAircraftInfo } from "../lib/fleetData";
 import {
@@ -36,12 +36,15 @@ import {
     ListOrdered,
     Target,
     BarChartHorizontal,
+    Route,
 } from "lucide-react";
 
 interface Props {
     flights: Flight[];
     /** Fecha ISO YYYY-MM-DD (sincronizada con el header) */
     selectedDate: string;
+    /** Cambios de ruta registrados para ese día (Firebase routeAfectaciones/{fecha}) */
+    routeAfectaciones?: RouteAfectacionEntry[];
 }
 
 const WINDOW_HOURS = 8;
@@ -64,7 +67,7 @@ const FLIGHT_CARD_STYLES = [
     "from-amber-500 via-orange-500 to-rose-600 shadow-amber-900/20",
 ];
 
-export function ControlView({ flights, selectedDate }: Props) {
+export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: Props) {
     const [subTab, setSubTab] = useState<ControlSubTab>("statusDia");
     const [statsDate, setStatsDate] = useState(selectedDate);
     const [statsAirport, setStatsAirport] = useState("");
@@ -231,8 +234,9 @@ export function ControlView({ flights, selectedDate }: Props) {
             nMvtOtp,
             otp0Pct,
             otp15Pct,
+            countAfectacionesRuta: routeAfectaciones.length,
         };
-    }, [dayFlights]);
+    }, [dayFlights, routeAfectaciones.length]);
 
     const hourTickLabels = useMemo(() => {
         return Array.from({ length: WINDOW_HOURS + 1 }, (_, i) => windowStartMin + i * 60).map(formatHm);
@@ -613,7 +617,7 @@ export function ControlView({ flights, selectedDate }: Props) {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-2">
                                 <Clock className="w-4 h-4" />
@@ -643,6 +647,85 @@ export function ControlView({ flights, selectedDate }: Props) {
                                 ) : null}
                             </p>
                         </div>
+                        <div className="rounded-xl border border-cyan-200 bg-cyan-50/50 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+                            <p className="text-xs font-black uppercase text-cyan-900 tracking-wide flex items-center gap-2">
+                                <Route className="w-4 h-4" />
+                                Afectaciones de ruta
+                            </p>
+                            <p className="text-3xl font-black text-cyan-950 mt-2 tabular-nums">{statusDia.countAfectacionesRuta}</p>
+                            <p className="text-[11px] text-cyan-900/85 mt-1 font-semibold">
+                                Cambios de origen o destino registrados desde el tablero (HCC / Admin)
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-cyan-300/80 bg-gradient-to-br from-cyan-50/90 to-white p-4 sm:p-5 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2 justify-between mb-3">
+                            <h4 className="text-sm font-black uppercase tracking-wide text-cyan-900 flex items-center gap-2">
+                                <Route className="w-4 h-4 shrink-0" />
+                                Detalle · Afectaciones de ruta
+                            </h4>
+                            <span className="text-xs font-black tabular-nums bg-cyan-100 text-cyan-950 px-2.5 py-1 rounded-full border border-cyan-200">
+                                {routeAfectaciones.length} registro{routeAfectaciones.length !== 1 ? "s" : ""}
+                            </span>
+                        </div>
+                        {routeAfectaciones.length === 0 ? (
+                            <p className="text-sm text-slate-500 py-2">Sin cambios de ruta registrados este día.</p>
+                        ) : (
+                            <div className="overflow-x-auto rounded-lg border border-cyan-100 bg-white">
+                                <table className="w-full text-sm min-w-[640px]">
+                                    <thead>
+                                        <tr className="bg-cyan-50 text-left text-[10px] font-black uppercase tracking-wider text-cyan-900">
+                                            <th className="px-3 py-2 whitespace-nowrap">Hora</th>
+                                            <th className="px-3 py-2">Vuelo</th>
+                                            <th className="px-3 py-2">Matrícula</th>
+                                            <th className="px-3 py-2">Antes</th>
+                                            <th className="px-3 py-2">Después</th>
+                                            <th className="px-3 py-2">Registró</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-cyan-50">
+                                        {routeAfectaciones.map((row) => {
+                                            let hora = "—";
+                                            try {
+                                                const d = new Date(row.at);
+                                                if (!Number.isNaN(d.getTime())) {
+                                                    hora = d.toLocaleString("es-AR", {
+                                                        day: "2-digit",
+                                                        month: "2-digit",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                    });
+                                                }
+                                            } catch {
+                                                /* ignore */
+                                            }
+                                            return (
+                                                <tr key={row.id} className="hover:bg-cyan-50/50">
+                                                    <td className="px-3 py-2 font-mono text-xs tabular-nums text-slate-700 whitespace-nowrap">
+                                                        {hora}
+                                                    </td>
+                                                    <td className="px-3 py-2 font-bold text-slate-900">
+                                                        {getAirlinePrefix(row.flt)}
+                                                        {row.flt}
+                                                    </td>
+                                                    <td className="px-3 py-2 font-mono text-xs">{row.reg || "—"}</td>
+                                                    <td className="px-3 py-2 font-mono font-semibold text-slate-700">
+                                                        {row.depAntes}-{row.arrAntes}
+                                                    </td>
+                                                    <td className="px-3 py-2 font-mono font-black text-cyan-900">
+                                                        {row.depDespues}-{row.arrDespues}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-slate-700 max-w-[12rem]">
+                                                        <span className="line-clamp-2 break-all">{row.by || "—"}</span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
                     <div className="rounded-xl border border-amber-300/80 bg-white p-4 sm:p-5 shadow-sm">

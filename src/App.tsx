@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { normalizeUserRole, type Flight, type User, type HitosData, type PernocteRowState } from "./types";
+import { normalizeUserRole, type Flight, type User, type HitosData, type PernocteRowState, type RouteAfectacionEntry } from "./types";
 import { formatDelayLine, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
@@ -8,10 +8,10 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import { getAirlinePrefix, coerceFlightFromDb, getHitosDepartureTime } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route } from "lucide-react";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
-import { ref, onValue, set, get } from "firebase/database";
+import { ref, onValue, set, get, push } from "firebase/database";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
 import { UserManagement } from "./components/UserManagement";
@@ -22,6 +22,12 @@ import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
 import { computePernocteRows, coercePernocteRow } from "./lib/pernocteHelpers";
+import { GanttCalculatorView } from "./components/GanttCalculatorView";
+import { normalizeMvtData } from "./lib/flightDataNormalize";
+import { RouteChangeModal } from "./components/RouteChangeModal";
+import { flightDateToIso } from "./lib/controlHelpers";
+import { coerceRouteAfectacion, normalizeAirportCode } from "./lib/routeAfectaciones";
+import { forFirebaseDb } from "./lib/forFirebaseDb";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -29,6 +35,8 @@ function App() {
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
+  const [routeModalFlight, setRouteModalFlight] = useState<Flight | null>(null);
+  const [routeAfectaciones, setRouteAfectaciones] = useState<RouteAfectacionEntry[]>([]);
   const [showParser, setShowParser] = useState(false);
   const [showManualFlight, setShowManualFlight] = useState(false);
   const [showOpsMenu, setShowOpsMenu] = useState(false);
@@ -44,6 +52,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [showUserManagement, setShowUserManagement] = useState(false);
+  /** Calculadora Gantt pública (sin sesión) */
+  const [publicGanttOpen, setPublicGanttOpen] = useState(false);
 
   const userRole = normalizeUserRole(currentUser?.role);
 
@@ -84,9 +94,13 @@ function App() {
         setFlights(validFlights);
 
         // Assure modal stays linked to the latest realtime database version
-        setSelectedFlight(prev => {
+        setSelectedFlight((prev) => {
           if (!prev) return null;
-          return validFlights.find(f => f.id === prev.id) || prev;
+          return validFlights.find((f) => f.id === prev.id) || prev;
+        });
+        setRouteModalFlight((prev) => {
+          if (!prev) return null;
+          return validFlights.find((f) => f.id === prev.id) || prev;
         });
       } else {
         setFlights([]);
@@ -95,6 +109,28 @@ function App() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!selectedDate) {
+      setRouteAfectaciones([]);
+      return;
+    }
+    const r = ref(db, `routeAfectaciones/${selectedDate}`);
+    const unsub = onValue(r, (snapshot) => {
+      const v = snapshot.val();
+      if (!v || typeof v !== "object") {
+        setRouteAfectaciones([]);
+        return;
+      }
+      const list: RouteAfectacionEntry[] = [];
+      for (const [id, raw] of Object.entries(v as Record<string, unknown>)) {
+        list.push(coerceRouteAfectacion(raw, id));
+      }
+      list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      setRouteAfectaciones(list);
+    });
+    return () => unsub();
+  }, [selectedDate]);
 
   useEffect(() => {
     const pernocteRef = ref(db, "pernocte");
@@ -137,13 +173,13 @@ function App() {
   const handleLoadFlights = (newFlights: Flight[]) => {
     const normalized = newFlights.map(coerceFlightFromDb);
     const updatedFlights = [...flights, ...normalized];
-    set(ref(db, 'flights'), updatedFlights);
+    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
     setShowParser(false);
   };
 
   const handleManualFlightAdd = (flight: Flight) => {
     const normalized = coerceFlightFromDb(flight);
-    set(ref(db, "flights"), [...flights, normalized]);
+    set(ref(db, "flights"), forFirebaseDb([...flights, normalized]));
     setShowManualFlight(false);
     const raw = normalized.date;
     if (raw && raw.includes("-")) {
@@ -156,30 +192,32 @@ function App() {
   };
 
   const handleSaveMVT = (id: string, mvtData: Flight["mvtData"]) => {
-    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, mvtData } : f));
-    set(ref(db, 'flights'), updatedFlights);
+    const payload = normalizeMvtData(mvtData);
+    payload.mvtSentAt = new Date().toISOString();
+    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, mvtData: payload } : f));
+    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
   };
 
   const handleSaveHitos = (id: string, hitosData: HitosData) => {
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData } : f));
-    set(ref(db, 'flights'), updatedFlights);
+    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
   };
 
   const handleSaveCrewHitos = (id: string, hitosCrewData: Record<string, string>) => {
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosCrewData } : f));
-    set(ref(db, 'flights'), updatedFlights);
+    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
   };
 
   const handleUpdateDailyReportObs = (id: string, text: string) => {
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, dailyReportObs: text } : f));
-    set(ref(db, "flights"), updatedFlights);
+    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
   };
 
   const handleCancelFlight = (id: string, reason: string) => {
     const updatedFlights = flights.map((f) =>
       f.id === id ? { ...f, cancelled: true, cancellationReason: reason } : f
     );
-    set(ref(db, "flights"), updatedFlights);
+    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
     setCancelModalFlight(null);
     setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
   };
@@ -193,7 +231,7 @@ function App() {
         rescheduleReason: reason,
       };
     });
-    set(ref(db, "flights"), updatedFlights);
+    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
     setRescheduleModalFlight(null);
     setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
   };
@@ -213,18 +251,49 @@ function App() {
     }
 
     const updatedFlights = flights.map(f => f.id === id ? { ...f, reg: newReg } : f);
-    set(ref(db, 'flights'), updatedFlights);
+    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
   };
 
-  const handleUpdateFlightRoute = (id: string, field: "dep" | "arr", value: string) => {
-    const v = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
-    const updatedFlights = flights.map((f) => {
-      if (f.id !== id) return f;
-      const dep = field === "dep" ? v : String(f.dep ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
-      const arr = field === "arr" ? v : String(f.arr ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
-      return { ...f, [field]: v, route: `${dep}-${arr}` };
-    });
-    set(ref(db, "flights"), updatedFlights);
+  const handleRouteChangeConfirm = async (newDep: string, newArr: string) => {
+    if (!routeModalFlight) return;
+    const id = routeModalFlight.id;
+    const flight = flights.find((f) => f.id === id) ?? routeModalFlight;
+    const depAntes = normalizeAirportCode(flight.dep);
+    const arrAntes = normalizeAirportCode(flight.arr);
+    const depDespues = normalizeAirportCode(newDep);
+    const arrDespues = normalizeAirportCode(newArr);
+    const dateKey = flightDateToIso(flight);
+    if (!dateKey) {
+      throw new Error("No se pudo determinar la fecha del vuelo para registrar la afectación.");
+    }
+    const byName = currentUser?.name?.trim() || currentUser?.email || "—";
+    const updatedFlights = flights.map((f) =>
+      f.id === id ? { ...f, dep: depDespues, arr: arrDespues, route: `${depDespues}-${arrDespues}` } : f
+    );
+    const logRef = push(ref(db, `routeAfectaciones/${dateKey}`));
+    try {
+      await set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+      await set(logRef, {
+        flightId: id,
+        flt: String(flight.flt ?? ""),
+        reg: String(flight.reg ?? ""),
+        depAntes,
+        arrAntes,
+        depDespues,
+        arrDespues,
+        at: new Date().toISOString(),
+        by: byName,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        msg.includes("permission") || msg.includes("PERMISSION_DENIED")
+          ? "Sin permiso para guardar en Firebase. Revisá las reglas de la base (flights y routeAfectaciones)."
+          : `No se pudo guardar: ${msg}`
+      );
+    }
+    setRouteModalFlight(null);
+    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
   };
 
   const flightsForSelectedDate = flights.filter((f) => {
@@ -269,7 +338,10 @@ function App() {
   }
 
   if (!currentUser) {
-    return <Login onLoginSuccess={setCurrentUser} />;
+    if (publicGanttOpen) {
+      return <GanttCalculatorView onBack={() => setPublicGanttOpen(false)} />;
+    }
+    return <Login onLoginSuccess={setCurrentUser} onOpenGantt={() => setPublicGanttOpen(true)} />;
   }
 
   return (
@@ -442,7 +514,7 @@ function App() {
         </div>
 
         {mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
-          <ControlView flights={flights} selectedDate={selectedDate} />
+          <ControlView flights={flights} selectedDate={selectedDate} routeAfectaciones={routeAfectaciones} />
         ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
           <DailyReportView
             flights={flights}
@@ -559,21 +631,7 @@ function App() {
                     >
                       <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">STD</span>
                       <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.std} align="left" />
-                      {(userRole === "ADMIN" || userRole === "HCC") ? (
-                        <input
-                          type="text"
-                          value={flight.dep}
-                          onChange={(e) => handleUpdateFlightRoute(flight.id, "dep", e.target.value)}
-                          maxLength={4}
-                          autoComplete="off"
-                          spellCheck={false}
-                          title="Origen (IATA)"
-                          aria-label="Aeropuerto de origen"
-                          className={`w-full min-w-[2.5rem] max-w-[5rem] text-2xl font-black bg-transparent border-b-2 border-dashed border-slate-300 dark:border-slate-600 pb-0.5 focus:outline-none focus:border-primary focus:ring-0 cursor-text ${isLate ? "dark:text-white text-red-900" : "text-slate-800 dark:text-slate-100"}`}
-                        />
-                      ) : (
-                        <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.dep}</span>
-                      )}
+                      <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.dep}</span>
                       <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70 tabular-nums">{flight.std}</span>
                       {flight.etd?.trim() ? (
                         <div className="mt-1.5 pt-1.5 border-t border-dashed border-amber-300/80 dark:border-amber-700/60 w-full">
@@ -591,24 +649,24 @@ function App() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <WeatherIndicator iata={flight.arr} date={flight.date} time={flight.sta} align="right" />
-                      {(userRole === "ADMIN" || userRole === "HCC") ? (
-                        <input
-                          type="text"
-                          value={flight.arr}
-                          onChange={(e) => handleUpdateFlightRoute(flight.id, "arr", e.target.value)}
-                          maxLength={4}
-                          autoComplete="off"
-                          spellCheck={false}
-                          title="Destino (IATA)"
-                          aria-label="Aeropuerto de destino"
-                          className={`w-full min-w-[2.5rem] max-w-[5rem] text-2xl font-black text-right bg-transparent border-b-2 border-dashed border-slate-300 dark:border-slate-600 pb-0.5 focus:outline-none focus:border-primary focus:ring-0 cursor-text ${isLate ? "dark:text-white text-red-900" : "text-slate-800 dark:text-slate-100"}`}
-                        />
-                      ) : (
-                        <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.arr}</span>
-                      )}
+                      <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.arr}</span>
                       <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70">{flight.sta}</span>
                     </div>
                   </div>
+
+                  {(userRole === "ADMIN" || userRole === "HCC") && !isCancelled && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRouteModalFlight(flight);
+                      }}
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide text-cyan-950 dark:text-cyan-100 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-300 dark:border-cyan-700 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-colors"
+                    >
+                      <Route className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                      Cambio ruta
+                    </button>
+                  )}
 
                   <div className="flex flex-col gap-2 mt-auto min-h-[72px] text-sm bg-black/5 dark:bg-black/30 rounded-xl p-3 border border-black/5 dark:border-white/10">
                     <div className="flex justify-between items-end w-full gap-2">
@@ -699,7 +757,7 @@ function App() {
                       Reprogramar vuelo
                     </button>
                   )}
-                  {!isCancelled && (
+                  {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && !isCancelled && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -783,6 +841,14 @@ function App() {
           flight={rescheduleModalFlight}
           onClose={() => setRescheduleModalFlight(null)}
           onConfirm={(etd, reason) => handleRescheduleFlight(rescheduleModalFlight.id, etd, reason)}
+        />
+      )}
+
+      {routeModalFlight && (userRole === "ADMIN" || userRole === "HCC") && (
+        <RouteChangeModal
+          flight={routeModalFlight}
+          onClose={() => setRouteModalFlight(null)}
+          onConfirm={handleRouteChangeConfirm}
         />
       )}
 

@@ -3,13 +3,15 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { ref, get } from "firebase/database";
 import { normalizeUserRole, type User } from "../types";
-import { PlaneTakeoff, Loader2, AlertCircle } from "lucide-react";
+import { PlaneTakeoff, Loader2, AlertCircle, Calculator } from "lucide-react";
 
 interface LoginProps {
     onLoginSuccess: (user: User) => void;
+    /** Abre la calculadora Gantt sin iniciar sesión */
+    onOpenGantt?: () => void;
 }
 
-export function Login({ onLoginSuccess }: LoginProps) {
+export function Login({ onLoginSuccess, onOpenGantt }: LoginProps) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -104,6 +106,22 @@ export function Login({ onLoginSuccess }: LoginProps) {
                         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Ingresar"}
                     </button>
                 </form>
+
+                {onOpenGantt && (
+                    <div className="mt-8 pt-6 border-t border-slate-800">
+                        <button
+                            type="button"
+                            onClick={onOpenGantt}
+                            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-slate-200 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 transition-all"
+                        >
+                            <Calculator className="w-5 h-5 text-cyan-400 shrink-0" aria-hidden />
+                            Calculadora Gantt
+                        </button>
+                        <p className="text-center text-xs text-slate-500 font-semibold mt-2">
+                            Consultá horarios teóricos sin cuenta
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

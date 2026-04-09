@@ -26,7 +26,7 @@ export function emptyMvtData(): NonNullable<Flight["mvtData"]> {
 export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Flight["mvtData"]> {
     const z = (v: string | undefined) => v ?? "";
     if (!raw || typeof raw !== "object") return emptyMvtData();
-    return {
+    const out: NonNullable<Flight["mvtData"]> = {
         atd: z(raw.atd),
         off: z(raw.off),
         eta: z(raw.eta),
@@ -45,6 +45,11 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
         infoSup: z(raw.infoSup),
         supervisor: z(raw.supervisor),
     };
+    /** No asignar la clave si no hay valor: Firebase rechaza `undefined` en propiedades anidadas. */
+    if (raw.mvtSentAt != null && String(raw.mvtSentAt).trim() !== "") {
+        out.mvtSentAt = String(raw.mvtSentAt);
+    }
+    return out;
 }
 
 export function emptyHitosData(): HitosData {

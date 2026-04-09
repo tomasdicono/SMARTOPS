@@ -274,6 +274,18 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                     </button>
                 </div>
             )}
+
+            {flight.mvtData?.mvtSentAt ? (
+                <p className="text-center text-xs font-semibold text-muted-foreground pt-6 mt-2 border-t border-border">
+                    MVT enviado:{" "}
+                    <span className="text-foreground tabular-nums">
+                        {new Date(flight.mvtData.mvtSentAt).toLocaleString("es-AR", {
+                            dateStyle: "short",
+                            timeStyle: "medium",
+                        })}
+                    </span>
+                </p>
+            ) : null}
           </fieldset>
         </form>
     );

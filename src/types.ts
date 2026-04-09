@@ -62,6 +62,8 @@ export interface Flight {
         ssee: SSEE[];
         infoSup: string;
         supervisor: string;
+        /** ISO 8601 — última vez que se envió/actualizó el MVT */
+        mvtSentAt?: string;
     };
 
     // Custom Gantt Chart / Turnaround Performance Data
@@ -80,6 +82,20 @@ export interface Flight {
 
     /** Notas libres en Reporte Diario (HCC / AJS). */
     dailyReportObs?: string;
+}
+
+/** Registro de cambio de ruta (Firebase: routeAfectaciones/{YYYY-MM-DD}/{pushId}) */
+export interface RouteAfectacionEntry {
+    id: string;
+    flightId: string;
+    flt: string;
+    reg: string;
+    depAntes: string;
+    arrAntes: string;
+    depDespues: string;
+    arrDespues: string;
+    at: string;
+    by: string;
 }
 
 /** Estado por matrícula en pestaña Pernocte (Firebase: pernocte/{fecha}/{matrícula}) */
