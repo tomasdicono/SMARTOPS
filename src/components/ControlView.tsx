@@ -15,7 +15,7 @@ import {
     flightDaySegments,
     clipSegmentToWindow,
     hasMvtAtdForOtp,
-    otpDelayMinutesVsStd,
+    otpDelayMinutes,
     rankStringsByFrequency,
     rankDelayCodesByShare,
 } from "../lib/controlHelpers";
@@ -212,10 +212,10 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         let otp0Count = 0;
         let otp15Count = 0;
         for (const f of conMvtOtp) {
-            const d = otpDelayMinutesVsStd(f);
+            const d = otpDelayMinutes(f);
             if (d == null) continue;
             if (d <= 0) otp0Count += 1;
-            else if (d >= 1 && d <= 14) otp15Count += 1;
+            if (d <= 14) otp15Count += 1;
         }
         const otp0Pct = nMvtOtp > 0 ? (otp0Count / nMvtOtp) * 100 : null;
         const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;

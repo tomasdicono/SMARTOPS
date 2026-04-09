@@ -178,10 +178,10 @@ export function hasMvtAtdForOtp(f: Flight): boolean {
 }
 
 /**
- * Minutos de diferencia ATD − STD (programación). Negativo = salida antes del STD.
- * OTP del Status día usa siempre el STD, no el ETD.
+ * Minutos de diferencia ATD − STD (programación publicada). Siempre contra STD, no ETD.
+ * Negativo = salida antes del STD.
  */
-export function otpDelayMinutesVsStd(f: Flight): number | null {
+export function otpDelayMinutes(f: Flight): number | null {
     if (!hasMvtAtdForOtp(f)) return null;
     const atd = f.mvtData!.atd!;
     return parseTimeToMinutes(atd) - parseTimeToMinutes(f.std);
