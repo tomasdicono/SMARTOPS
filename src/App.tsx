@@ -906,10 +906,12 @@ function App() {
                               {flight.mvtData?.paxActual?.trim() || flight.pax || "—"}
                             </span>
                           </div>
-                          <div className="flex flex-col items-start sm:items-center min-w-0">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">SSEE</span>
+                          <div className="flex flex-col items-center text-center min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">
+                              SSEE
+                            </span>
                             <span
-                              className="font-bold text-slate-700 dark:text-slate-300 text-xs leading-snug line-clamp-2 break-words w-full"
+                              className="font-bold text-slate-700 dark:text-slate-300 text-xs leading-snug line-clamp-2 break-words max-w-full text-center"
                               title={formatMvtSseeSummary(flight.mvtData?.ssee)}
                             >
                               {formatMvtSseeSummary(flight.mvtData?.ssee)}
