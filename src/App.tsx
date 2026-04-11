@@ -5,7 +5,13 @@ import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
 import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
-import { getAirlinePrefix, coerceFlightFromDb, getHitosDepartureTime } from "./lib/flightHelpers";
+import {
+  getAirlinePrefix,
+  coerceFlightFromDb,
+  getHitosDepartureTime,
+  isMvtCompleteForCard,
+  isHitosCompleteForCard,
+} from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
 import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw } from "lucide-react";
@@ -24,7 +30,7 @@ import { PernocteView } from "./components/PernocteView";
 import { DiferidosView } from "./components/DiferidosView";
 import { computePernocteRows, coercePernocteRow } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
-import { normalizeMvtData } from "./lib/flightDataNormalize";
+import { normalizeMvtData, normalizeHitosData } from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
 import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
@@ -65,8 +71,16 @@ function App() {
   const [showUserManagement, setShowUserManagement] = useState(false);
   /** Calculadora Gantt pública (sin sesión) */
   const [publicGanttOpen, setPublicGanttOpen] = useState(false);
+  /** Aviso tras enviar MVT correctamente */
+  const [mvtSentToast, setMvtSentToast] = useState<{ open: boolean; subtitle?: string }>({ open: false });
 
   const userRole = normalizeUserRole(currentUser?.role);
+
+  useEffect(() => {
+    if (!mvtSentToast.open) return;
+    const t = window.setTimeout(() => setMvtSentToast({ open: false }), 4500);
+    return () => window.clearTimeout(t);
+  }, [mvtSentToast.open]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -219,16 +233,37 @@ function App() {
     }
   };
 
-  const handleSaveMVT = (id: string, mvtData: Flight["mvtData"]) => {
+  const handleSaveMVT = async (id: string, mvtData: Flight["mvtData"]) => {
     const payload = normalizeMvtData(mvtData);
     payload.mvtSentAt = new Date().toISOString();
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, mvtData: payload } : f));
-    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
+    const f = flights.find((x) => x.id === id);
+    const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
+    try {
+      await set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+      setMvtSentToast({ open: true, subtitle });
+    } catch {
+      alert("No se pudo guardar el MVT. Revisá la conexión e intentá de nuevo.");
+    }
   };
 
+  /** Auto-guardado de borrador Hitos: no marca “enviado”; preserva hitosSentAt si la carta no cambió. */
+  const handlePersistHitos = (id: string, hitosData: HitosData) => {
+    const prev = flights.find((f) => f.id === id)?.hitosData;
+    const payload = normalizeHitosData(hitosData);
+    if (prev?.hitosSentAt && prev.ganttChartName === payload.ganttChartName) {
+      payload.hitosSentAt = prev.hitosSentAt;
+    }
+    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData: payload } : f));
+    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+  };
+
+  /** Guardar Hitos validado desde la pestaña (botón Guardar). */
   const handleSaveHitos = (id: string, hitosData: HitosData) => {
-    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData } : f));
-    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
+    const payload = normalizeHitosData(hitosData);
+    payload.hitosSentAt = new Date().toISOString();
+    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData: payload } : f));
+    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
   };
 
   const handleSaveCrewHitos = (id: string, hitosCrewData: Record<string, string>) => {
@@ -640,6 +675,7 @@ function App() {
             onUpdateDailyReportObs={handleUpdateDailyReportObs}
             canEditObs={userRole === "HCC" || userRole === "AJS"}
             reportUserName={currentUser?.name ?? ""}
+            routeAfectaciones={routeAfectaciones}
           />
         ) : mainTab === "pernocte" && (userRole === "HCC" || userRole === "AJS") ? (
           <PernocteView
@@ -677,35 +713,41 @@ function App() {
             {[...filteredFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
               const isCancelled = !!flight.cancelled;
               const isLate = !isCancelled && isFlightIncompleteAndLate(flight);
-              const hasMvt = !!flight.mvtData?.atd;
-              const hasHitos = !!flight.hitosData?.ganttChartName;
+              const hasMvt = isMvtCompleteForCard(flight);
+              const hasHitos = isHitosCompleteForCard(flight);
 
               let cardBg = "bg-card border-border hover:border-primary/50";
               let badgeText = "";
               let badgeColor = "";
+              let badgeIcon: "ban" | "check" | "alert" | null = null;
 
               if (isCancelled) {
                 cardBg =
                   "bg-slate-100 dark:bg-slate-900/95 border-slate-400 dark:border-slate-600 shadow-slate-900/10 hover:border-slate-500";
                 badgeText = "VUELO CANCELADO";
                 badgeColor = "bg-slate-700 border-white dark:border-slate-900 text-white";
+                badgeIcon = "ban";
               } else if (hasMvt && hasHitos) {
                 cardBg = "bg-emerald-50 dark:bg-[#064e3b] border-emerald-400 dark:border-emerald-500 shadow-emerald-900/20";
-                badgeText = "MVT COMPLETADO";
+                badgeText = "MVT ✓ · HITOS ✓";
                 badgeColor = "bg-emerald-500 border-white dark:border-[#064e3b] text-white";
+                badgeIcon = "check";
               } else if (hasMvt && !hasHitos) {
                 cardBg = "bg-yellow-50 dark:bg-[#422006] border-yellow-400 dark:border-yellow-600 shadow-yellow-900/20";
-                badgeText = "PENDIENTE HITOS";
+                badgeText = "MVT ✓ · Hitos pendiente";
                 badgeColor = "bg-yellow-500 border-white dark:border-[#422006] text-yellow-950 dark:text-yellow-50";
+                badgeIcon = "alert";
               } else if (!hasMvt && hasHitos) {
                 cardBg = "bg-yellow-50 dark:bg-[#422006] border-yellow-400 dark:border-yellow-600 shadow-yellow-900/20";
-                badgeText = "PENDIENTE MVT";
+                badgeText = "MVT pendiente · Hitos ✓";
                 badgeColor = "bg-yellow-500 border-white dark:border-[#422006] text-yellow-950 dark:text-yellow-50";
+                badgeIcon = "alert";
               } else {
                 if (isLate) {
                   cardBg = "bg-red-50 dark:bg-[#450a0a] border-red-500 dark:border-red-600 shadow-red-900/20";
                   badgeText = "DATOS INCOMPLETOS";
                   badgeColor = "bg-red-600 border-white dark:border-[#450a0a] text-white";
+                  badgeIcon = "alert";
                 }
               }
 
@@ -951,15 +993,15 @@ function App() {
 
                   {/* Disclaimers */}
                   {badgeText && (
-                    <div className={`absolute -top-3 left-1/2 -translate-x-1/2 border-2 text-[10px] font-black tracking-widest uppercase px-3 py-1 rounded-full shadow flex items-center gap-1.5 whitespace-nowrap ${badgeColor}`}>
-                      {badgeText === "VUELO CANCELADO" ? (
-                        <Ban className="w-3.5 h-3.5" />
-                      ) : badgeText === "MVT COMPLETADO" ? (
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                    <div className={`absolute -top-3 left-1/2 -translate-x-1/2 border-2 text-[9px] sm:text-[10px] font-black tracking-wide uppercase px-2.5 sm:px-3 py-1 rounded-full shadow flex items-center gap-1.5 max-w-[calc(100%-0.5rem)] text-center ${badgeColor}`}>
+                      {badgeIcon === "ban" ? (
+                        <Ban className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                      ) : badgeIcon === "check" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
                       ) : (
-                        <AlertCircle className="w-3.5 h-3.5" />
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden />
                       )}
-                      {badgeText}
+                      <span className="leading-tight">{badgeText}</span>
                     </div>
                   )}
                 </div>
@@ -1027,7 +1069,7 @@ function App() {
           onClose={() => setSelectedFlight(null)}
           onSaveMVT={(data) => handleSaveMVT(selectedFlight.id, data)}
           onSaveHitos={(data) => handleSaveHitos(selectedFlight.id, data)}
-          onPersistHitos={(data) => handleSaveHitos(selectedFlight.id, data)}
+          onPersistHitos={(data) => handlePersistHitos(selectedFlight.id, data)}
           onSaveCrewHitos={(data) => handleSaveCrewHitos(selectedFlight.id, data)}
           onPersistCrewHitos={(data) => handleSaveCrewHitos(selectedFlight.id, data)}
         />
@@ -1036,6 +1078,35 @@ function App() {
       {showUserManagement && (userRole === "ADMIN" || userRole === "AJS") && (
         <UserManagement onClose={() => setShowUserManagement(false)} />
       )}
+
+      {mvtSentToast.open ? (
+        <div
+          className="fixed bottom-6 left-1/2 z-[100] flex max-w-[min(92vw,24rem)] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4 duration-300"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex w-full items-start gap-3 rounded-2xl border border-emerald-300/80 bg-white px-4 py-3 shadow-xl ring-1 ring-emerald-500/15 dark:border-emerald-700/90 dark:bg-emerald-950 dark:ring-emerald-400/20">
+            <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="font-black text-emerald-900 dark:text-emerald-100">MVT enviado</p>
+              {mvtSentToast.subtitle ? (
+                <p className="mt-0.5 text-sm font-semibold leading-snug text-emerald-800/95 dark:text-emerald-200/95">
+                  {mvtSentToast.subtitle}
+                </p>
+              ) : null}
+              <p className="mt-1 text-xs text-emerald-700/85 dark:text-emerald-300/90">Los datos ya quedaron registrados.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMvtSentToast({ open: false })}
+              className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-emerald-700/80 transition-colors hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-900/60 dark:hover:text-emerald-50"
+              aria-label="Cerrar aviso"
+            >
+              <span className="text-lg font-bold leading-none">×</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

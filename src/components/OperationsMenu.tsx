@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Copy, CheckCircle2, X, MessageSquareText, Search } from "lucide-react";
 import type { Flight } from "../types";
 import { getAirlinePrefix, formatTimeInUTC, buildMvtOutListTitle } from "../lib/flightHelpers";
+import { mvtLoadLineForMessage } from "../lib/a321LoadBays";
 
 interface Props {
     flights: Flight[];
@@ -57,7 +58,8 @@ export function OperationsMenu({ flights, onClose }: Props) {
         msg += `LDM\n`;
         msg += `TOTAL${m.totalBags || "0"}B\n`;
         msg += `CARGO ${m.totalCarga || "0"}\n`;
-        if (m.load) msg += `LOAD: ${m.load}\n`;
+        const loadLine = mvtLoadLineForMessage(m, f.reg);
+        if (loadLine) msg += `LOAD: ${loadLine}\n`;
         if (m.fob) msg += `FOB: ${m.fob}\n`;
 
         if (m.ssee && m.ssee.length > 0) {

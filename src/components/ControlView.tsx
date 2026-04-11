@@ -6,6 +6,7 @@ import {
     flightDateToIso,
     getPax,
     getBags,
+    getTotalCargaKg,
     getMvtPaxOnly,
     getScheduledPax,
     filterFlightsForStats,
@@ -14,11 +15,9 @@ import {
     uniqueAirportsFromFlights,
     flightDaySegments,
     clipSegmentToWindow,
-    hasMvtAtdForOtp,
-    otpDelayMinutes,
-    rankStringsByFrequency,
-    rankDelayCodesByShare,
+    computeStatusDiaDaySummary,
 } from "../lib/controlHelpers";
+import { formatDelayCodeDisplay } from "../lib/delayCodes";
 import {
     BarChart3,
     GanttChartSquare,
@@ -37,6 +36,7 @@ import {
     Target,
     BarChartHorizontal,
     Route,
+    Weight,
 } from "lucide-react";
 
 interface Props {
@@ -168,6 +168,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const mix321 = useMemo(() => computeFleetMixShare(statsFlights, "A321"), [statsFlights]);
 
     const totalBags = useMemo(() => statsFlights.reduce((s, f) => s + getBags(f), 0), [statsFlights]);
+    const totalCargaKg = useMemo(() => statsFlights.reduce((s, f) => s + getTotalCargaKg(f), 0), [statsFlights]);
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
 
@@ -176,65 +177,10 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         [cancelledStatsFlights]
     );
 
-    const statusDia = useMemo(() => {
-        const operational = dayFlights.filter((f) => !f.cancelled);
-        const cancelled = dayFlights.filter((f) => f.cancelled);
-        /** Vuelos con ETD cargado (reprogramación de salida) */
-        const conEtd = operational.filter((f) => f.etd?.trim());
-        const paxAfectadosReprogramacion = conEtd.reduce((s, f) => s + getScheduledPax(f), 0);
-        const countVuelosReprogramados = conEtd.length;
-        const motivosReprogramacion = rankStringsByFrequency(conEtd.map((f) => f.rescheduleReason));
-
-        const demoraCodigos = rankDelayCodesByShare(operational);
-
-        const cancelByKey = new Map<string, { text: string; count: number; pax: number }>();
-        for (const f of cancelled) {
-            const t = String(f.cancellationReason ?? "").trim().replace(/\s+/g, " ");
-            const key = t.toLowerCase();
-            const text = t || "(Sin motivo registrado)";
-            const px = getScheduledPax(f);
-            const prev = cancelByKey.get(key);
-            if (prev) {
-                prev.count += 1;
-                prev.pax += px;
-            } else {
-                cancelByKey.set(key, { text, count: 1, pax: px });
-            }
-        }
-        const motivosCancelacionDetalle = [...cancelByKey.values()].sort(
-            (a, b) => b.count - a.count || a.text.localeCompare(b.text)
-        );
-
-        const paxCancelados = cancelled.reduce((s, f) => s + getScheduledPax(f), 0);
-
-        const conMvtOtp = operational.filter((f) => hasMvtAtdForOtp(f));
-        const nMvtOtp = conMvtOtp.length;
-        let otp0Count = 0;
-        let otp15Count = 0;
-        for (const f of conMvtOtp) {
-            const d = otpDelayMinutes(f);
-            if (d == null) continue;
-            if (d <= 0) otp0Count += 1;
-            if (d <= 14) otp15Count += 1;
-        }
-        const otp0Pct = nMvtOtp > 0 ? (otp0Count / nMvtOtp) * 100 : null;
-        const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;
-
-        return {
-            paxAfectadosReprogramacion,
-            countVuelosReprogramados,
-            motivosReprogramacion,
-            demoraCodigos,
-            countCancelados: cancelled.length,
-            motivosCancelacionDetalle,
-            paxCancelados,
-            totalVuelosDia: dayFlights.length,
-            nMvtOtp,
-            otp0Pct,
-            otp15Pct,
-            countAfectacionesRuta: routeAfectaciones.length,
-        };
-    }, [dayFlights, routeAfectaciones.length]);
+    const statusDia = useMemo(
+        () => computeStatusDiaDaySummary(dayFlights, routeAfectaciones.length),
+        [dayFlights, routeAfectaciones.length]
+    );
 
     const hourTickLabels = useMemo(() => {
         return Array.from({ length: WINDOW_HOURS + 1 }, (_, i) => windowStartMin + i * 60).map(formatHm);
@@ -727,11 +673,11 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             <ul className="space-y-3">
                                 {statusDia.demoraCodigos.map((row, i) => (
                                     <li key={`${row.code}-${i}`} className="space-y-1">
-                                        <div className="flex justify-between gap-3 text-xs font-bold text-slate-800">
-                                            <span className="font-mono tabular-nums truncate" title={row.code}>
-                                                {row.code}
+                                        <div className="flex justify-between gap-3 text-xs text-slate-800 items-start">
+                                            <span className="font-semibold leading-snug min-w-0 break-words pr-1">
+                                                {formatDelayCodeDisplay(row.code)}
                                             </span>
-                                            <span className="shrink-0 tabular-nums text-violet-900">
+                                            <span className="shrink-0 tabular-nums font-bold text-violet-900">
                                                 {row.pct.toFixed(1)}% · {row.count}×
                                             </span>
                                         </div>
@@ -860,6 +806,17 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 <Luggage className="w-3.5 h-3.5" /> Bags despachadas
                             </p>
                             <p className="text-3xl font-black text-cyan-800 mt-2">{totalBags}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-amber-50/60 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Weight className="w-3.5 h-3.5" /> Total carga (kg)
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                Suma de TOTAL CARGA (MVT) en el filtro
+                            </p>
+                            <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">
+                                {totalCargaKg.toLocaleString("es-AR")}
+                            </p>
                         </div>
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-slate-50 to-white">
                             <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">

@@ -27,6 +27,8 @@ export interface HitosData {
     ganttChartName: string;
     ata: string;
     entries: Record<string, string>; // Milestone name -> real execution time
+    /** ISO 8601 — envío validado desde la pestaña Hitos (no el auto-guardado de borrador). */
+    hitosSentAt?: string;
 }
 
 export interface Flight {
@@ -58,6 +60,8 @@ export interface Flight {
         totalBags: string;
         totalCarga: string;
         load: string;
+        /** A320/A321: PCS por posición LDM (solo números si no hay carga) o texto libre por posición si hay TOTAL CARGA (KG). */
+        loadBays?: Record<string, string>;
         fob: string;
         ssee: SSEE[];
         infoSup: string;

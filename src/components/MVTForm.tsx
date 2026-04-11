@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
 import type { Flight } from "../types";
-import { Plus, Trash2, Calculator, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Calculator, CheckCircle2, AlertCircle } from "lucide-react";
 import { parseTimeToMinutes, formatMinutesToHHMM } from "../lib/mvtTime";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
+import { loadBaysFamilyFromReg, mergeLoadBays, sumLoadBaysForFamily } from "../lib/a321LoadBays";
+import { MvtLoadBayDiagram } from "./MvtLoadBayDiagram";
 
 interface Props {
     flight: Flight;
@@ -121,8 +123,46 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
         }));
     };
 
+    const loadBayFamily = loadBaysFamilyFromReg(flight.reg);
+
+    const loadBaysMerged = useMemo(() => {
+        if (!loadBayFamily) return {} as Record<string, string>;
+        return mergeLoadBays(data.loadBays, loadBayFamily);
+    }, [data.loadBays, loadBayFamily]);
+
+    const totalBagsNum = useMemo(() => {
+        const n = parseInt(String(data.totalBags ?? "").replace(/\D/g, ""), 10);
+        return Number.isNaN(n) ? 0 : n;
+    }, [data.totalBags]);
+
+    const totalCargaNum = useMemo(() => {
+        const n = parseInt(String(data.totalCarga ?? "").replace(/\D/g, ""), 10);
+        return Number.isNaN(n) ? 0 : n;
+    }, [data.totalCarga]);
+
+    const loadBaysSum = useMemo(() => {
+        if (!loadBayFamily) return 0;
+        return sumLoadBaysForFamily(loadBaysMerged, loadBayFamily);
+    }, [loadBayFamily, loadBaysMerged]);
+
+    /** Sin carga (kg): PCS por bodega deben sumar TOTAL BAGS. Con carga: texto libre por posición, sin esa validación. */
+    const bagsMatchTotal =
+        !loadBayFamily || totalCargaNum > 0 || loadBaysSum === totalBagsNum;
+
+    const handleLoadBayChange = (code: string, value: string) => {
+        if (!loadBayFamily) return;
+        const stored = totalCargaNum > 0 ? value.trim() : value.replace(/[^0-9]/g, "");
+        setData((prev) => ({
+            ...prev,
+            loadBays: { ...mergeLoadBays(prev.loadBays, loadBayFamily), [code]: stored },
+        }));
+    };
+
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
+        if (loadBayFamily && totalCargaNum === 0 && loadBaysSum !== totalBagsNum) {
+            return;
+        }
         onSave(data);
         clearMvtDraft(flight.id);
     };
@@ -150,9 +190,9 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                     </p>
                 ) : null}
                 <div className="grid grid-cols-3 gap-4">
-                    <NumberInput label="ATD" value={data.atd} onChange={(v) => handleChange("atd", v)} placeholder="Ej: 1430" />
-                    <NumberInput label="OFF" value={data.off} onChange={(v) => handleChange("off", v)} placeholder="Ej: 1445" />
-                    <NumberInput label="ETA" value={data.eta} onChange={(v) => handleChange("eta", v)} placeholder="Ej: 1620" />
+                    <NumberInput label="ATD" value={data.atd} onChange={(v) => handleChange("atd", v)} placeholder="Quite Frenos" />
+                    <NumberInput label="OFF" value={data.off} onChange={(v) => handleChange("off", v)} placeholder="Despegue" />
+                    <NumberInput label="ETA" value={data.eta} onChange={(v) => handleChange("eta", v)} placeholder="Estima Arribo" />
                 </div>
             </section>
 
@@ -194,12 +234,55 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <NumberInput label="PAX" value={data.paxActual} onChange={(v) => handleChange("paxActual", v)} />
                     <NumberInput label="INF" value={data.inf} onChange={(v) => handleChange("inf", v)} />
-                    <NumberInput label="Total Bags" value={data.totalBags} onChange={(v) => handleChange("totalBags", v)} />
-                    <NumberInput label="Total Carga" value={data.totalCarga} onChange={(v) => handleChange("totalCarga", v)} />
+                    <NumberInput label="TOTAL BAGS (PCS)" value={data.totalBags} onChange={(v) => handleChange("totalBags", v)} />
+                    <NumberInput label="TOTAL CARGA (KG)" value={data.totalCarga} onChange={(v) => handleChange("totalCarga", v)} />
                 </div>
+                {loadBayFamily && totalCargaNum === 0 ? (
+                    <div
+                        className={`mb-3 flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-xs sm:text-sm ${
+                            bagsMatchTotal
+                                ? "border-emerald-200 bg-emerald-50/70 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/35 dark:text-emerald-100"
+                                : "border-amber-400 bg-amber-50 text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100"
+                        }`}
+                        role="status"
+                    >
+                        <div className="flex items-center gap-2 font-semibold">
+                            {bagsMatchTotal ? (
+                                <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+                            ) : (
+                                <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+                            )}
+                            <span>
+                                Suma PCS en bodegas: <strong className="tabular-nums">{loadBaysSum}</strong>
+                                {" · "}
+                                TOTAL BAGS: <strong className="tabular-nums">{totalBagsNum}</strong>
+                            </span>
+                        </div>
+                        {!bagsMatchTotal ? (
+                            <p className="pl-6 text-[11px] font-medium leading-snug opacity-95">
+                                Ambos valores deben coincidir (distribuí los {totalBagsNum || "…"} bultos entre las posiciones).
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
                 <div className="grid grid-cols-1 select-none md:grid-cols-2 gap-4">
-                    <TextInput label="LOAD" value={data.load} onChange={(v) => handleChange("load", v)} />
-                    <NumberInput label="FOB" value={data.fob} onChange={(v) => handleChange("fob", v)} />
+                    {loadBayFamily ? (
+                        <div className="md:col-span-2 space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                LOAD por bodega ({loadBayFamily})
+                            </p>
+                            <MvtLoadBayDiagram
+                                family={loadBayFamily}
+                                values={loadBaysMerged}
+                                onBayChange={handleLoadBayChange}
+                                numericOnly={totalCargaNum === 0}
+                                disabled={readOnly}
+                            />
+                        </div>
+                    ) : (
+                        <TextInput label="LOAD" value={data.load} onChange={(v) => handleChange("load", v)} />
+                    )}
+                    <NumberInput label="FOB (KG)" value={data.fob} onChange={(v) => handleChange("fob", v)} />
                 </div>
             </section>
 
@@ -268,7 +351,20 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
 
             {!readOnly && (
                 <div className="sticky bottom-4 z-10 flex justify-end">
-                    <button type="submit" className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg hover:shadow-xl transition-all flex items-center gap-2 hover:-translate-y-0.5 ${flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}>
+                    <button
+                        type="submit"
+                        disabled={loadBayFamily != null && totalCargaNum === 0 && !bagsMatchTotal}
+                        title={
+                            loadBayFamily != null && totalCargaNum === 0 && !bagsMatchTotal
+                                ? "La suma de PCS por bodega debe coincidir con TOTAL BAGS"
+                                : undefined
+                        }
+                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${
+                            loadBayFamily != null && totalCargaNum === 0 && !bagsMatchTotal
+                                ? "cursor-not-allowed opacity-50 bg-muted text-muted-foreground"
+                                : `hover:shadow-xl hover:-translate-y-0.5 ${flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`
+                        }`}
+                    >
                         {flight.mvtData?.atd ? <CheckCircle2 className="w-5 h-5" /> : null}
                         {flight.mvtData?.atd ? "Actualizar MVT" : "Enviar MVT"}
                     </button>

@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useRef } from "react";
-import type { Flight } from "../types";
-import { getAirlinePrefix } from "../lib/flightHelpers";
+import type { Flight, RouteAfectacionEntry } from "../types";
+import { getAirlinePrefix, getHitosDepartureTime } from "../lib/flightHelpers";
+import { flightDateToIso, computeStatusDiaDaySummary } from "../lib/controlHelpers";
 import {
     filterDelayedFlightsForDate,
     totalDelayMinutes,
@@ -19,6 +20,8 @@ interface Props {
     canEditObs: boolean;
     /** Nombre del usuario para el PDF (encabezado Responsable). */
     reportUserName: string;
+    /** Misma fuente que Control → Status día (Firebase `routeAfectaciones/{fecha}`). */
+    routeAfectaciones?: RouteAfectacionEntry[];
 }
 
 export function DailyReportView({
@@ -28,8 +31,22 @@ export function DailyReportView({
     onUpdateDailyReportObs,
     canEditObs,
     reportUserName,
+    routeAfectaciones = [],
 }: Props) {
     const rows = useMemo(() => filterDelayedFlightsForDate(flights, selectedDate), [flights, selectedDate]);
+
+    const dayFlights = useMemo(
+        () =>
+            flights
+                .filter((f) => flightDateToIso(f) === selectedDate)
+                .sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))),
+        [flights, selectedDate]
+    );
+
+    const statusDia = useMemo(
+        () => computeStatusDiaDaySummary(dayFlights, routeAfectaciones.length),
+        [dayFlights, routeAfectaciones.length]
+    );
 
     const obsTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -69,7 +86,12 @@ export function DailyReportView({
                 <button
                     type="button"
                     disabled={rows.length === 0}
-                    onClick={() => void downloadDailyReportPdf(rows, selectedDate, { responsibleName: reportUserName })}
+                    onClick={() =>
+                        void downloadDailyReportPdf(rows, selectedDate, {
+                            responsibleName: reportUserName,
+                            statusDia: statusDia,
+                        })
+                    }
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-wide bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none text-white shadow-md transition-colors"
                 >
                     <FileDown className="w-4 h-4 shrink-0" />

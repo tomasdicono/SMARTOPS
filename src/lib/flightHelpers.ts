@@ -52,6 +52,21 @@ export function coerceFlightFromDb(f: Flight): Flight {
     return base;
 }
 
+/** Tarjetas del tablero: MVT enviado o legado con ATD cargado. */
+export function isMvtCompleteForCard(f: Flight): boolean {
+    const m = f.mvtData;
+    if (!m) return false;
+    if (m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "") return true;
+    const atd = String(m.atd ?? "").replace(/\D/g, "");
+    return atd.length >= 3;
+}
+
+/** Tarjetas del tablero: hitos validados (Guardar), no solo auto-guardado con carta elegida. */
+export function isHitosCompleteForCard(f: Flight): boolean {
+    const t = f.hitosData?.hitosSentAt;
+    return t != null && String(t).trim() !== "";
+}
+
 /** Referencia de salida para hitos y línea de tiempo operativa: ETD si hay reprogramación, si no STD. */
 export function getHitosDepartureTime(f: Flight): string {
     const e = String(f.etd ?? "").trim();

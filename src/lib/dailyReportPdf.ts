@@ -2,6 +2,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Flight } from "../types";
 import { getAirlinePrefix } from "./flightHelpers";
+import type { StatusDiaDaySummary } from "./controlHelpers";
+import { formatDelayCodeDisplay } from "./delayCodes";
 import { totalDelayMinutes, formatDelayCell } from "./dailyReportHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 
@@ -39,6 +41,30 @@ async function fetchLogoAsDataUrl(): Promise<string | null> {
 export interface DailyReportPdfOptions {
     /** Nombre del usuario que genera el PDF (columna derecha). */
     responsibleName: string;
+    /** Mismo criterio que Control → Status día; se imprime al final del PDF. */
+    statusDia: StatusDiaDaySummary;
+}
+
+function buildStatusDiaPdfRows(s: StatusDiaDaySummary): string[][] {
+    const rows: string[][] = [
+        ["Vuelos programados", String(s.totalVuelosDia)],
+        ["Vuelos operados al momento", s.nMvtOtp > 0 ? String(s.nMvtOtp) : "—"],
+        ["OTP 0", s.nMvtOtp > 0 && s.otp0Pct != null ? `${s.otp0Pct.toFixed(1)}%` : "—"],
+        ["OTP 15", s.nMvtOtp > 0 && s.otp15Pct != null ? `${s.otp15Pct.toFixed(1)}%` : "—"],
+        ["Vuelos reprogramados", String(s.countVuelosReprogramados)],
+        ["PAX afectados (reprogramación)", String(s.paxAfectadosReprogramacion)],
+        ["Afectaciones de ruta", String(s.countAfectacionesRuta)],
+        ["Cancelaciones / PAX cancelados", `${s.countCancelados} / ${s.paxCancelados}`],
+    ];
+    if (s.demoraCodigos.length > 0) {
+        rows.push([
+            "Códigos demora MVT (participación en el día)",
+            s.demoraCodigos
+                .map((d) => `${formatDelayCodeDisplay(d.code)} (${d.pct.toFixed(0)}%)`)
+                .join(" · "),
+        ]);
+    }
+    return rows;
 }
 
 /**
@@ -49,7 +75,7 @@ export async function downloadDailyReportPdf(
     dateLabel: string,
     options: DailyReportPdfOptions,
 ): Promise<void> {
-    const { responsibleName } = options;
+    const { responsibleName, statusDia } = options;
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
 
@@ -164,14 +190,64 @@ export async function downloadDailyReportPdf(
             11: { cellWidth: "auto" },
         },
         margin: { left: 10, right: 10 },
-        didDrawPage: (data) => {
-            const footY = doc.internal.pageSize.getHeight() - 7;
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(7);
-            doc.setTextColor(...JS.muted);
-            doc.text(`Página ${data.pageNumber}`, pageW / 2, footY, { align: "center" });
-        },
     });
+
+    const pageH = doc.internal.pageSize.getHeight();
+    const docExt = doc as jsPDF & { lastAutoTable?: { finalY: number } };
+    let yAfterMain = (docExt.lastAutoTable?.finalY ?? HEADER_H_MM + 30) + 10;
+    const minSpaceMm = 42;
+    if (yAfterMain > pageH - minSpaceMm) {
+        doc.addPage();
+        yAfterMain = 14;
+    } else {
+        yAfterMain += 2;
+    }
+
+    doc.setTextColor(...JS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("STATUS DÍA (RESUMEN)", 10, yAfterMain);
+
+    autoTable(doc, {
+        startY: yAfterMain + 4,
+        head: [["Indicador", "Valor"]],
+        body: buildStatusDiaPdfRows(statusDia),
+        theme: "striped",
+        tableWidth: "auto",
+        styles: {
+            font: "helvetica",
+            fontSize: 7,
+            cellPadding: 2,
+            overflow: "linebreak",
+            valign: "top",
+            textColor: [...JS.text] as [number, number, number],
+            lineColor: [...JS.border] as [number, number, number],
+            lineWidth: 0.15,
+        },
+        headStyles: {
+            fillColor: [...JS.navy],
+            textColor: 255,
+            fontStyle: "bold",
+            fontSize: 7,
+        },
+        alternateRowStyles: { fillColor: [...JS.rowAlt] },
+        columnStyles: {
+            0: { cellWidth: 62 },
+            1: { cellWidth: "auto" },
+        },
+        margin: { left: 10, right: 10 },
+    });
+
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        const footY = doc.internal.pageSize.getHeight() - 7;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(...JS.muted);
+        doc.text(`Página ${i} de ${totalPages}`, pageW / 2, footY, { align: "center" });
+    }
+    doc.setPage(totalPages);
 
     const safeName = dateLabel.replace(/[^\d-]/g, "") || "fecha";
     doc.save(`reporte-diario-demoras-${safeName}.pdf`);

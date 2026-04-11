@@ -87,3 +87,24 @@ export const DELAY_CODE_OPTIONS: DelayCodeOption[] = [
 export function formatDelayOption(o: DelayCodeOption): string {
     return `${o.code}: ${o.label}`;
 }
+
+/** Busca la opción del menú MVT (código almacenado puede ser "9", "09", etc.). */
+export function findDelayCodeOption(code: string | undefined | null): DelayCodeOption | undefined {
+    const t = String(code ?? "").trim();
+    if (!t) return undefined;
+    const direct = DELAY_CODE_OPTIONS.find((o) => o.code === t);
+    if (direct) return direct;
+    const n = parseInt(t, 10);
+    if (!Number.isNaN(n)) {
+        return DELAY_CODE_OPTIONS.find((o) => Number(o.code) === n);
+    }
+    return undefined;
+}
+
+/** Misma leyenda que en el desplegable MVT (`code: descripción`); si no hay match, el código tal cual. */
+export function formatDelayCodeDisplay(code: string | undefined | null): string {
+    const t = String(code ?? "").trim();
+    if (!t) return "—";
+    const opt = findDelayCodeOption(t);
+    return opt ? formatDelayOption(opt) : t;
+}

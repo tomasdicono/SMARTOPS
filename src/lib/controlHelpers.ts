@@ -45,6 +45,12 @@ export function getBags(f: Flight): number {
     return parseInt(f.mvtData?.totalBags || "0", 10) || 0;
 }
 
+/** TOTAL CARGA (KG) del MVT, 0 si no hay dato. */
+export function getTotalCargaKg(f: Flight): number {
+    const raw = String(f.mvtData?.totalCarga ?? "").replace(/\D/g, "");
+    return parseInt(raw || "0", 10) || 0;
+}
+
 export function isA321Model(model: string): boolean {
     return model.includes("321");
 }
@@ -238,4 +244,80 @@ export function rankStringsByFrequency(items: (string | undefined | null)[]): { 
     return [...map.values()]
         .map(({ display, count }) => ({ text: display, count }))
         .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
+}
+
+/** Mismos agregados que la pestaña Control → Status día (día calendario + afectaciones de ruta). */
+export interface StatusDiaDaySummary {
+    paxAfectadosReprogramacion: number;
+    countVuelosReprogramados: number;
+    motivosReprogramacion: { text: string; count: number }[];
+    demoraCodigos: DelayCodeShare[];
+    countCancelados: number;
+    motivosCancelacionDetalle: { text: string; count: number; pax: number }[];
+    paxCancelados: number;
+    totalVuelosDia: number;
+    nMvtOtp: number;
+    otp0Pct: number | null;
+    otp15Pct: number | null;
+    countAfectacionesRuta: number;
+}
+
+export function computeStatusDiaDaySummary(
+    dayFlights: Flight[],
+    routeAfectacionesCount: number
+): StatusDiaDaySummary {
+    const operational = dayFlights.filter((f) => !f.cancelled);
+    const cancelled = dayFlights.filter((f) => f.cancelled);
+    const conEtd = operational.filter((f) => f.etd?.trim());
+    const paxAfectadosReprogramacion = conEtd.reduce((s, f) => s + getScheduledPax(f), 0);
+    const countVuelosReprogramados = conEtd.length;
+    const motivosReprogramacion = rankStringsByFrequency(conEtd.map((f) => f.rescheduleReason));
+    const demoraCodigos = rankDelayCodesByShare(operational);
+
+    const cancelByKey = new Map<string, { text: string; count: number; pax: number }>();
+    for (const f of cancelled) {
+        const t = String(f.cancellationReason ?? "").trim().replace(/\s+/g, " ");
+        const key = t.toLowerCase();
+        const text = t || "(Sin motivo registrado)";
+        const px = getScheduledPax(f);
+        const prev = cancelByKey.get(key);
+        if (prev) {
+            prev.count += 1;
+            prev.pax += px;
+        } else {
+            cancelByKey.set(key, { text, count: 1, pax: px });
+        }
+    }
+    const motivosCancelacionDetalle = [...cancelByKey.values()].sort(
+        (a, b) => b.count - a.count || a.text.localeCompare(b.text)
+    );
+    const paxCancelados = cancelled.reduce((s, f) => s + getScheduledPax(f), 0);
+
+    const conMvtOtp = operational.filter((f) => hasMvtAtdForOtp(f));
+    const nMvtOtp = conMvtOtp.length;
+    let otp0Count = 0;
+    let otp15Count = 0;
+    for (const f of conMvtOtp) {
+        const d = otpDelayMinutes(f);
+        if (d == null) continue;
+        if (d <= 0) otp0Count += 1;
+        if (d <= 14) otp15Count += 1;
+    }
+    const otp0Pct = nMvtOtp > 0 ? (otp0Count / nMvtOtp) * 100 : null;
+    const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;
+
+    return {
+        paxAfectadosReprogramacion,
+        countVuelosReprogramados,
+        motivosReprogramacion,
+        demoraCodigos,
+        countCancelados: cancelled.length,
+        motivosCancelacionDetalle,
+        paxCancelados,
+        totalVuelosDia: dayFlights.length,
+        nMvtOtp,
+        otp0Pct,
+        otp15Pct,
+        countAfectacionesRuta: routeAfectacionesCount,
+    };
 }

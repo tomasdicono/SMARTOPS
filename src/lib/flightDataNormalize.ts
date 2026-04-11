@@ -1,4 +1,5 @@
 import type { Flight, HitosData } from "../types";
+import { formatLoadBaysForMessage, inferLoadBaysFamily, normalizeLoadBays } from "./a321LoadBays";
 
 export function emptyMvtData(): NonNullable<Flight["mvtData"]> {
     return {
@@ -26,6 +27,18 @@ export function emptyMvtData(): NonNullable<Flight["mvtData"]> {
 export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Flight["mvtData"]> {
     const z = (v: string | undefined) => v ?? "";
     if (!raw || typeof raw !== "object") return emptyMvtData();
+    const rawLoadBays = raw.loadBays;
+    const userSentLoadBays =
+        rawLoadBays != null && typeof rawLoadBays === "object" && !Array.isArray(rawLoadBays);
+    const baysNorm = normalizeLoadBays(rawLoadBays);
+    const loadFromBays =
+        baysNorm != null ? formatLoadBaysForMessage(baysNorm, inferLoadBaysFamily(baysNorm)) : "";
+    let loadOut: string;
+    if (baysNorm) {
+        loadOut = loadFromBays;
+    } else {
+        loadOut = userSentLoadBays ? "" : z(raw.load);
+    }
     const out: NonNullable<Flight["mvtData"]> = {
         atd: z(raw.atd),
         off: z(raw.off),
@@ -39,7 +52,8 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
         inf: z(raw.inf),
         totalBags: z(raw.totalBags),
         totalCarga: z(raw.totalCarga),
-        load: z(raw.load),
+        load: loadOut,
+        loadBays: baysNorm,
         fob: z(raw.fob),
         ssee: Array.isArray(raw.ssee) ? raw.ssee : [],
         infoSup: z(raw.infoSup),
@@ -69,11 +83,15 @@ export function normalizeHitosData(raw?: Partial<HitosData> | null): HitosData {
                   Object.entries(entries as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])
               )
             : {};
-    return {
+    const out: HitosData = {
         ganttChartName: typeof raw.ganttChartName === "string" ? raw.ganttChartName : "",
         ata: typeof raw.ata === "string" ? raw.ata : "",
         entries: safeEntries,
     };
+    if (raw.hitosSentAt != null && String(raw.hitosSentAt).trim() !== "") {
+        out.hitosSentAt = String(raw.hitosSentAt);
+    }
+    return out;
 }
 
 /** Crew hitos: objeto plano de strings; Firebase puede devolver null o claves raras. */
