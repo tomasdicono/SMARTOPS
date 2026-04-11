@@ -545,6 +545,39 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         </div>
                     </div>
 
+                    <div className="rounded-xl border border-indigo-200 bg-white p-4 sm:p-5 shadow-sm ring-1 ring-indigo-100/70">
+                        <h4 className="text-sm font-black uppercase tracking-wide text-indigo-950 flex items-center gap-2 mb-4">
+                            <Users className="w-4 h-4 shrink-0 text-indigo-600" />
+                            Factor de ocupación
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-indigo-100">
+                            <div className="pb-4 sm:pb-0 sm:pr-5 flex flex-col gap-1">
+                                <p className="text-xs font-black uppercase text-indigo-900 tracking-wide leading-snug">
+                                    Factor de ocupación programado
+                                </p>
+                                {statusDia.factorOcupacionProgramadoPct != null ? (
+                                    <p className="text-3xl font-black text-indigo-950 mt-1 tabular-nums">
+                                        {statusDia.factorOcupacionProgramadoPct.toFixed(1)}%
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-slate-500 mt-2">Sin datos.</p>
+                                )}
+                            </div>
+                            <div className="pt-4 sm:pt-0 sm:pl-5 flex flex-col gap-1">
+                                <p className="text-xs font-black uppercase text-indigo-900 tracking-wide leading-snug">
+                                    Factor de ocupación real
+                                </p>
+                                {statusDia.factorOcupacionRealPct != null ? (
+                                    <p className="text-3xl font-black text-violet-950 mt-1 tabular-nums">
+                                        {statusDia.factorOcupacionRealPct.toFixed(1)}%
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-slate-500 mt-2">Sin datos.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
                             <p className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-2">

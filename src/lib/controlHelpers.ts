@@ -260,6 +260,10 @@ export interface StatusDiaDaySummary {
     otp0Pct: number | null;
     otp15Pct: number | null;
     countAfectacionesRuta: number;
+    /** Σ PAX programación / Σ asientos (vuelos operativos con matrícula en flota). */
+    factorOcupacionProgramadoPct: number | null;
+    /** Σ PAX MVT / Σ asientos solo en vuelos con MVT enviado (`mvtSentAt`). */
+    factorOcupacionRealPct: number | null;
 }
 
 export function computeStatusDiaDaySummary(
@@ -306,6 +310,25 @@ export function computeStatusDiaDaySummary(
     const otp0Pct = nMvtOtp > 0 ? (otp0Count / nMvtOtp) * 100 : null;
     const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;
 
+    let seatsOcc = 0;
+    let paxProgramadosSum = 0;
+    let seatsMvtEnviados = 0;
+    let paxMvtEnviadosSum = 0;
+    for (const f of operational) {
+        const ac = getAircraftInfo(f.reg);
+        if (!ac || ac.capacity <= 0) continue;
+        seatsOcc += ac.capacity;
+        paxProgramadosSum += getScheduledPax(f);
+        const m = f.mvtData;
+        const mvtEnviado = m != null && m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "";
+        if (mvtEnviado) {
+            seatsMvtEnviados += ac.capacity;
+            paxMvtEnviadosSum += getMvtPaxOnly(f);
+        }
+    }
+    const factorOcupacionProgramadoPct = seatsOcc > 0 ? (paxProgramadosSum / seatsOcc) * 100 : null;
+    const factorOcupacionRealPct = seatsMvtEnviados > 0 ? (paxMvtEnviadosSum / seatsMvtEnviados) * 100 : null;
+
     return {
         paxAfectadosReprogramacion,
         countVuelosReprogramados,
@@ -319,5 +342,7 @@ export function computeStatusDiaDaySummary(
         otp0Pct,
         otp15Pct,
         countAfectacionesRuta: routeAfectacionesCount,
+        factorOcupacionProgramadoPct,
+        factorOcupacionRealPct,
     };
 }

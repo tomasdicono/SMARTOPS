@@ -51,6 +51,14 @@ function buildStatusDiaPdfRows(s: StatusDiaDaySummary): string[][] {
         ["Vuelos operados al momento", s.nMvtOtp > 0 ? String(s.nMvtOtp) : "—"],
         ["OTP 0", s.nMvtOtp > 0 && s.otp0Pct != null ? `${s.otp0Pct.toFixed(1)}%` : "—"],
         ["OTP 15", s.nMvtOtp > 0 && s.otp15Pct != null ? `${s.otp15Pct.toFixed(1)}%` : "—"],
+        [
+            "Factor ocupación programado (PAX programación)",
+            s.factorOcupacionProgramadoPct != null ? `${s.factorOcupacionProgramadoPct.toFixed(1)}%` : "—",
+        ],
+        [
+            "Factor ocupación real (PAX MVT · solo MVT enviados)",
+            s.factorOcupacionRealPct != null ? `${s.factorOcupacionRealPct.toFixed(1)}%` : "—",
+        ],
         ["Vuelos reprogramados", String(s.countVuelosReprogramados)],
         ["PAX afectados (reprogramación)", String(s.paxAfectadosReprogramacion)],
         ["Afectaciones de ruta", String(s.countAfectacionesRuta)],
