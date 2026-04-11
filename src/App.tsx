@@ -11,10 +11,12 @@ import {
   getHitosDepartureTime,
   isMvtCompleteForCard,
   isHitosCompleteForCard,
+  flightNeedsCleaningWarning,
 } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
 import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw } from "lucide-react";
+import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, get, push, remove } from "firebase/database";
@@ -783,6 +785,18 @@ function App() {
                       {flight.flt}
                     </span>
                   </div>
+
+                  {!isCancelled && flightNeedsCleaningWarning(flight) ? (
+                    <div
+                      className="mb-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50/95 dark:bg-amber-950/40 dark:border-amber-600 px-3 py-2.5 text-amber-950 dark:text-amber-100 shadow-sm"
+                      role="status"
+                    >
+                      <BroomIcon className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                      <p className="text-[11px] sm:text-xs font-bold leading-snug">
+                        Tiempo de vuelo mayor a 03:30hs, requiere limpieza al arribo.
+                      </p>
+                    </div>
+                  ) : null}
 
                   <div className="flex items-center justify-between font-bold mb-6">
                     <div

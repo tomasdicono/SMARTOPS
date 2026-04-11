@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Copy, CheckCircle2, X, MessageSquareText, Search } from "lucide-react";
+import { BroomIcon } from "./BroomIcon";
 import type { Flight } from "../types";
-import { getAirlinePrefix, formatTimeInUTC, buildMvtOutListTitle } from "../lib/flightHelpers";
+import { getAirlinePrefix, formatTimeInUTC, buildMvtOutListTitle, flightNeedsCleaningWarning } from "../lib/flightHelpers";
 import { mvtLoadLineForMessage } from "../lib/a321LoadBays";
 
 interface Props {
@@ -134,9 +135,17 @@ export function OperationsMenu({ flights, onClose }: Props) {
                                 return (
                                     <li key={flight.id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
                                         <div className="flex items-start justify-between gap-3 px-4 py-3 bg-slate-100 border-b border-slate-200">
-                                            <span className="font-bold text-slate-900 text-sm sm:text-base leading-snug tracking-tight pr-2">
-                                                {listTitle}
-                                            </span>
+                                            <div className="min-w-0 flex flex-col gap-2 pr-2">
+                                                <span className="font-bold text-slate-900 text-sm sm:text-base leading-snug tracking-tight">
+                                                    {listTitle}
+                                                </span>
+                                                {flightNeedsCleaningWarning(flight) ? (
+                                                    <span className="inline-flex items-center gap-1.5 self-start rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-950">
+                                                        <BroomIcon className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                                        Limpieza al arribo (&gt; 03:30 hs)
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                             <button
                                                 type="button"
                                                 onClick={() => handleCopy(flight.id, messageText)}

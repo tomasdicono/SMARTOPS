@@ -3,8 +3,9 @@ import type { Flight } from "../types";
 import { MVTForm } from "./MVTForm";
 import { HitosTab } from "./HitosTab";
 import { HitosCrewTab } from "./HitosCrewTab";
-import { getAirlinePrefix } from "../lib/flightHelpers";
+import { flightNeedsCleaningWarning, getAirlinePrefix } from "../lib/flightHelpers";
 import { X, Ban } from "lucide-react";
+import { BroomIcon } from "./BroomIcon";
 
 interface Props {
     flight: Flight;
@@ -81,6 +82,15 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                             )}
                             <p className="text-xs text-rose-700/80 mt-2">Los formularios están bloqueados; solo lectura.</p>
                         </div>
+                    </div>
+                )}
+
+                {!flight.cancelled && flightNeedsCleaningWarning(flight) && (
+                    <div className="px-4 sm:px-6 py-3 bg-amber-50 border-b border-amber-200 flex items-start gap-3">
+                        <BroomIcon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-sm font-bold text-amber-950 leading-snug">
+                            Tiempo de vuelo mayor a 03:30hs, requiere limpieza al arribo.
+                        </p>
                     </div>
                 )}
 

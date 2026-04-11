@@ -1,5 +1,38 @@
 import type { Flight, HitosData } from "../types";
+import { parseHHmmToMinutes } from "./controlHelpers";
 import { normalizeHitosCrewData, normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
+
+const DAY_MINUTES = 24 * 60;
+/** Bloque estrictamente mayor a 3:30 h → aviso de limpieza de cabina */
+const LONG_BLOCK_CLEANING_THRESHOLD_MIN = 3 * 60 + 30;
+
+function blockDurationDepArrMinutes(depMin: number, arrMin: number): number {
+    let a = arrMin;
+    if (a < depMin) a += DAY_MINUTES;
+    return a - depMin;
+}
+
+/**
+ * Duración de bloque en minutos: STA−STD (programación), o ETA−ETD del MVT si hay reprogramación
+ * y ambos horarios cargados. Cruce de medianoche: llegada al día siguiente.
+ */
+export function flightBlockDurationMinutes(f: Flight): number | null {
+    const etdStr = String(f.etd ?? "").trim();
+    const etaStr = String(f.mvtData?.eta ?? "").trim();
+    if (etdStr && etaStr) {
+        return blockDurationDepArrMinutes(parseHHmmToMinutes(etdStr), parseHHmmToMinutes(etaStr));
+    }
+    if (!String(f.std ?? "").trim() || !String(f.sta ?? "").trim()) return null;
+    return blockDurationDepArrMinutes(parseHHmmToMinutes(f.std), parseHHmmToMinutes(f.sta));
+}
+
+/** Vuelos con bloque &gt; 3:30 h (mismo criterio que Control / STA–STD). */
+export function flightNeedsCleaningWarning(f: Flight): boolean {
+    if (f.cancelled) return false;
+    const d = flightBlockDurationMinutes(f);
+    if (d == null || !Number.isFinite(d) || d <= 0) return false;
+    return d > LONG_BLOCK_CLEANING_THRESHOLD_MIN;
+}
 
 const MONTH_ABBRS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
