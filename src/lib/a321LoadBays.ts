@@ -5,7 +5,7 @@ import { getAircraftInfo } from "./fleetData";
 export type LoadBayFamily = "A320" | "A321";
 
 export const A320_BAY_GROUPS: { title: string; codes: string[] }[] = [
-    { title: "Delantera", codes: ["13", "12", "11"] },
+    { title: "Delantera", codes: ["11", "12", "13"] },
     { title: "Trasera", codes: ["31", "32", "41", "42"] },
     { title: "Bulk", codes: ["51", "52", "53"] },
 ];

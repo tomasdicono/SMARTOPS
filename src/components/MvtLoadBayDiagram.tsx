@@ -3,9 +3,10 @@ import type { LoadBayFamily } from "../lib/a321LoadBays";
 /** Posición horizontal (0–100), vista superior, morro izquierda. */
 const SLOT_X_PCT: Record<LoadBayFamily, Record<string, number>> = {
     A320: {
-        "13": 14,
+        /** Izquierda → derecha (morro a la izquierda): 11 / 12 / 13, luego trasera y bulk. */
+        "11": 14,
         "12": 24,
-        "11": 34,
+        "13": 34,
         "31": 46,
         "32": 54,
         "41": 64,
