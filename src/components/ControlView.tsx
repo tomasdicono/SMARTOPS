@@ -17,7 +17,12 @@ import {
     clipSegmentToWindow,
     computeStatusDiaDaySummary,
     buildStatusDiaPrensaText,
+    normalizeIsoDateRange,
+    countDaysInclusiveIso,
+    flightMatchesStatsAtdTimeFilter,
+    isStatsAtdTimeFilterActive,
 } from "../lib/controlHelpers";
+import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
 import {
     BarChart3,
@@ -72,7 +77,11 @@ const FLIGHT_CARD_STYLES = [
 
 export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: Props) {
     const [subTab, setSubTab] = useState<ControlSubTab>("statusDia");
-    const [statsDate, setStatsDate] = useState(selectedDate);
+    const [statsDateFrom, setStatsDateFrom] = useState(selectedDate);
+    const [statsDateTo, setStatsDateTo] = useState(selectedDate);
+    /** Filtro opcional: ventana de ATD (MVT), formato `HH:MM` de `<input type="time" />` o vacío */
+    const [statsTimeFrom, setStatsTimeFrom] = useState("");
+    const [statsTimeTo, setStatsTimeTo] = useState("");
     const [statsAirport, setStatsAirport] = useState("");
     /** Inicio de la ventana visible en la línea de tiempo (0, 8 o 16 h) */
     const [timelineWindowStartH, setTimelineWindowStartH] = useState(0);
@@ -80,7 +89,8 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const [obvkAirport, setObvkAirport] = useState("");
 
     useEffect(() => {
-        setStatsDate(selectedDate);
+        setStatsDateFrom(selectedDate);
+        setStatsDateTo(selectedDate);
     }, [selectedDate]);
 
     useEffect(() => {
@@ -161,17 +171,52 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const airportOptions = useMemo(() => uniqueAirportsFromFlights(flights), [flights]);
 
     const statsScope = useMemo(() => {
-        const raw = filterFlightsForStats(flights, statsDate, statsAirport);
+        const dateAirportRaw = filterFlightsForStats(flights, statsDateFrom, statsDateTo, statsAirport);
+        const raw = dateAirportRaw.filter((f) => flightMatchesStatsAtdTimeFilter(f, statsTimeFrom, statsTimeTo));
         const operational = raw.filter((f) => !f.cancelled);
-        const cancelled = filterFlightsForStatsDepartureOnly(flights, statsDate, statsAirport)
+        const cancelled = filterFlightsForStatsDepartureOnly(flights, statsDateFrom, statsDateTo, statsAirport)
             .filter((f) => f.cancelled)
-            .sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b)));
-        return { raw, operational, cancelled };
-    }, [flights, statsDate, statsAirport]);
+            .filter((f) => flightMatchesStatsAtdTimeFilter(f, statsTimeFrom, statsTimeTo))
+            .sort((a, b) => {
+                const da = flightDateToIso(a).localeCompare(flightDateToIso(b));
+                if (da !== 0) return da;
+                return getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b));
+            });
+        return { raw, operational, cancelled, dateAirportMatchCount: dateAirportRaw.length };
+    }, [flights, statsDateFrom, statsDateTo, statsAirport, statsTimeFrom, statsTimeTo]);
+
+    const statsRangeLabel = useMemo(() => {
+        const { lo, hi } = normalizeIsoDateRange(statsDateFrom, statsDateTo);
+        if (!lo || !hi) return "";
+        const d0 = new Date(`${lo}T12:00:00`);
+        const d1 = new Date(`${hi}T12:00:00`);
+        const f0 = d0.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+        const f1 = d1.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+        const days = countDaysInclusiveIso(lo, hi);
+        if (lo === hi) return f0;
+        return `${f0} – ${f1} · ${days} día${days !== 1 ? "s" : ""}`;
+    }, [statsDateFrom, statsDateTo]);
+
+    const statsAtdTimeLabel = useMemo(() => {
+        if (!isStatsAtdTimeFilterActive(statsTimeFrom, statsTimeTo)) return "";
+        const a = statsTimeFrom.trim();
+        const b = statsTimeTo.trim();
+        const fmt = (s: string) => (s ? formatMinutesToHHMM(parseTimeToMinutes(s)) : null);
+        const fa = a ? fmt(a) : null;
+        const fb = b ? fmt(b) : null;
+        if (fa && fb) {
+            const overnight = parseTimeToMinutes(a) > parseTimeToMinutes(b);
+            return `${fa} – ${fb}${overnight ? " (cruce medianoche)" : ""}`;
+        }
+        if (fa) return `desde ${fa}`;
+        if (fb) return `hasta ${fb}`;
+        return "";
+    }, [statsTimeFrom, statsTimeTo]);
 
     const statsFlights = statsScope.operational;
     const cancelledStatsFlights = statsScope.cancelled;
     const statsFlightsAnyInFilter = statsScope.raw.length > 0;
+    const statsDateAirportMatchCount = statsScope.dateAirportMatchCount;
 
     const mix320 = useMemo(() => computeFleetMixShare(statsFlights, "A320"), [statsFlights]);
     const mix321 = useMemo(() => computeFleetMixShare(statsFlights, "A321"), [statsFlights]);
@@ -787,17 +832,28 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                 {subTab === "stats" && (
                 <div className="animate-in fade-in duration-200">
                 <div className="p-5 space-y-6">
-                    <div className="flex flex-wrap gap-4 items-end">
-                        <div>
-                            <label className="block text-xs font-black uppercase text-slate-500 mb-1">Fecha</label>
+                    <div className="flex flex-nowrap items-end gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                        <div className="shrink-0">
+                            <label className="block text-xs font-black uppercase text-slate-500 mb-1">Desde</label>
                             <input
                                 type="date"
-                                value={statsDate}
-                                onChange={(e) => setStatsDate(e.target.value)}
-                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light]"
+                                value={statsDateFrom}
+                                onChange={(e) => setStatsDateFrom(e.target.value)}
+                                max={statsDateTo || undefined}
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
                             />
                         </div>
-                        <div className="min-w-[200px] flex-1 max-w-xs">
+                        <div className="shrink-0">
+                            <label className="block text-xs font-black uppercase text-slate-500 mb-1">Hasta</label>
+                            <input
+                                type="date"
+                                value={statsDateTo}
+                                onChange={(e) => setStatsDateTo(e.target.value)}
+                                min={statsDateFrom || undefined}
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
+                            />
+                        </div>
+                        <div className="shrink-0 min-w-[11rem] max-w-[14rem]">
                             <label className="block text-xs font-black uppercase text-slate-500 mb-1">Aeropuerto</label>
                             <select
                                 value={statsAirport}
@@ -812,7 +868,58 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 ))}
                             </select>
                         </div>
+                        <div className="shrink-0">
+                            <label className="block text-xs font-black uppercase text-slate-500 mb-1">ATD desde</label>
+                            <input
+                                type="time"
+                                value={statsTimeFrom}
+                                onChange={(e) => setStatsTimeFrom(e.target.value)}
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light]"
+                            />
+                        </div>
+                        <div className="shrink-0">
+                            <label className="block text-xs font-black uppercase text-slate-500 mb-1">ATD hasta</label>
+                            <input
+                                type="time"
+                                value={statsTimeTo}
+                                onChange={(e) => setStatsTimeTo(e.target.value)}
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light]"
+                            />
+                        </div>
+                        {(statsTimeFrom || statsTimeTo) && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setStatsTimeFrom("");
+                                    setStatsTimeTo("");
+                                }}
+                                className="shrink-0 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                            >
+                                Quitar ATD
+                            </button>
+                        )}
                     </div>
+                    <p className="text-[11px] text-slate-500 -mt-2 max-w-2xl leading-snug">
+                        Opcional: restringe a vuelos cuyo <span className="font-bold text-slate-700">ATD del MVT</span> caiga en la
+                        ventana (hora local, mismo criterio que el formulario). Si activás el filtro, se excluyen vuelos sin MVT o sin
+                        ATD cargado.
+                    </p>
+                    {statsRangeLabel ? (
+                        <p className="text-xs font-semibold text-slate-600 -mt-1">
+                            Período: <span className="font-black text-slate-800 tabular-nums">{statsRangeLabel}</span>
+                            {statsAtdTimeLabel ? (
+                                <>
+                                    {" "}
+                                    · ATD:{" "}
+                                    <span className="font-black text-slate-800 tabular-nums">{statsAtdTimeLabel}</span>
+                                </>
+                            ) : null}
+                        </p>
+                    ) : statsAtdTimeLabel ? (
+                        <p className="text-xs font-semibold text-slate-600 -mt-1">
+                            ATD: <span className="font-black text-slate-800 tabular-nums">{statsAtdTimeLabel}</span>
+                        </p>
+                    ) : null}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-slate-50 to-white">
@@ -940,7 +1047,11 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                     )}
 
                     {!statsFlightsAnyInFilter && (
-                        <p className="text-center text-slate-500 py-4">No hay vuelos para fecha y aeropuerto seleccionados.</p>
+                        <p className="text-center text-slate-500 py-4 max-w-lg mx-auto leading-relaxed">
+                            {statsDateAirportMatchCount === 0
+                                ? "No hay vuelos para el período y aeropuerto seleccionados."
+                                : "Hay vuelos en el período y aeropuerto, pero ninguno cumple el filtro de ATD (o no tienen MVT con ATD cargado)."}
+                        </p>
                     )}
                 </div>
                 </div>

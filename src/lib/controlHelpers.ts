@@ -61,22 +61,93 @@ export function isA320Family(model: string): boolean {
     return model.includes("320") && !model.includes("321");
 }
 
-/** Vuelos del día ISO; opcional filtro aeropuerto (dep o arr) */
-export function filterFlightsForStats(flights: Flight[], isoDate: string, airport: string | ""): Flight[] {
-    let list = flights.filter((f) => flightDateToIso(f) === isoDate);
+/**
+ * Ordena dos fechas ISO (YYYY-MM-DD) en rango inclusivo [lo, hi].
+ * Si falta una, se usa la otra (un solo día). Si ambas vacías, lo/hi quedan vacíos.
+ */
+export function normalizeIsoDateRange(isoFrom: string, isoTo: string): { lo: string; hi: string } {
+    const a = String(isoFrom ?? "").trim();
+    const b = String(isoTo ?? "").trim();
+    if (!a && !b) return { lo: "", hi: "" };
+    if (!a) return { lo: b, hi: b };
+    if (!b) return { lo: a, hi: a };
+    return a <= b ? { lo: a, hi: b } : { lo: b, hi: a };
+}
+
+/** Días calendario inclusivos entre dos ISO YYYY-MM-DD (misma longitud que el rango). */
+export function countDaysInclusiveIso(lo: string, hi: string): number {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(lo) || !/^\d{4}-\d{2}-\d{2}$/.test(hi)) return 0;
+    const t0 = new Date(`${lo}T12:00:00`).getTime();
+    const t1 = new Date(`${hi}T12:00:00`).getTime();
+    if (Number.isNaN(t0) || Number.isNaN(t1)) return 0;
+    return Math.round((t1 - t0) / 86400000) + 1;
+}
+
+/** Vuelos con fecha en [isoFrom, isoTo] inclusive; opcional filtro aeropuerto (dep o arr) */
+export function filterFlightsForStats(flights: Flight[], isoFrom: string, isoTo: string, airport: string | ""): Flight[] {
+    const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
+    if (!lo || !hi) return [];
+    let list = flights.filter((f) => {
+        const d = flightDateToIso(f);
+        return d >= lo && d <= hi;
+    });
     if (airport) {
         list = list.filter((f) => f.dep === airport || f.arr === airport);
     }
     return list;
 }
 
-/** Misma fecha ISO; filtro aeropuerto solo por origen (dep). Usado p. ej. en vuelos cancelados. */
-export function filterFlightsForStatsDepartureOnly(flights: Flight[], isoDate: string, airport: string | ""): Flight[] {
-    let list = flights.filter((f) => flightDateToIso(f) === isoDate);
+/** Mismo rango de fechas; filtro aeropuerto solo por origen (dep). Usado p. ej. en vuelos cancelados. */
+export function filterFlightsForStatsDepartureOnly(
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+    airport: string | ""
+): Flight[] {
+    const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
+    if (!lo || !hi) return [];
+    let list = flights.filter((f) => {
+        const d = flightDateToIso(f);
+        return d >= lo && d <= hi;
+    });
     if (airport) {
         list = list.filter((f) => f.dep === airport);
     }
     return list;
+}
+
+/** MVT con ATD cargado con al menos hora:minuto parseables (mismo umbral que OTP en status día). */
+export function hasMvtAtdForStatsFilter(f: Flight): boolean {
+    const atd = f.mvtData?.atd;
+    return !!atd && String(atd).replace(/\D/g, "").length >= 3;
+}
+
+/** `true` si al menos uno de los campos horario (HH:MM) está definido. */
+export function isStatsAtdTimeFilterActive(timeFromHHMM: string, timeToHHMM: string): boolean {
+    return String(timeFromHHMM ?? "").trim() !== "" || String(timeToHHMM ?? "").trim() !== "";
+}
+
+/**
+ * Filtro opcional por hora de **ATD del MVT** (minutos desde medianoche, mismo criterio que el formulario).
+ * Si `timeFrom` y `timeTo` están vacíos → no filtra (devuelve siempre `true`).
+ * Si alguno tiene valor → solo pasan vuelos con ATD válido dentro de la ventana.
+ * Si desde > hasta → ventana nocturna (ej. 22:00–06:00).
+ */
+export function flightMatchesStatsAtdTimeFilter(f: Flight, timeFromHHMM: string, timeToHHMM: string): boolean {
+    const a = String(timeFromHHMM ?? "").trim();
+    const b = String(timeToHHMM ?? "").trim();
+    if (!a && !b) return true;
+    if (!hasMvtAtdForStatsFilter(f)) return false;
+    const m = parseTimeToMinutes(f.mvtData!.atd!);
+    const lo = a ? parseTimeToMinutes(a) : null;
+    const hi = b ? parseTimeToMinutes(b) : null;
+    if (lo != null && hi != null) {
+        if (lo <= hi) return m >= lo && m <= hi;
+        return m >= lo || m <= hi;
+    }
+    if (lo != null) return m >= lo;
+    if (hi != null) return m <= hi;
+    return true;
 }
 
 /** Participación de cada familia: % de vuelos del filtro que operan con ese equipo (flota conocida) */
