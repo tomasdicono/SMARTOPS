@@ -542,25 +542,25 @@ function App() {
             </button>
 
             {(userRole === "ADMIN" || userRole === "HCC") && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowGestiones(true)}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-                  title="Pegar tabla de gestiones (matrículas, ETD/ETA, etc.)"
-                >
-                  <Table2 className="w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline">Gestiones</span>
-                  <span className="sm:hidden">Gest.</span>
-                </button>
-                <button
-                  onClick={() => setShowParser(true)}
-                  className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-                >
-                  <ClipboardPaste className="w-4 h-4" />
-                  <span>Cargar</span>
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => setShowGestiones(true)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+                title="Pegar tabla de gestiones (matrículas, ETD/ETA, etc.)"
+              >
+                <Table2 className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Gestiones</span>
+                <span className="sm:hidden">Gest.</span>
+              </button>
+            )}
+            {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && (
+              <button
+                onClick={() => setShowParser(true)}
+                className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+              >
+                <ClipboardPaste className="w-4 h-4" />
+                <span>Cargar</span>
+              </button>
             )}
             {userRole === "HCC" && (
               <button
@@ -701,7 +701,7 @@ function App() {
             <p className="text-md max-w-md mx-auto">
               Usa el botón "Cargar" en la parte superior para pegar la programación de la jornada.
             </p>
-            {(userRole === "ADMIN" || userRole === "HCC") && (
+            {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && (
             <button
               onClick={() => setShowParser(true)}
               className="mt-8 bg-primary/10 text-primary px-6 py-2 rounded-full font-bold shadow hover:bg-primary/20 transition-colors"

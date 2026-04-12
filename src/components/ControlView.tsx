@@ -50,6 +50,9 @@ interface Props {
 const WINDOW_HOURS = 8;
 const WINDOW_STARTS = [0, 8, 16] as const;
 
+/** Pestaña «Línea de tiempo» en Control operacional. Poner en `true` para reactivarla. */
+const SHOW_TIMELINE_TAB = false;
+
 function formatHm(minutes: number): string {
     const m = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
     const h = Math.floor(m / 60);
@@ -83,6 +86,12 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     useEffect(() => {
         setTimelineWindowStartH(0);
     }, [selectedDate]);
+
+    useEffect(() => {
+        if (!SHOW_TIMELINE_TAB && subTab === "timeline") {
+            setSubTab("statusDia");
+        }
+    }, [subTab]);
 
     const dayFlights = useMemo(
         () =>
@@ -241,6 +250,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         <AlertTriangle className="w-4 h-4 shrink-0" />
                         OBVK
                     </button>
+                    {SHOW_TIMELINE_TAB && (
                     <button
                         type="button"
                         onClick={() => setSubTab("timeline")}
@@ -253,10 +263,11 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         <GanttChartSquare className="w-4 h-4 shrink-0" />
                         Línea de tiempo
                     </button>
+                    )}
                 </div>
 
                 {/* ——— Línea de tiempo ——— */}
-                {subTab === "timeline" && (
+                {SHOW_TIMELINE_TAB && subTab === "timeline" && (
                 <div className="animate-in fade-in duration-200">
                 {/* Controles ventana 8h */}
                 <div className="px-5 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50/80 border-b border-slate-100">
