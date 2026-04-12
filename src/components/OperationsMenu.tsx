@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, CheckCircle2, X, MessageSquareText, Search } from "lucide-react";
+import { Copy, CheckCircle2, X, MessageSquareText, Search, ChevronRight } from "lucide-react";
 import { BroomIcon } from "./BroomIcon";
 import type { Flight } from "../types";
 import { getAirlinePrefix, formatTimeInUTC, buildMvtOutListTitle, flightNeedsCleaningWarning } from "../lib/flightHelpers";
@@ -13,6 +13,8 @@ interface Props {
 export function OperationsMenu({ flights, onClose }: Props) {
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    /** Solo un MVT expandido a la vez; null = todos colapsados (solo títulos). */
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     const completedFlights = flights.filter((f) => !!f.mvtData);
 
@@ -131,39 +133,56 @@ export function OperationsMenu({ flights, onClose }: Props) {
                                 const messageText = generateMessage(flight);
                                 const isCopied = copiedId === flight.id;
                                 const listTitle = buildMvtOutListTitle(flight);
+                                const isOpen = expandedId === flight.id;
 
                                 return (
                                     <li key={flight.id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                                        <div className="flex items-start justify-between gap-3 px-4 py-3 bg-slate-100 border-b border-slate-200">
-                                            <div className="min-w-0 flex flex-col gap-2 pr-2">
-                                                <span className="font-bold text-slate-900 text-sm sm:text-base leading-snug tracking-tight">
-                                                    {listTitle}
-                                                </span>
-                                                {flightNeedsCleaningWarning(flight) ? (
-                                                    <span className="inline-flex items-center gap-1.5 self-start rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-950">
-                                                        <BroomIcon className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                                                        Limpieza al arribo (&gt; 03:30 hs)
-                                                    </span>
-                                                ) : null}
-                                            </div>
+                                        <div className="flex items-stretch gap-1 bg-slate-100 border-b border-slate-200">
                                             <button
                                                 type="button"
-                                                onClick={() => handleCopy(flight.id, messageText)}
-                                                className={`shrink-0 p-2 rounded-lg transition-all ${
+                                                onClick={() => setExpandedId((prev) => (prev === flight.id ? null : flight.id))}
+                                                className="flex flex-1 min-w-0 items-start gap-2 text-left px-4 py-3 hover:bg-slate-200/60 transition-colors rounded-none"
+                                                aria-expanded={isOpen}
+                                            >
+                                                <ChevronRight
+                                                    className={`w-5 h-5 shrink-0 text-slate-600 mt-0.5 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                                                    aria-hidden
+                                                />
+                                                <div className="min-w-0 flex flex-col gap-2 flex-1">
+                                                    <span className="font-bold text-slate-900 text-sm sm:text-base leading-snug tracking-tight">
+                                                        {listTitle}
+                                                    </span>
+                                                    {flightNeedsCleaningWarning(flight) ? (
+                                                        <span className="inline-flex items-center gap-1.5 self-start rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-950">
+                                                            <BroomIcon className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                                            Limpieza al arribo (&gt; 03:30 hs)
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCopy(flight.id, messageText);
+                                                }}
+                                                className={`shrink-0 self-start m-2 p-2 rounded-lg transition-all ${
                                                     isCopied
                                                         ? "bg-emerald-100 text-emerald-700"
                                                         : "bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary/50 shadow-sm"
                                                 }`}
-                                                title="Copiar mensaje"
+                                                title="Copiar mensaje completo"
                                             >
                                                 {isCopied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                             </button>
                                         </div>
-                                        <div className="p-4">
-                                            <pre className="text-xs font-mono whitespace-pre-wrap break-words text-slate-700">
-                                                {messageText}
-                                            </pre>
-                                        </div>
+                                        {isOpen ? (
+                                            <div className="p-4 border-t border-slate-100 bg-white">
+                                                <pre className="text-xs font-mono whitespace-pre-wrap break-words text-slate-700">
+                                                    {messageText}
+                                                </pre>
+                                            </div>
+                                        ) : null}
                                     </li>
                                 );
                             })}

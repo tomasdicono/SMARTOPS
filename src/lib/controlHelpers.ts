@@ -1,4 +1,6 @@
-import type { Flight } from "../types";
+import type { Flight, RouteAfectacionEntry } from "../types";
+import { formatDelayCodeDisplay } from "./delayCodes";
+import { getAirlinePrefix } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { parseTimeToMinutes } from "./mvtTime";
 
@@ -257,6 +259,8 @@ export interface StatusDiaDaySummary {
     paxCancelados: number;
     totalVuelosDia: number;
     nMvtOtp: number;
+    /** Vuelos no cancelados con registro MVT cargado (`mvtData` presente). */
+    countVuelosConMvtCargado: number;
     otp0Pct: number | null;
     otp15Pct: number | null;
     countAfectacionesRuta: number;
@@ -296,6 +300,8 @@ export function computeStatusDiaDaySummary(
         (a, b) => b.count - a.count || a.text.localeCompare(b.text)
     );
     const paxCancelados = cancelled.reduce((s, f) => s + getScheduledPax(f), 0);
+
+    const countVuelosConMvtCargado = operational.filter((f) => f.mvtData != null).length;
 
     const conMvtOtp = operational.filter((f) => hasMvtAtdForOtp(f));
     const nMvtOtp = conMvtOtp.length;
@@ -339,10 +345,150 @@ export function computeStatusDiaDaySummary(
         paxCancelados,
         totalVuelosDia: dayFlights.length,
         nMvtOtp,
+        countVuelosConMvtCargado,
         otp0Pct,
         otp15Pct,
         countAfectacionesRuta: routeAfectacionesCount,
         factorOcupacionProgramadoPct,
         factorOcupacionRealPct,
     };
+}
+
+/** Fecha YYYY-MM-DD → leyenda larga en español (Argentina). */
+function formatFechaLargaEsAr(isoYmd: string): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoYmd)) return isoYmd;
+    const d = new Date(`${isoYmd}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return isoYmd;
+    const s = d.toLocaleDateString("es-AR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+    });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function pctEsAr(n: number): string {
+    return n.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function formatRouteAfectacionLinePrensa(row: RouteAfectacionEntry): string {
+    const flt = `${getAirlinePrefix(row.flt)}${row.flt}`.trim();
+    let hora = "—";
+    try {
+        const d = new Date(row.at);
+        if (!Number.isNaN(d.getTime())) {
+            hora = d.toLocaleString("es-AR", {
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+        }
+    } catch {
+        /* ignore */
+    }
+    const ruta = `${row.depAntes}-${row.arrAntes} → ${row.depDespues}-${row.arrDespues}`;
+    const reg = row.reg?.trim() || "—";
+    return `  • ${flt} · ${reg} · ${ruta} · ${hora}`;
+}
+
+/**
+ * Borrador listo para copiar a prensa / comunicaciones, solo con datos del Status día.
+ */
+export function buildStatusDiaPrensaText(
+    fechaIso: string,
+    s: StatusDiaDaySummary,
+    routeAfectaciones: RouteAfectacionEntry[]
+): string {
+    const fecha = formatFechaLargaEsAr(fechaIso);
+    const out: string[] = [];
+
+    out.push(`Status operativo — ${fecha}`);
+    out.push("");
+    out.push(
+        `El día cuenta con ${s.totalVuelosDia} vuelo${s.totalVuelosDia !== 1 ? "s" : ""} cargados en itinerario.`
+    );
+    out.push("");
+
+    out.push("⏱️ Puntualidad");
+    out.push(
+        `Sobre un total de ${s.countVuelosConMvtCargado} vuelo${s.countVuelosConMvtCargado !== 1 ? "s" : ""} operado${s.countVuelosConMvtCargado !== 1 ? "s" : ""}, el status OTP al momento es el siguiente:`
+    );
+    if (s.nMvtOtp > 0 && s.otp0Pct != null && s.otp15Pct != null) {
+        out.push(`OTP 0 --> ${pctEsAr(s.otp0Pct)}%`);
+        out.push(`OTP 15 --> ${pctEsAr(s.otp15Pct)}%`);
+    } else {
+        out.push("Sin datos de OTP: no hay vuelos con MVT y hora de salida real suficiente para calcular el indicador.");
+    }
+    out.push("");
+
+    out.push("📊 Factor de ocupación");
+    if (s.factorOcupacionProgramadoPct != null) {
+        out.push(`Factor de ocupación esperado: ${pctEsAr(s.factorOcupacionProgramadoPct)}%.`);
+    } else {
+        out.push("Factor de ocupación esperado: sin dato consolidado.");
+    }
+    if (s.factorOcupacionRealPct != null) {
+        out.push(`Factor de ocupación de vuelos ejecutados: ${pctEsAr(s.factorOcupacionRealPct)}%.`);
+    } else {
+        out.push("Factor de ocupación de vuelos ejecutados: sin dato.");
+    }
+    out.push("");
+
+    out.push("Reprogramaciones");
+    if (s.countVuelosReprogramados === 0) {
+        out.push("Sin reprogramaciones.");
+    } else {
+        out.push(
+            `Hay ${s.countVuelosReprogramados} vuelo${s.countVuelosReprogramados !== 1 ? "s" : ""} con nueva hora de salida ETD. ` +
+                `La afectación por las reprogramaciones alcanza a ${s.paxAfectadosReprogramacion} pasajero${s.paxAfectadosReprogramacion !== 1 ? "s" : ""}.`
+        );
+    }
+    out.push("");
+
+    out.push("Cambios de ruta");
+    if (routeAfectaciones.length === 0) {
+        out.push("Sin cambios de ruta registrados.");
+    } else {
+        out.push(`Se registraron ${routeAfectaciones.length} cambio${routeAfectaciones.length !== 1 ? "s" : ""} de ruta en el sistema:`);
+        out.push("");
+        for (const row of routeAfectaciones) {
+            out.push(formatRouteAfectacionLinePrensa(row));
+        }
+    }
+    out.push("");
+
+    out.push("⏳ Demoras");
+    if (s.demoraCodigos.length === 0) {
+        out.push("Sin demoras.");
+    } else {
+        out.push("Los más frecuentes del día son:");
+        for (const row of s.demoraCodigos.slice(0, 8)) {
+            out.push(
+                `  • ${formatDelayCodeDisplay(row.code)}: ${pctEsAr(row.pct)}% del total de códigos, ${row.count} registro${row.count !== 1 ? "s" : ""}.`
+            );
+        }
+    }
+    out.push("");
+
+    out.push("Cancelaciones");
+    if (s.countCancelados === 0 && s.paxCancelados === 0) {
+        out.push("Sin cancelaciones.");
+    } else {
+        out.push(
+            `${s.countCancelados} vuelo${s.countCancelados !== 1 ? "s" : ""} cancelado${s.countCancelados !== 1 ? "s" : ""}; ` +
+                `pasajeros según programación afectados: ${s.paxCancelados}.`
+        );
+        if (s.motivosCancelacionDetalle.length > 0) {
+            out.push("Detalle por motivo:");
+            for (const m of s.motivosCancelacionDetalle.slice(0, 10)) {
+                out.push(
+                    `  • ${m.text}: ${m.count} vuelo${m.count !== 1 ? "s" : ""}, ${m.pax} PAX.`
+                );
+            }
+        }
+    }
+
+    return out.join("\n");
 }

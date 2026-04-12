@@ -16,6 +16,7 @@ import {
     flightDaySegments,
     clipSegmentToWindow,
     computeStatusDiaDaySummary,
+    buildStatusDiaPrensaText,
 } from "../lib/controlHelpers";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
 import {
@@ -29,14 +30,13 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
-    CalendarClock,
     Ban,
     Activity,
     ListOrdered,
-    Target,
     BarChartHorizontal,
     Route,
     Weight,
+    FileText,
 } from "lucide-react";
 
 interface Props {
@@ -182,11 +182,18 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         [dayFlights, routeAfectaciones.length]
     );
 
+    const [prensaModal, setPrensaModal] = useState<{ open: boolean; text: string }>({
+        open: false,
+        text: "",
+    });
+    const [prensaCopied, setPrensaCopied] = useState(false);
+
     const hourTickLabels = useMemo(() => {
         return Array.from({ length: WINDOW_HOURS + 1 }, (_, i) => windowStartMin + i * 60).map(formatHm);
     }, [windowStartMin]);
 
     return (
+        <>
         <div className="pb-8">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden ring-1 ring-slate-200/80">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-cyan-50/40 to-slate-50">
@@ -499,137 +506,117 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
 
                 {subTab === "statusDia" && (
                 <div className="animate-in fade-in duration-200">
-                <div className="p-5 space-y-6 bg-gradient-to-b from-indigo-50/40 to-white">
-                    <p className="text-sm font-semibold text-slate-600 max-w-3xl">
-                        Resumen operativo del día <span className="font-black text-slate-900 tabular-nums">{selectedDate}</span>
-                        {" · "}
-                        <span className="tabular-nums">{statusDia.totalVuelosDia}</span> vuelo{statusDia.totalVuelosDia !== 1 ? "s" : ""} en calendario
-                    </p>
-
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-slate-700">
-                            <Target className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <h4 className="text-sm font-black uppercase tracking-wide">OTP · MVT con ATD</h4>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
-                                <p className="text-xs font-black uppercase text-emerald-900 tracking-wide flex items-center gap-2">
-                                    <Percent className="w-4 h-4" />
-                                    OTP 0
-                                </p>
-                                {statusDia.nMvtOtp > 0 && statusDia.otp0Pct != null ? (
-                                    <>
-                                        <p className="text-3xl font-black text-emerald-950 mt-2 tabular-nums">
-                                            {statusDia.otp0Pct.toFixed(1)}%
-                                        </p>
-                                    </>
-                                ) : (
-                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin datos.</p>
-                                )}
-                            </div>
-                            <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm">
-                                <p className="text-xs font-black uppercase text-teal-900 tracking-wide flex items-center gap-2">
-                                    <Percent className="w-4 h-4" />
-                                    OTP 15
-                                </p>
-                                {statusDia.nMvtOtp > 0 && statusDia.otp15Pct != null ? (
-                                    <>
-                                        <p className="text-3xl font-black text-teal-950 mt-2 tabular-nums">
-                                            {statusDia.otp15Pct.toFixed(1)}%
-                                        </p>
-                                    </>
-                                ) : (
-                                    <p className="text-sm text-slate-500 mt-3 py-1">Sin datos.</p>
-                                )}
-                            </div>
-                        </div>
+                <div className="p-3 sm:p-4 space-y-3 bg-gradient-to-b from-indigo-50/30 to-white print:p-2 print:space-y-2 print:bg-white print:from-white print:shadow-none">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/90 pb-2 print:border-slate-400 print:pb-1.5">
+                        <p className="text-xs sm:text-sm text-slate-700 leading-snug">
+                            <span className="font-black uppercase text-slate-900">Status día</span>
+                            <span className="tabular-nums font-semibold mx-1">· {selectedDate}</span>
+                            <span className="text-slate-500">· {statusDia.totalVuelosDia} vuelos</span>
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPrensaCopied(false);
+                                setPrensaModal({
+                                    open: true,
+                                    text: buildStatusDiaPrensaText(selectedDate, statusDia, routeAfectaciones),
+                                });
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wide text-violet-950 shadow-sm hover:bg-violet-100"
+                            aria-label="Abrir texto listo para prensa o comunicaciones"
+                        >
+                            <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                            Texto para prensa
+                        </button>
                     </div>
 
-                    <div className="rounded-xl border border-indigo-200 bg-white p-4 sm:p-5 shadow-sm ring-1 ring-indigo-100/70">
-                        <h4 className="text-sm font-black uppercase tracking-wide text-indigo-950 flex items-center gap-2 mb-4">
-                            <Users className="w-4 h-4 shrink-0 text-indigo-600" />
-                            Factor de ocupación
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-indigo-100">
-                            <div className="pb-4 sm:pb-0 sm:pr-5 flex flex-col gap-1">
-                                <p className="text-xs font-black uppercase text-indigo-900 tracking-wide leading-snug">
-                                    Factor de ocupación programado
+                    <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 print:gap-1.5">
+                        <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/90 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-emerald-900 leading-tight">OTP 0</p>
+                            {statusDia.nMvtOtp > 0 && statusDia.otp0Pct != null ? (
+                                <p className="text-xl sm:text-2xl font-black text-emerald-950 tabular-nums leading-tight mt-0.5">
+                                    {statusDia.otp0Pct.toFixed(1)}%
                                 </p>
-                                {statusDia.factorOcupacionProgramadoPct != null ? (
-                                    <p className="text-3xl font-black text-indigo-950 mt-1 tabular-nums">
-                                        {statusDia.factorOcupacionProgramadoPct.toFixed(1)}%
-                                    </p>
-                                ) : (
-                                    <p className="text-sm text-slate-500 mt-2">Sin datos.</p>
-                                )}
-                            </div>
-                            <div className="pt-4 sm:pt-0 sm:pl-5 flex flex-col gap-1">
-                                <p className="text-xs font-black uppercase text-indigo-900 tracking-wide leading-snug">
-                                    Factor de ocupación real
+                            ) : (
+                                <p className="text-[11px] text-slate-500 mt-1">—</p>
+                            )}
+                        </div>
+                        <div className="rounded-lg border border-teal-200/90 bg-teal-50/80 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-teal-900 leading-tight">OTP 15</p>
+                            {statusDia.nMvtOtp > 0 && statusDia.otp15Pct != null ? (
+                                <p className="text-xl sm:text-2xl font-black text-teal-950 tabular-nums leading-tight mt-0.5">
+                                    {statusDia.otp15Pct.toFixed(1)}%
                                 </p>
-                                {statusDia.factorOcupacionRealPct != null ? (
-                                    <p className="text-3xl font-black text-violet-950 mt-1 tabular-nums">
-                                        {statusDia.factorOcupacionRealPct.toFixed(1)}%
-                                    </p>
-                                ) : (
-                                    <p className="text-sm text-slate-500 mt-2">Sin datos.</p>
-                                )}
-                            </div>
+                            ) : (
+                                <p className="text-[11px] text-slate-500 mt-1">—</p>
+                            )}
                         </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
-                            <p className="text-xs font-black uppercase text-amber-900 tracking-wide flex items-center gap-2">
-                                <CalendarClock className="w-4 h-4" />
-                                Vuelos reprogramados
-                            </p>
-                            <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">{statusDia.countVuelosReprogramados}</p>
+                        <div className="rounded-lg border border-indigo-200/90 bg-indigo-50/70 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-indigo-900 leading-tight">F. ocup. prog.</p>
+                            {statusDia.factorOcupacionProgramadoPct != null ? (
+                                <p className="text-xl sm:text-2xl font-black text-indigo-950 tabular-nums leading-tight mt-0.5">
+                                    {statusDia.factorOcupacionProgramadoPct.toFixed(1)}%
+                                </p>
+                            ) : (
+                                <p className="text-[11px] text-slate-500 mt-1">—</p>
+                            )}
                         </div>
-                        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">
-                            <p className="text-xs font-black uppercase text-orange-900 tracking-wide flex items-center gap-2">
-                                <AlertTriangle className="w-4 h-4" />
-                                Afectados por reprogramaciones
+                        <div className="rounded-lg border border-violet-200/90 bg-violet-50/70 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-violet-900 leading-tight">F. ocup. real</p>
+                            {statusDia.factorOcupacionRealPct != null ? (
+                                <p className="text-xl sm:text-2xl font-black text-violet-950 tabular-nums leading-tight mt-0.5">
+                                    {statusDia.factorOcupacionRealPct.toFixed(1)}%
+                                </p>
+                            ) : (
+                                <p className="text-[11px] text-slate-500 mt-1">—</p>
+                            )}
+                        </div>
+                        <div className="rounded-lg border border-amber-200/90 bg-amber-50/80 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-amber-900 leading-tight">Reprog.</p>
+                            <p className="text-xl sm:text-2xl font-black text-amber-950 tabular-nums leading-tight mt-0.5">
+                                {statusDia.countVuelosReprogramados}
                             </p>
-                            <p className="text-3xl font-black text-orange-950 mt-2 tabular-nums">
+                        </div>
+                        <div className="rounded-lg border border-orange-200/90 bg-orange-50/70 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-orange-900 leading-tight">PAX reprog.</p>
+                            <p className="text-xl sm:text-2xl font-black text-orange-950 tabular-nums leading-tight mt-0.5">
                                 {statusDia.paxAfectadosReprogramacion}
                             </p>
                         </div>
-                        <div className="rounded-xl border border-cyan-200 bg-cyan-50/50 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
-                            <p className="text-xs font-black uppercase text-cyan-900 tracking-wide flex items-center gap-2">
-                                <Route className="w-4 h-4" />
-                                Afectaciones de ruta
+                        <div className="rounded-lg border border-cyan-200/90 bg-cyan-50/80 p-2 print:p-1.5 print:border-slate-400 print:bg-white sm:col-span-2 xl:col-span-1">
+                            <p className="text-[9px] font-black uppercase text-cyan-900 leading-tight">Afect. ruta</p>
+                            <p className="text-xl sm:text-2xl font-black text-cyan-950 tabular-nums leading-tight mt-0.5">
+                                {statusDia.countAfectacionesRuta}
                             </p>
-                            <p className="text-3xl font-black text-cyan-950 mt-2 tabular-nums">{statusDia.countAfectacionesRuta}</p>
                         </div>
                     </div>
 
-                    <div className="rounded-xl border border-cyan-300/80 bg-gradient-to-br from-cyan-50/90 to-white p-4 sm:p-5 shadow-sm">
-                        <div className="flex flex-wrap items-center gap-2 justify-between mb-3">
-                            <h4 className="text-sm font-black uppercase tracking-wide text-cyan-900 flex items-center gap-2">
-                                <Route className="w-4 h-4 shrink-0" />
-                                Detalle · Afectaciones de ruta
+                    <div className="rounded-lg border border-cyan-200 bg-white p-2 sm:p-3 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400">
+                        <div className="flex flex-wrap items-center gap-1.5 justify-between mb-1.5">
+                            <h4 className="text-[11px] font-black uppercase tracking-wide text-cyan-900 flex items-center gap-1">
+                                <Route className="w-3.5 h-3.5 shrink-0" />
+                                Afectaciones de ruta
                             </h4>
-                            <span className="text-xs font-black tabular-nums bg-cyan-100 text-cyan-950 px-2.5 py-1 rounded-full border border-cyan-200">
-                                {routeAfectaciones.length} registro{routeAfectaciones.length !== 1 ? "s" : ""}
+                            <span className="text-[10px] font-black tabular-nums bg-cyan-100 text-cyan-950 px-1.5 py-0.5 rounded border border-cyan-200">
+                                {routeAfectaciones.length}
                             </span>
                         </div>
                         {routeAfectaciones.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
+                            <p className="text-[11px] text-slate-500 py-1">Sin datos.</p>
                         ) : (
-                            <div className="overflow-x-auto rounded-lg border border-cyan-100 bg-white">
-                                <table className="w-full text-sm min-w-[640px]">
+                            <div className="overflow-x-auto rounded border border-cyan-100 bg-white print:border-slate-300">
+                                <table className="w-full text-[11px] min-w-[520px] leading-tight">
                                     <thead>
-                                        <tr className="bg-cyan-50 text-left text-[10px] font-black uppercase tracking-wider text-cyan-900">
-                                            <th className="px-3 py-2 whitespace-nowrap">Hora</th>
-                                            <th className="px-3 py-2">Vuelo</th>
-                                            <th className="px-3 py-2">Matrícula</th>
-                                            <th className="px-3 py-2">Antes</th>
-                                            <th className="px-3 py-2">Después</th>
-                                            <th className="px-3 py-2">Registró</th>
+                                        <tr className="bg-cyan-50 text-left text-[9px] font-black uppercase tracking-wide text-cyan-900 print:bg-slate-100">
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Hora</th>
+                                            <th className="px-1.5 py-1">Vuelo</th>
+                                            <th className="px-1.5 py-1">Mat.</th>
+                                            <th className="px-1.5 py-1">Antes</th>
+                                            <th className="px-1.5 py-1">Después</th>
+                                            <th className="px-1.5 py-1">Registró</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-cyan-50">
+                                    <tbody className="divide-y divide-cyan-50/80">
                                         {routeAfectaciones.map((row) => {
                                             let hora = "—";
                                             try {
@@ -646,22 +633,22 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                                 /* ignore */
                                             }
                                             return (
-                                                <tr key={row.id} className="hover:bg-cyan-50/50">
-                                                    <td className="px-3 py-2 font-mono text-xs tabular-nums text-slate-700 whitespace-nowrap">
+                                                <tr key={row.id} className="hover:bg-cyan-50/40 print:hover:bg-transparent">
+                                                    <td className="px-1.5 py-0.5 font-mono tabular-nums text-slate-700 whitespace-nowrap">
                                                         {hora}
                                                     </td>
-                                                    <td className="px-3 py-2 font-bold text-slate-900">
+                                                    <td className="px-1.5 py-0.5 font-bold text-slate-900">
                                                         {getAirlinePrefix(row.flt)}
                                                         {row.flt}
                                                     </td>
-                                                    <td className="px-3 py-2 font-mono text-xs">{row.reg || "—"}</td>
-                                                    <td className="px-3 py-2 font-mono font-semibold text-slate-700">
+                                                    <td className="px-1.5 py-0.5 font-mono">{row.reg || "—"}</td>
+                                                    <td className="px-1.5 py-0.5 font-mono font-semibold text-slate-700">
                                                         {row.depAntes}-{row.arrAntes}
                                                     </td>
-                                                    <td className="px-3 py-2 font-mono font-black text-cyan-900">
+                                                    <td className="px-1.5 py-0.5 font-mono font-black text-cyan-900">
                                                         {row.depDespues}-{row.arrDespues}
                                                     </td>
-                                                    <td className="px-3 py-2 text-slate-700 max-w-[12rem]">
+                                                    <td className="px-1.5 py-0.5 text-slate-700 max-w-[10rem]">
                                                         <span className="line-clamp-2 break-all">{row.by || "—"}</span>
                                                     </td>
                                                 </tr>
@@ -673,95 +660,106 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         )}
                     </div>
 
-                    <div className="rounded-xl border border-amber-300/80 bg-white p-4 sm:p-5 shadow-sm">
-                        <h4 className="text-sm font-black uppercase tracking-wide text-amber-900 flex items-center gap-2 mb-3">
-                            <ListOrdered className="w-4 h-4 shrink-0" />
-                            Motivos de reprogramación
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-2 sm:p-2.5 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400 print:bg-white">
+                        <h4 className="text-[11px] font-black uppercase tracking-wide text-amber-900 flex items-center gap-1 mb-1.5">
+                            <ListOrdered className="w-3.5 h-3.5 shrink-0" />
+                            Motivos reprogramación
                         </h4>
                         {statusDia.motivosReprogramacion.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
+                            <p className="text-[11px] text-slate-500 py-0.5">Sin datos.</p>
                         ) : (
-                            <ol className="space-y-2 list-decimal list-inside marker:font-black marker:text-amber-700">
-                                {statusDia.motivosReprogramacion.map((row, i) => (
-                                    <li
-                                        key={`${row.text}-${i}`}
-                                        className="text-sm text-slate-800 pl-1 [&::marker]:text-xs"
-                                    >
-                                        <span className="font-bold tabular-nums text-amber-800">{row.count}×</span>{" "}
-                                        <span className="font-semibold">{row.text}</span>
-                                    </li>
-                                ))}
-                            </ol>
-                        )}
-                    </div>
-
-                    <div className="rounded-xl border border-violet-300/80 bg-gradient-to-br from-violet-50/90 to-white p-4 sm:p-5 shadow-sm">
-                        <h4 className="text-sm font-black uppercase tracking-wide text-violet-950 flex items-center gap-2 mb-4">
-                            <BarChartHorizontal className="w-4 h-4 shrink-0" />
-                            Motivos demoras (MVT)
-                        </h4>
-                        {statusDia.demoraCodigos.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
-                        ) : (
-                            <ul className="space-y-3">
-                                {statusDia.demoraCodigos.map((row, i) => (
-                                    <li key={`${row.code}-${i}`} className="space-y-1">
-                                        <div className="flex justify-between gap-3 text-xs text-slate-800 items-start">
-                                            <span className="font-semibold leading-snug min-w-0 break-words pr-1">
-                                                {formatDelayCodeDisplay(row.code)}
-                                            </span>
-                                            <span className="shrink-0 tabular-nums font-bold text-violet-900">
-                                                {row.pct.toFixed(1)}% · {row.count}×
-                                            </span>
-                                        </div>
-                                        <div className="h-2.5 rounded-full bg-violet-100/80 overflow-hidden border border-violet-200/60">
-                                            <div
-                                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 min-w-[2px]"
-                                                style={{ width: `${Math.min(100, row.pct)}%` }}
-                                            />
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-
-                    <div className="rounded-xl border border-rose-300/80 bg-gradient-to-br from-rose-50/90 to-white p-4 sm:p-5 shadow-sm">
-                        <div className="flex flex-wrap items-center gap-2 justify-between mb-3">
-                            <h4 className="text-sm font-black uppercase tracking-wide text-rose-900 flex items-center gap-2">
-                                <Ban className="w-4 h-4 shrink-0" />
-                                Cancelaciones
-                            </h4>
-                            <span className="text-xs font-black tabular-nums bg-rose-100 text-rose-950 px-2.5 py-1 rounded-full border border-rose-200">
-                                {statusDia.countCancelados} vuelo{statusDia.countCancelados !== 1 ? "s" : ""}
-                            </span>
-                        </div>
-                        <p className="text-xs font-black uppercase tracking-wide text-rose-800 mb-3 tabular-nums">
-                            PAX{" "}
-                            <span className="text-lg font-black text-rose-950">{statusDia.paxCancelados}</span>
-                        </p>
-                        {statusDia.motivosCancelacionDetalle.length === 0 ? (
-                            <p className="text-sm text-slate-500 py-2">Sin datos.</p>
-                        ) : (
-                            <div className="overflow-x-auto rounded-lg border border-rose-100 bg-white">
-                                <table className="w-full text-sm min-w-[280px]">
+                            <div className="overflow-x-auto rounded border border-amber-100 bg-white print:border-slate-300">
+                                <table className="w-full text-[11px] min-w-[240px] leading-tight">
                                     <thead>
-                                        <tr className="bg-rose-50 text-left text-[10px] font-black uppercase tracking-wider text-rose-800">
-                                            <th className="px-3 py-2">Motivo</th>
-                                            <th className="px-3 py-2 text-right whitespace-nowrap">Vuelos</th>
-                                            <th className="px-3 py-2 text-right whitespace-nowrap">PAX afect.</th>
+                                        <tr className="bg-amber-50 text-left text-[9px] font-black uppercase text-amber-900 print:bg-slate-100">
+                                            <th className="px-1.5 py-1 text-right w-10">N</th>
+                                            <th className="px-1.5 py-1">Motivo</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-rose-50">
-                                        {statusDia.motivosCancelacionDetalle.map((row, i) => (
-                                            <tr key={`${row.text}-${i}`} className="hover:bg-rose-50/50">
-                                                <td className="px-3 py-2 text-slate-800 max-w-[min(100vw,20rem)]">
-                                                    <span className="line-clamp-2">{row.text}</span>
-                                                </td>
-                                                <td className="px-3 py-2 text-right font-black tabular-nums text-rose-900">
+                                    <tbody className="divide-y divide-amber-50/80">
+                                        {statusDia.motivosReprogramacion.map((row, i) => (
+                                            <tr key={`${row.text}-${i}`}>
+                                                <td className="px-1.5 py-0.5 text-right font-black tabular-nums text-amber-900">
                                                     {row.count}
                                                 </td>
-                                                <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-800">
+                                                <td className="px-1.5 py-0.5 text-slate-800 font-semibold">{row.text}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="rounded-lg border border-violet-200 bg-violet-50/30 p-2 sm:p-2.5 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400 print:bg-white">
+                        <h4 className="text-[11px] font-black uppercase tracking-wide text-violet-950 flex items-center gap-1 mb-1.5">
+                            <BarChartHorizontal className="w-3.5 h-3.5 shrink-0" />
+                            Demoras MVT
+                        </h4>
+                        {statusDia.demoraCodigos.length === 0 ? (
+                            <p className="text-[11px] text-slate-500 py-0.5">Sin datos.</p>
+                        ) : (
+                            <div className="overflow-x-auto rounded border border-violet-100 bg-white print:border-slate-300">
+                                <table className="w-full text-[11px] min-w-[280px] leading-tight">
+                                    <thead>
+                                        <tr className="bg-violet-50 text-left text-[9px] font-black uppercase text-violet-900 print:bg-slate-100">
+                                            <th className="px-1.5 py-1">Código / descripción</th>
+                                            <th className="px-1.5 py-1 text-right w-12">%</th>
+                                            <th className="px-1.5 py-1 text-right w-8">N</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-violet-50/80">
+                                        {statusDia.demoraCodigos.map((row, i) => (
+                                            <tr key={`${row.code}-${i}`}>
+                                                <td className="px-1.5 py-0.5 font-semibold text-slate-800 break-words">
+                                                    {formatDelayCodeDisplay(row.code)}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 text-right tabular-nums font-bold text-violet-900">
+                                                    {row.pct.toFixed(1)}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 text-right tabular-nums font-black text-slate-700">
+                                                    {row.count}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="rounded-lg border border-rose-200 bg-rose-50/30 p-2 sm:p-2.5 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400 print:bg-white">
+                        <div className="flex flex-wrap items-center gap-1.5 justify-between mb-1">
+                            <h4 className="text-[11px] font-black uppercase tracking-wide text-rose-900 flex items-center gap-1">
+                                <Ban className="w-3.5 h-3.5 shrink-0" />
+                                Cancelaciones
+                            </h4>
+                            <span className="text-[10px] font-black tabular-nums bg-rose-100 text-rose-950 px-1.5 py-0.5 rounded border border-rose-200">
+                                {statusDia.countCancelados} vuelos · PAX {statusDia.paxCancelados}
+                            </span>
+                        </div>
+                        {statusDia.motivosCancelacionDetalle.length === 0 ? (
+                            <p className="text-[11px] text-slate-500 py-0.5">Sin datos.</p>
+                        ) : (
+                            <div className="overflow-x-auto rounded border border-rose-100 bg-white print:border-slate-300">
+                                <table className="w-full text-[11px] min-w-[260px] leading-tight">
+                                    <thead>
+                                        <tr className="bg-rose-50 text-left text-[9px] font-black uppercase text-rose-800 print:bg-slate-100">
+                                            <th className="px-1.5 py-1">Motivo</th>
+                                            <th className="px-1.5 py-1 text-right whitespace-nowrap w-12">Vuelos</th>
+                                            <th className="px-1.5 py-1 text-right whitespace-nowrap w-12">PAX</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-rose-50/80">
+                                        {statusDia.motivosCancelacionDetalle.map((row, i) => (
+                                            <tr key={`${row.text}-${i}`} className="hover:bg-rose-50/40 print:hover:bg-transparent">
+                                                <td className="px-1.5 py-0.5 text-slate-800 max-w-[min(100vw,18rem)]">
+                                                    <span className="line-clamp-2">{row.text}</span>
+                                                </td>
+                                                <td className="px-1.5 py-0.5 text-right font-black tabular-nums text-rose-900">
+                                                    {row.count}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 text-right font-bold tabular-nums text-slate-800">
                                                     {row.pax}
                                                 </td>
                                             </tr>
@@ -939,5 +937,73 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
 
             </div>
         </div>
+
+        {prensaModal.open && (
+            <div
+                className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="prensa-modal-title"
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) setPrensaModal({ open: false, text: "" });
+                }}
+            >
+                <div
+                    className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200/80"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-white">
+                        <FileText className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" aria-hidden />
+                        <div className="min-w-0">
+                            <h2 id="prensa-modal-title" className="text-sm font-black uppercase tracking-wide text-slate-900">
+                                Borrador para prensa / comunicaciones
+                            </h2>
+                            <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                                Texto armado con los mismos datos del Status día (sin servicios externos). Copiá y
+                                ajustá el tono antes de enviar.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="p-3 flex-1 min-h-0 flex flex-col gap-2">
+                        <textarea
+                            readOnly
+                            value={prensaModal.text}
+                            className="w-full flex-1 min-h-[220px] resize-y rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs leading-relaxed text-slate-800 font-mono shadow-inner"
+                            spellCheck={false}
+                        />
+                        <div className="flex flex-wrap items-center gap-2 justify-end">
+                            {prensaCopied && (
+                                <span className="text-[11px] font-bold text-emerald-700 mr-auto">Copiado al portapapeles</span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setPrensaModal({ open: false, text: "" })}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-700 hover:bg-slate-50"
+                            >
+                                Cerrar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    try {
+                                        await navigator.clipboard.writeText(prensaModal.text);
+                                        setPrensaCopied(true);
+                                        window.setTimeout(() => setPrensaCopied(false), 2500);
+                                    } catch {
+                                        window.alert(
+                                            "No se pudo copiar automáticamente. Seleccioná el texto en el cuadro y usá Ctrl+C."
+                                        );
+                                    }
+                                }}
+                                className="rounded-xl border border-violet-300 bg-violet-600 px-3 py-2 text-xs font-black uppercase tracking-wide text-white shadow-sm hover:bg-violet-700"
+                            >
+                                Copiar texto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }
