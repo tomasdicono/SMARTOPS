@@ -3,8 +3,15 @@ import type { Flight } from "../types";
 import { MVTForm } from "./MVTForm";
 import { HitosTab } from "./HitosTab";
 import { HitosCrewTab } from "./HitosCrewTab";
-import { flightNeedsCleaningWarning, getAirlinePrefix } from "../lib/flightHelpers";
-import { X, Ban } from "lucide-react";
+import {
+    flightNeedsCleaningWarning,
+    getAirlinePrefix,
+    isMvtCompleteForCard,
+    hasHitosDataForSummaryExport,
+    canDownloadHitosSummaryRole,
+} from "../lib/flightHelpers";
+import { downloadHitosSummary } from "../lib/downloadHitosSummary";
+import { X, Ban, Download } from "lucide-react";
 import { BroomIcon } from "./BroomIcon";
 
 interface Props {
@@ -30,6 +37,11 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
     const canSeeHitos = userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS";
     const canSeeCrew = userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS";
     const isReadOnlyView = !!flight.cancelled;
+    const canDownloadHitosSummary =
+        canDownloadHitosSummaryRole(userRole) &&
+        !isReadOnlyView &&
+        isMvtCompleteForCard(flight) &&
+        hasHitosDataForSummaryExport(flight);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -62,12 +74,25 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                             ) : null}
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 p-2 bg-background hover:bg-muted text-muted-foreground hover:text-foreground rounded-full transition-colors shadow-sm border border-slate-200"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="absolute top-4 right-4 flex items-center gap-2">
+                        {canDownloadHitosSummary && (
+                            <button
+                                type="button"
+                                onClick={() => downloadHitosSummary(flight)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/50 bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-emerald-900 shadow-sm hover:bg-emerald-100 transition-colors"
+                                title="Descargar informe HTML de hitos (operacionales y tripulación)"
+                            >
+                                <Download className="w-4 h-4 shrink-0" aria-hidden />
+                                <span className="hidden sm:inline">Resumen hitos</span>
+                            </button>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="p-2 bg-background hover:bg-muted text-muted-foreground hover:text-foreground rounded-full transition-colors shadow-sm border border-slate-200"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {flight.cancelled && (

@@ -11,6 +11,8 @@ import {
   getHitosDepartureTime,
   isMvtCompleteForCard,
   isHitosCompleteForCard,
+  canDownloadHitosSummaryRole,
+  hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
 } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
@@ -765,7 +767,7 @@ function App() {
                   onClick={() => setSelectedFlight(flight)}
                   className={`relative border-2 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1.5 ${cardBg}`}
                 >
-                  {(userRole === "AJS" || userRole === "HCC") && hasMvt && hasHitos && !isCancelled && (
+                  {canDownloadHitosSummaryRole(userRole) && hasMvt && hasHitosDataForSummaryExport(flight) && !isCancelled && (
                     <button
                       type="button"
                       title="Descargar informe HTML de hitos (operacionales y tripulación)"

@@ -1,4 +1,4 @@
-import type { Flight, HitosData } from "../types";
+import type { Flight, HitosData, UserRole } from "../types";
 import { parseHHmmToMinutes } from "./controlHelpers";
 import { normalizeHitosCrewData, normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
 
@@ -98,6 +98,30 @@ export function isMvtCompleteForCard(f: Flight): boolean {
 export function isHitosCompleteForCard(f: Flight): boolean {
     const t = f.hitosData?.hitosSentAt;
     return t != null && String(t).trim() !== "";
+}
+
+/** Roles que pueden descargar el informe HTML de resumen de hitos (operacionales y tripulación). */
+export function canDownloadHitosSummaryRole(role: UserRole): boolean {
+    return role === "HCC" || role === "AJS" || role === "ADMIN";
+}
+
+/**
+ * Datos mínimos para exportar el resumen: validación con Guardar, o borrador con carta y al menos un horario real,
+ * u horarios en hitos crew (excl. claves internas __…).
+ */
+export function hasHitosDataForSummaryExport(f: Flight): boolean {
+    if (isHitosCompleteForCard(f)) return true;
+    const h = f.hitosData;
+    if (h?.ganttChartName?.trim()) {
+        const entries = h.entries || {};
+        if (Object.values(entries).some((v) => String(v).replace(/\D/g, "").length >= 3)) return true;
+    }
+    const crew = f.hitosCrewData || {};
+    for (const [k, v] of Object.entries(crew)) {
+        if (k.startsWith("__")) continue;
+        if (String(v ?? "").replace(/\D/g, "").length >= 3) return true;
+    }
+    return false;
 }
 
 /** Referencia de salida para hitos y línea de tiempo operativa: ETD si hay reprogramación, si no STD. */
