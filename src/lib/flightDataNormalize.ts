@@ -1,4 +1,4 @@
-import type { Flight, HitosData } from "../types";
+import type { Flight, HitosData, PeaPosition } from "../types";
 import { formatLoadBaysForMessage, inferLoadBaysFamily, normalizeLoadBays } from "./a321LoadBays";
 
 export function emptyMvtData(): NonNullable<Flight["mvtData"]> {
@@ -67,7 +67,15 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
 }
 
 export function emptyHitosData(): HitosData {
-    return { ganttChartName: "", ata: "", entries: {} };
+    return {
+        ganttChartName: "",
+        ata: "",
+        entries: {},
+        gpuStart: "",
+        gpuEnd: "",
+        gpuNotUsed: false,
+        peaPosition: "",
+    };
 }
 
 /**
@@ -83,10 +91,18 @@ export function normalizeHitosData(raw?: Partial<HitosData> | null): HitosData {
                   Object.entries(entries as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])
               )
             : {};
+    const peaRaw = raw.peaPosition;
+    const peaPosition: PeaPosition =
+        peaRaw === "remota" || peaRaw === "manga" ? peaRaw : "";
+
     const out: HitosData = {
         ganttChartName: typeof raw.ganttChartName === "string" ? raw.ganttChartName : "",
         ata: typeof raw.ata === "string" ? raw.ata : "",
         entries: safeEntries,
+        gpuStart: typeof raw.gpuStart === "string" ? raw.gpuStart : "",
+        gpuEnd: typeof raw.gpuEnd === "string" ? raw.gpuEnd : "",
+        gpuNotUsed: typeof raw.gpuNotUsed === "boolean" ? raw.gpuNotUsed : false,
+        peaPosition,
     };
     if (raw.hitosSentAt != null && String(raw.hitosSentAt).trim() !== "") {
         out.hitosSentAt = String(raw.hitosSentAt);

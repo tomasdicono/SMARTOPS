@@ -189,7 +189,7 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                             <HitosCrewTab
                                 key={flight.id}
                                 flight={flight}
-                                readOnly={isReadOnlyView}
+                                readOnly={isReadOnlyView || userRole !== "CREW"}
                                 onPersistCrewHitos={onPersistCrewHitos}
                                 onSave={(data) => {
                                     onSaveCrewHitos(data);

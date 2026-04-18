@@ -9,6 +9,16 @@ export function normalizeUserRole(role: unknown): UserRole {
     return (allowed.includes(u as UserRole) ? u : "CREW") as UserRole;
 }
 
+/** Mismo alcance operativo que HCC en tablero (AJS alineado a HCC). */
+export function isHccDeskRole(role: UserRole): boolean {
+    return role === "HCC" || role === "AJS";
+}
+
+/** ADMIN o rol de escritorio HCC/AJS (gestiones, ruta, matrícula, etc.). */
+export function isAdminOrHccDesk(role: UserRole): boolean {
+    return role === "ADMIN" || isHccDeskRole(role);
+}
+
 export interface User {
     id: string; // auth uid
     email: string;
@@ -23,12 +33,23 @@ export interface SSEE {
     qty: string;
 }
 
+/** PEA — posición de estacionamiento de aeronaves (operacional). */
+export type PeaPosition = "" | "remota" | "manga";
+
 export interface HitosData {
     ganttChartName: string;
     ata: string;
     entries: Record<string, string>; // Milestone name -> real execution time
     /** ISO 8601 — envío validado desde la pestaña Hitos (no el auto-guardado de borrador). */
     hitosSentAt?: string;
+    /** Inicio uso GPU (HHMM, 4 dígitos). */
+    gpuStart?: string;
+    /** Fin uso GPU (HHMM). */
+    gpuEnd?: string;
+    /** No se utilizó GPU en el vuelo (ignora gpuStart/gpuEnd). */
+    gpuNotUsed?: boolean;
+    /** PEA: remota o manga. */
+    peaPosition?: PeaPosition;
 }
 
 export interface Flight {

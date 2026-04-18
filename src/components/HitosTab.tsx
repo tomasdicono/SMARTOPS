@@ -5,7 +5,7 @@ import type { Flight, HitosData } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { getHitosDepartureTime } from "../lib/flightHelpers";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
-import { Save, AlertCircle, Clock } from "lucide-react";
+import { Save, AlertCircle, Clock, Zap } from "lucide-react";
 
 interface Props {
     flight: Flight;
@@ -64,6 +64,25 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
         setData(p => ({ ...p, [field]: cln }));
     };
 
+    const handleGpuField = (field: "gpuStart" | "gpuEnd", val: string) => {
+        const cln = val.replace(/[^0-9]/g, "").slice(0, 4);
+        setData((p) => {
+            const nextStart = field === "gpuStart" ? cln : (p.gpuStart ?? "");
+            const nextEnd = field === "gpuEnd" ? cln : (p.gpuEnd ?? "");
+            const hasAny =
+                Boolean(nextStart.replace(/\D/g, "")) || Boolean(nextEnd.replace(/\D/g, ""));
+            return { ...p, [field]: cln, gpuNotUsed: hasAny ? false : p.gpuNotUsed };
+        });
+    };
+
+    const handleGpuNotUsed = (checked: boolean) => {
+        setData((p) => ({
+            ...p,
+            gpuNotUsed: checked,
+            ...(checked ? { gpuStart: "", gpuEnd: "" } : {}),
+        }));
+    };
+
     const handleEntryChange = (name: string, val: string) => {
         const cln = val.replace(/[^0-9]/g, '').slice(0, 4);
         setData(p => ({ ...p, entries: { ...p.entries, [name]: cln } }));
@@ -96,12 +115,93 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
     return (
         <fieldset disabled={readOnly} className="flex flex-col h-full bg-slate-50/50 p-6 overflow-y-auto custom-scrollbar border-none m-0">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
+                <div className="space-y-4 mb-6 pb-6 border-b border-slate-100">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
+                            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
+                            Control de GPU
+                        </p>
+                        <div className="flex flex-wrap items-end gap-3 sm:gap-4">
+                            <div className="min-w-[7rem]">
+                                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Inicio uso</label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={data.gpuStart ?? ""}
+                                    onChange={(e) => handleGpuField("gpuStart", e.target.value)}
+                                    placeholder="Ej: 1430"
+                                    disabled={!!data.gpuNotUsed}
+                                    className="w-full bg-slate-50 border border-input p-2.5 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-mono text-base font-bold placeholder:font-sans disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                            </div>
+                            <div className="min-w-[7rem]">
+                                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Fin uso</label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={data.gpuEnd ?? ""}
+                                    onChange={(e) => handleGpuField("gpuEnd", e.target.value)}
+                                    placeholder="Ej: 1515"
+                                    disabled={!!data.gpuNotUsed}
+                                    className="w-full bg-slate-50 border border-input p-2.5 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-mono text-base font-bold placeholder:font-sans disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                            </div>
+                            <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm font-bold text-slate-800 cursor-pointer hover:bg-slate-100 transition-colors mb-0.5">
+                                <input
+                                    type="checkbox"
+                                    checked={!!data.gpuNotUsed}
+                                    onChange={(e) => handleGpuNotUsed(e.target.checked)}
+                                    className="rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                                No se utilizó GPU
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                            PEA{" "}
+                            <span className="normal-case font-semibold text-slate-500 font-normal">
+                                (posición de estacionamiento de aeronaves)
+                            </span>
+                        </p>
+                        <div className="flex flex-wrap gap-4 sm:gap-6" role="radiogroup" aria-label="PEA">
+                            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name={`pea-${flight.id}`}
+                                    checked={(data.peaPosition ?? "") === "remota"}
+                                    onChange={() => setData((p) => ({ ...p, peaPosition: "remota" }))}
+                                    className="border-slate-300 text-primary focus:ring-primary"
+                                />
+                                Remota
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name={`pea-${flight.id}`}
+                                    checked={(data.peaPosition ?? "") === "manga"}
+                                    onChange={() => setData((p) => ({ ...p, peaPosition: "manga" }))}
+                                    className="border-slate-300 text-primary focus:ring-primary"
+                                />
+                                Manga
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Carta de Referencia</label>
                         <select
                             value={data.ganttChartName}
-                            onChange={(e) => setData({ ganttChartName: e.target.value, ata: "", entries: {} })}
+                            onChange={(e) =>
+                                setData((p) => ({
+                                    ...p,
+                                    ganttChartName: e.target.value,
+                                    ata: "",
+                                    entries: {},
+                                }))
+                            }
                             className="w-full bg-slate-50 border border-input p-3 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none transition-all font-bold"
                         >
                             <option value="">Selecciona Carta...</option>
@@ -220,6 +320,7 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
                                 </div>
                             )}
                             <button
+                                type="button"
                                 onClick={handleSave}
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-xl font-black shadow-md transition-all flex items-center gap-2 hover:-translate-y-0.5"
                             >

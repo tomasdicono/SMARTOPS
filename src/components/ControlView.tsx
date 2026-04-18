@@ -21,6 +21,8 @@ import {
     countDaysInclusiveIso,
     flightMatchesStatsAtdTimeFilter,
     isStatsAtdTimeFilterActive,
+    computeAverageGpuUsageMinutes,
+    computePeaCounts,
 } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
@@ -42,6 +44,9 @@ import {
     Route,
     Weight,
     FileText,
+    Zap,
+    Building2,
+    MapPin,
 } from "lucide-react";
 
 interface Props {
@@ -225,6 +230,13 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const totalCargaKg = useMemo(() => statsFlights.reduce((s, f) => s + getTotalCargaKg(f), 0), [statsFlights]);
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
+    const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(statsFlights), [statsFlights]);
+    const peaCounts = useMemo(() => computePeaCounts(statsFlights), [statsFlights]);
+    const statsFlightTotal = statsFlights.length;
+    const peaMangaPct =
+        statsFlightTotal > 0 ? (peaCounts.manga / statsFlightTotal) * 100 : null;
+    const peaRemotaPct =
+        statsFlightTotal > 0 ? (peaCounts.remota / statsFlightTotal) * 100 : null;
 
     const cancelledScheduledPaxTotal = useMemo(
         () => cancelledStatsFlights.reduce((s, f) => s + getScheduledPax(f), 0),
@@ -585,6 +597,9 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             Texto para prensa
                         </button>
                     </div>
+                    <p className="text-[11px] text-slate-500 max-w-2xl leading-snug -mt-1 print:text-slate-600">
+                        Los datos que se muestran a continuación provienen de la data extraída de los mensajes operacionales.
+                    </p>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 print:gap-1.5">
                         <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/90 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
@@ -900,9 +915,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         )}
                     </div>
                     <p className="text-[11px] text-slate-500 -mt-2 max-w-2xl leading-snug">
-                        Opcional: restringe a vuelos cuyo <span className="font-bold text-slate-700">ATD del MVT</span> caiga en la
-                        ventana (hora local, mismo criterio que el formulario). Si activás el filtro, se excluyen vuelos sin MVT o sin
-                        ATD cargado.
+                        Los datos que se muestran a continuación provienen de la data extraída de los mensajes operacionales.
                     </p>
                     {statsRangeLabel ? (
                         <p className="text-xs font-semibold text-slate-600 -mt-1">
@@ -981,6 +994,59 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 {bagsPerPaxPct != null ? `${bagsPerPaxPct.toFixed(2)}%` : "—"}
                             </p>
                             <p className="text-xs text-slate-600 mt-1">Porcentaje: bags sobre pasajeros (mismo filtro)</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-amber-50/40 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Zap className="w-3.5 h-3.5 text-amber-600" aria-hidden />
+                                Uso promedio GPU
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                Promedio de duración (inicio → fin) según hitos operacionales
+                            </p>
+                            <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">
+                                {avgGpuUsage.avgMinutes != null
+                                    ? formatMinutesToHHMM(Math.round(avgGpuUsage.avgMinutes))
+                                    : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {avgGpuUsage.countWithGpu > 0
+                                    ? `${avgGpuUsage.countWithGpu} vuelo${avgGpuUsage.countWithGpu !== 1 ? "s" : ""} con inicio y fin GPU (excl. «no se utilizó GPU»)`
+                                    : "Sin vuelos con GPU informada en el filtro"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-violet-50/50 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Building2 className="w-3.5 h-3.5 text-violet-600" aria-hidden />
+                                Uso de manga
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                % sobre el total de vuelos del filtro (PEA en hitos operacionales)
+                            </p>
+                            <p className="text-3xl font-black text-violet-950 mt-2 tabular-nums">
+                                {peaMangaPct != null ? `${peaMangaPct.toFixed(1)}%` : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {statsFlightTotal > 0
+                                    ? `${peaCounts.manga} de ${statsFlightTotal} vuelo${statsFlightTotal !== 1 ? "s" : ""} con PEA «Manga»`
+                                    : "Sin vuelos en el filtro"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-sky-50/50 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-sky-600" aria-hidden />
+                                Uso de remota
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                % sobre el total de vuelos del filtro (PEA en hitos operacionales)
+                            </p>
+                            <p className="text-3xl font-black text-sky-950 mt-2 tabular-nums">
+                                {peaRemotaPct != null ? `${peaRemotaPct.toFixed(1)}%` : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {statsFlightTotal > 0
+                                    ? `${peaCounts.remota} de ${statsFlightTotal} vuelo${statsFlightTotal !== 1 ? "s" : ""} con PEA «Remota»`
+                                    : "Sin vuelos en el filtro"}
+                            </p>
                         </div>
                     </div>
 

@@ -2,6 +2,7 @@ import type { Flight, RouteAfectacionEntry } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
 import { getAirlinePrefix } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
+import { normalizeHitosData } from "./flightDataNormalize";
 import { parseTimeToMinutes } from "./mvtTime";
 
 /** Convierte fecha de vuelo (DD-MM-YYYY o YYYY-MM-DD) a ISO YYYY-MM-DD */
@@ -173,6 +174,51 @@ export function computeFleetMixShare(flights: Flight[], family: "A320" | "A321")
     }
     const sharePct = totalFlights > 0 ? (countOfType / totalFlights) * 100 : null;
     return { countOfType, totalFlights, sharePct };
+}
+
+/**
+ * Duración uso GPU (minutos) desde hitos operacionales: inicio y fin en HHMM, sin «no se utilizó GPU».
+ * Horarios en el mismo día; si fin &lt; inicio se asume cruce de medianoche.
+ */
+export function gpuUsageDurationMinutesFromFlight(f: Flight): number | null {
+    const h = normalizeHitosData(f.hitosData);
+    if (h.gpuNotUsed) return null;
+    const gs = String(h.gpuStart ?? "").replace(/\D/g, "");
+    const ge = String(h.gpuEnd ?? "").replace(/\D/g, "");
+    if (gs.length < 3 || ge.length < 3) return null;
+    const startM = parseHHmmToMinutes(gs.padStart(4, "0").slice(-4));
+    const endM = parseHHmmToMinutes(ge.padStart(4, "0").slice(-4));
+    let diff = endM - startM;
+    if (diff === 0) return null;
+    if (diff < 0) diff += 24 * 60;
+    return diff > 0 ? diff : null;
+}
+
+/** Promedio de minutos de uso GPU en el conjunto de vuelos (solo los que tienen inicio/fin válidos en hitos). */
+export function computeAverageGpuUsageMinutes(flights: Flight[]): {
+    avgMinutes: number | null;
+    countWithGpu: number;
+} {
+    const mins: number[] = [];
+    for (const f of flights) {
+        const d = gpuUsageDurationMinutesFromFlight(f);
+        if (d != null) mins.push(d);
+    }
+    if (mins.length === 0) return { avgMinutes: null, countWithGpu: 0 };
+    const sum = mins.reduce((a, b) => a + b, 0);
+    return { avgMinutes: sum / mins.length, countWithGpu: mins.length };
+}
+
+/** Cantidad de vuelos con PEA manga / remota en hitos operacionales (mismo filtro que estadísticas). */
+export function computePeaCounts(flights: Flight[]): { manga: number; remota: number } {
+    let manga = 0;
+    let remota = 0;
+    for (const f of flights) {
+        const p = normalizeHitosData(f.hitosData).peaPosition;
+        if (p === "manga") manga++;
+        else if (p === "remota") remota++;
+    }
+    return { manga, remota };
 }
 
 export function uniqueAirportsFromFlights(flights: Flight[]): string[] {

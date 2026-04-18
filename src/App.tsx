@@ -1,5 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
-import { normalizeUserRole, type Flight, type User, type HitosData, type PernocteRowState, type RouteAfectacionEntry, type DiferidoEntry } from "./types";
+import {
+  normalizeUserRole,
+  isHccDeskRole,
+  isAdminOrHccDesk,
+  type Flight,
+  type User,
+  type HitosData,
+  type PernocteRowState,
+  type RouteAfectacionEntry,
+  type DiferidoEntry,
+} from "./types";
 import { formatDelayLine, formatMvtSseeSummary, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
@@ -17,7 +27,7 @@ import {
 } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings } from "lucide-react";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
@@ -53,6 +63,8 @@ function App() {
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
+  /** Menú ⋯ en tarjeta de vuelo (reprogramar / cancelar) */
+  const [openFlightActionsMenuId, setOpenFlightActionsMenuId] = useState<string | null>(null);
   const [routeModalFlight, setRouteModalFlight] = useState<Flight | null>(null);
   const [routeAfectaciones, setRouteAfectaciones] = useState<RouteAfectacionEntry[]>([]);
   /** Matrícula → texto (Firebase: diferidos/{matrícula}) */
@@ -77,6 +89,8 @@ function App() {
   const [publicGanttOpen, setPublicGanttOpen] = useState(false);
   /** Aviso tras enviar MVT correctamente */
   const [mvtSentToast, setMvtSentToast] = useState<{ open: boolean; subtitle?: string }>({ open: false });
+  /** Aviso tras guardar Hitos validados */
+  const [hitosSavedToast, setHitosSavedToast] = useState<{ open: boolean; subtitle?: string }>({ open: false });
 
   const userRole = normalizeUserRole(currentUser?.role);
 
@@ -85,6 +99,24 @@ function App() {
     const t = window.setTimeout(() => setMvtSentToast({ open: false }), 4500);
     return () => window.clearTimeout(t);
   }, [mvtSentToast.open]);
+
+  useEffect(() => {
+    if (!hitosSavedToast.open) return;
+    const t = window.setTimeout(() => setHitosSavedToast({ open: false }), 4500);
+    return () => window.clearTimeout(t);
+  }, [hitosSavedToast.open]);
+
+  useEffect(() => {
+    if (!openFlightActionsMenuId) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const el = document.querySelector(`[data-flight-actions="${openFlightActionsMenuId}"]`);
+      if (el && !el.contains(e.target as Node)) {
+        setOpenFlightActionsMenuId(null);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [openFlightActionsMenuId]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -263,11 +295,18 @@ function App() {
   };
 
   /** Guardar Hitos validado desde la pestaña (botón Guardar). */
-  const handleSaveHitos = (id: string, hitosData: HitosData) => {
+  const handleSaveHitos = async (id: string, hitosData: HitosData) => {
     const payload = normalizeHitosData(hitosData);
     payload.hitosSentAt = new Date().toISOString();
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData: payload } : f));
-    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+    const f = flights.find((x) => x.id === id);
+    const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
+    try {
+      await set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+      setHitosSavedToast({ open: true, subtitle });
+    } catch {
+      alert("No se pudieron guardar los hitos. Revisá la conexión e intentá de nuevo.");
+    }
   };
 
   const handleSaveCrewHitos = (id: string, hitosCrewData: Record<string, string>) => {
@@ -543,7 +582,7 @@ function App() {
               <span>MVT</span>
             </button>
 
-            {(userRole === "ADMIN" || userRole === "HCC") && (
+            {isAdminOrHccDesk(userRole) && (
               <button
                 type="button"
                 onClick={() => setShowGestiones(true)}
@@ -555,7 +594,7 @@ function App() {
                 <span className="sm:hidden">Gest.</span>
               </button>
             )}
-            {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && (
+            {isAdminOrHccDesk(userRole) && (
               <button
                 onClick={() => setShowParser(true)}
                 className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
@@ -564,7 +603,7 @@ function App() {
                 <span>Cargar</span>
               </button>
             )}
-            {userRole === "HCC" && (
+            {isHccDeskRole(userRole) && (
               <button
                 type="button"
                 onClick={() => setShowManualFlight(true)}
@@ -581,7 +620,7 @@ function App() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-4 sm:px-6">
-        {(userRole === "HCC" || userRole === "AJS") && (
+        {isHccDeskRole(userRole) && (
           <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
             <button
               type="button"
@@ -629,7 +668,7 @@ function App() {
               <Moon className="w-4 h-4 shrink-0" />
               Pernocte
             </button>
-            {userRole === "HCC" && (
+            {isHccDeskRole(userRole) && (
               <button
                 type="button"
                 onClick={() => setMainTab("diferidos")}
@@ -648,13 +687,13 @@ function App() {
 
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-black text-secondary flex items-center gap-3">
-            {mainTab === "diferidos" && userRole === "HCC" ? (
+            {mainTab === "diferidos" && isHccDeskRole(userRole) ? (
               <>Diferidos</>
-            ) : mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
+            ) : mainTab === "control" && isHccDeskRole(userRole) ? (
               <>Control operacional</>
-            ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
+            ) : mainTab === "reporte" && isHccDeskRole(userRole) ? (
               <>Reporte Diario</>
-            ) : mainTab === "pernocte" && (userRole === "HCC" || userRole === "AJS") ? (
+            ) : mainTab === "pernocte" && isHccDeskRole(userRole) ? (
               <>Pernocte</>
             ) : (
               <>
@@ -667,21 +706,21 @@ function App() {
           </h2>
         </div>
 
-        {mainTab === "diferidos" && userRole === "HCC" ? (
+        {mainTab === "diferidos" && isHccDeskRole(userRole) ? (
           <DiferidosView diferidos={diferidosMap} onSave={handleSaveDiferido} onRemove={handleRemoveDiferido} />
-        ) : mainTab === "control" && (userRole === "HCC" || userRole === "AJS") ? (
+        ) : mainTab === "control" && isHccDeskRole(userRole) ? (
           <ControlView flights={flights} selectedDate={selectedDate} routeAfectaciones={routeAfectaciones} />
-        ) : mainTab === "reporte" && (userRole === "HCC" || userRole === "AJS") ? (
+        ) : mainTab === "reporte" && isHccDeskRole(userRole) ? (
           <DailyReportView
             flights={flights}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             onUpdateDailyReportObs={handleUpdateDailyReportObs}
-            canEditObs={userRole === "HCC" || userRole === "AJS"}
+            canEditObs={isHccDeskRole(userRole)}
             reportUserName={currentUser?.name ?? ""}
             routeAfectaciones={routeAfectaciones}
           />
-        ) : mainTab === "pernocte" && (userRole === "HCC" || userRole === "AJS") ? (
+        ) : mainTab === "pernocte" && isHccDeskRole(userRole) ? (
           <PernocteView
             filterDate={pernocteDateEffective}
             headerDate={selectedDate}
@@ -703,7 +742,7 @@ function App() {
             <p className="text-md max-w-md mx-auto">
               Usa el botón "Cargar" en la parte superior para pegar la programación de la jornada.
             </p>
-            {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && (
+            {isAdminOrHccDesk(userRole) && (
             <button
               onClick={() => setShowParser(true)}
               className="mt-8 bg-primary/10 text-primary px-6 py-2 rounded-full font-bold shadow hover:bg-primary/20 transition-colors"
@@ -761,25 +800,99 @@ function App() {
               const paxExcess = acInfo ? paxNum - acInfo.capacity : 0;
               const diferidoTxt = getDiferidoTextForReg(diferidosMap, flight.reg);
 
+              const canRescheduleFlight = isHccDeskRole(userRole) && !isCancelled;
+              const canCancelFlight = isAdminOrHccDesk(userRole) && !isCancelled;
+              const showFlightActionsMenu = canRescheduleFlight || canCancelFlight;
+              const showHitosDownload =
+                canDownloadHitosSummaryRole(userRole) &&
+                hasMvt &&
+                hasHitosDataForSummaryExport(flight) &&
+                !isCancelled;
+
               return (
                 <div
                   key={flight.id}
                   onClick={() => setSelectedFlight(flight)}
                   className={`relative border-2 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1.5 ${cardBg}`}
                 >
-                  {canDownloadHitosSummaryRole(userRole) && hasMvt && hasHitosDataForSummaryExport(flight) && !isCancelled && (
-                    <button
-                      type="button"
-                      title="Descargar informe HTML de hitos (operacionales y tripulación)"
-                      aria-label="Descargar informe HTML de hitos operacionales y de tripulación"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadHitosSummary(flight);
-                      }}
-                      className="absolute top-2 right-2 z-20 inline-flex items-center justify-center rounded-xl border-2 border-emerald-600/40 bg-white/95 p-2 text-emerald-800 shadow-md hover:bg-emerald-50 hover:border-emerald-500 transition-colors"
+                  {(showHitosDownload || showFlightActionsMenu) && (
+                    <div
+                      className="absolute top-2 right-2 z-20 flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <Download className="w-4 h-4 shrink-0" aria-hidden />
-                    </button>
+                      {showHitosDownload && (
+                        <button
+                          type="button"
+                          title="Descargar informe HTML de hitos (operacionales y tripulación)"
+                          aria-label="Descargar informe HTML de hitos operacionales y de tripulación"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadHitosSummary(flight);
+                          }}
+                          className="inline-flex items-center justify-center rounded-xl border-2 border-emerald-600/40 bg-white/95 p-2 text-emerald-800 shadow-md hover:bg-emerald-50 hover:border-emerald-500 transition-colors"
+                        >
+                          <Download className="w-4 h-4 shrink-0" aria-hidden />
+                        </button>
+                      )}
+                      {showFlightActionsMenu && (
+                        <div className="relative" data-flight-actions={flight.id}>
+                          <button
+                            type="button"
+                            title="Opciones del vuelo"
+                            aria-label="Opciones del vuelo"
+                            aria-expanded={openFlightActionsMenuId === flight.id}
+                            aria-haspopup="menu"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenFlightActionsMenuId((prev) =>
+                                prev === flight.id ? null : flight.id
+                              );
+                            }}
+                            className="inline-flex items-center justify-center rounded-xl border-2 border-slate-300/80 bg-white/95 p-2 text-slate-700 shadow-md hover:bg-slate-50 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-900/95 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <Settings className="w-4 h-4 shrink-0" aria-hidden />
+                          </button>
+                          {openFlightActionsMenuId === flight.id && (
+                            <div
+                              role="menu"
+                              className="absolute right-0 top-full mt-1 min-w-[13.5rem] rounded-xl border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-slate-600 dark:bg-slate-900 dark:ring-white/10 z-30"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {canRescheduleFlight && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-amber-900 hover:bg-amber-50 dark:text-amber-100 dark:hover:bg-amber-950/50"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenFlightActionsMenuId(null);
+                                    setRescheduleModalFlight(flight);
+                                  }}
+                                >
+                                  <CalendarClock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                  Reprogramar vuelo
+                                </button>
+                              )}
+                              {canCancelFlight && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenFlightActionsMenuId(null);
+                                    setCancelModalFlight(flight);
+                                  }}
+                                >
+                                  <Ban className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                  Cancelar vuelo
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                   <div className="flex justify-between items-start mb-4">
                     <span className={`text-4xl font-black tracking-tighter flex items-baseline gap-1 ${isLate ? "text-red-700 dark:text-red-100" : "text-secondary dark:text-primary"}`}>
@@ -830,7 +943,7 @@ function App() {
                     </div>
                   </div>
 
-                  {(userRole === "ADMIN" || userRole === "HCC") && !isCancelled && (
+                  {isAdminOrHccDesk(userRole) && !isCancelled && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -851,9 +964,9 @@ function App() {
                         <div className="flex items-center flex-wrap gap-2">
                           <select
                             value={flight.reg}
-                            disabled={userRole !== "ADMIN" && userRole !== "HCC"}
+                            disabled={!isAdminOrHccDesk(userRole)}
                             onChange={(e) => handleUpdateRegistration(flight.id, e.target.value)}
-                            className={`font-black bg-transparent border-b-2 border-dashed border-slate-300 dark:border-slate-700 pb-0.5 focus:outline-none text-sm transition-colors ${(userRole === "ADMIN" || userRole === "HCC") ? "cursor-pointer hover:border-primary focus:border-primary text-slate-800 dark:text-slate-100 hover:text-primary" : "appearance-none cursor-default border-none text-slate-600 dark:text-slate-400"}`}
+                            className={`font-black bg-transparent border-b-2 border-dashed border-slate-300 dark:border-slate-700 pb-0.5 focus:outline-none text-sm transition-colors ${isAdminOrHccDesk(userRole) ? "cursor-pointer hover:border-primary focus:border-primary text-slate-800 dark:text-slate-100 hover:text-primary" : "appearance-none cursor-default border-none text-slate-600 dark:text-slate-400"}`}
                           >
                             {!acInfo && <option value={flight.reg}>{flight.reg}</option>}
                             {Object.keys(FLEET_DATA).sort().map(r => (
@@ -955,32 +1068,6 @@ function App() {
                     )}
                   </div>
 
-                  {(userRole === "HCC" || userRole === "AJS") && !isCancelled && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRescheduleModalFlight(flight);
-                      }}
-                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide text-amber-900 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
-                    >
-                      <CalendarClock className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                      Reprogramar vuelo
-                    </button>
-                  )}
-                  {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && !isCancelled && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCancelModalFlight(flight);
-                      }}
-                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors"
-                    >
-                      <Ban className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                      Cancelar vuelo
-                    </button>
-                  )}
                   {!isCancelled && flight.rescheduleReason?.trim() && (
                     <p className="mt-2 text-xs text-amber-900/90 dark:text-amber-200/90 line-clamp-4 border-t border-amber-200/80 dark:border-amber-800/80 pt-2 text-left">
                       <span className="font-bold text-amber-800 dark:text-amber-300">
@@ -995,7 +1082,7 @@ function App() {
                       {flight.cancellationReason}
                     </p>
                   )}
-                  {(userRole === "ADMIN" || userRole === "HCC" || userRole === "AJS") && isCancelled && (
+                  {isAdminOrHccDesk(userRole) && isCancelled && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1037,7 +1124,7 @@ function App() {
         />
       )}
 
-      {showManualFlight && userRole === "HCC" && (
+      {showManualFlight && isHccDeskRole(userRole) && (
         <ManualFlightModal
           initialDateIso={selectedDate}
           onClose={() => setShowManualFlight(false)}
@@ -1068,7 +1155,7 @@ function App() {
         />
       )}
 
-      {routeModalFlight && (userRole === "ADMIN" || userRole === "HCC") && (
+      {routeModalFlight && isAdminOrHccDesk(userRole) && (
         <RouteChangeModal
           flight={routeModalFlight}
           onClose={() => setRouteModalFlight(null)}
@@ -1076,7 +1163,7 @@ function App() {
         />
       )}
 
-      {showGestiones && (userRole === "ADMIN" || userRole === "HCC") && (
+      {showGestiones && isAdminOrHccDesk(userRole) && (
         <GestionesModal flights={flights} onClose={() => setShowGestiones(false)} onApply={handleGestionesApply} />
       )}
 
@@ -1118,6 +1205,35 @@ function App() {
               type="button"
               onClick={() => setMvtSentToast({ open: false })}
               className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-emerald-700/80 transition-colors hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-900/60 dark:hover:text-emerald-50"
+              aria-label="Cerrar aviso"
+            >
+              <span className="text-lg font-bold leading-none">×</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {hitosSavedToast.open ? (
+        <div
+          className={`fixed left-1/2 z-[100] flex max-w-[min(92vw,24rem)] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4 duration-300 ${mvtSentToast.open ? "bottom-24" : "bottom-6"}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex w-full items-start gap-3 rounded-2xl border border-indigo-300/80 bg-white px-4 py-3 shadow-xl ring-1 ring-indigo-500/15 dark:border-indigo-700/90 dark:bg-indigo-950 dark:ring-indigo-400/20">
+            <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-indigo-600 dark:text-indigo-400" aria-hidden />
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="font-black text-indigo-900 dark:text-indigo-100">Hitos guardados</p>
+              {hitosSavedToast.subtitle ? (
+                <p className="mt-0.5 text-sm font-semibold leading-snug text-indigo-800/95 dark:text-indigo-200/95">
+                  {hitosSavedToast.subtitle}
+                </p>
+              ) : null}
+              <p className="mt-1 text-xs text-indigo-700/85 dark:text-indigo-300/90">Los datos ya quedaron registrados.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHitosSavedToast({ open: false })}
+              className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-indigo-700/80 transition-colors hover:bg-indigo-100 hover:text-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-900/60 dark:hover:text-indigo-50"
               aria-label="Cerrar aviso"
             >
               <span className="text-lg font-bold leading-none">×</span>

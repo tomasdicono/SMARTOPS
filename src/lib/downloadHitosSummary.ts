@@ -1,6 +1,8 @@
 import type { Flight, HitosData } from "../types";
 import { GANTT_CHARTS } from "./hitosData";
+import { gpuUsageDurationMinutesFromFlight } from "./controlHelpers";
 import { normalizeHitosData } from "./flightDataNormalize";
+import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 import {
     parseToMins,
     formatMins,
@@ -9,6 +11,27 @@ import {
     getCrewTargetInfo,
     CREW_STORAGE_KEYS,
 } from "./hitosReference";
+
+/** PEA y duración total GPU para el resumen descargable (hitos operacionales). */
+function getPeaAndGpuSummary(flight: Flight): { peaLine: string; gpuLine: string } {
+    const h = normalizeHitosData(flight.hitosData);
+    let peaLine = "—";
+    if (h.peaPosition === "manga") peaLine = "Manga";
+    else if (h.peaPosition === "remota") peaLine = "Remota";
+
+    let gpuLine: string;
+    if (h.gpuNotUsed) {
+        gpuLine = "No se utilizó GPU";
+    } else {
+        const mins = gpuUsageDurationMinutesFromFlight(flight);
+        if (mins != null) {
+            gpuLine = formatMinutesToHHMM(mins);
+        } else {
+            gpuLine = "—";
+        }
+    }
+    return { peaLine, gpuLine };
+}
 
 /** Debe coincidir con HitosCrewTab */
 const CREW_HITO_LABELS = [
@@ -22,6 +45,14 @@ function formatAtaForDisplay(ata: string): string {
     const d = String(ata ?? "").replace(/\D/g, "");
     if (d.length >= 3) return formatMins(parseToMins(d.padStart(4, "0").slice(-4)));
     return ata || "—";
+}
+
+/** ATD del MVT para el encabezado del resumen (mismo criterio que tarjetas). */
+function formatAtdForDisplay(flight: Flight): string {
+    const raw = flight.mvtData?.atd;
+    if (raw == null || String(raw).trim() === "") return "—";
+    if (String(raw).replace(/\D/g, "").length < 3) return "—";
+    return formatMinutesToHHMM(parseTimeToMinutes(String(raw)));
 }
 
 type DemoraKind = "ok" | "late" | "neutral";
@@ -49,6 +80,8 @@ interface HitosSummaryPayload {
         arr: string;
         reg: string;
         std: string;
+        /** ATD MVT normalizado (hh:mm) o — */
+        atdDisplay: string;
         etd?: string;
         sta: string;
     };
@@ -77,6 +110,7 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
         arr: flight.arr,
         reg: flight.reg || "—",
         std: flight.std,
+        atdDisplay: formatAtdForDisplay(flight),
         etd: flight.etd?.trim() || undefined,
         sta: flight.sta,
     };
@@ -220,6 +254,7 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
 
 export function buildHitosSummaryText(flight: Flight): string {
     const p = buildHitosSummaryPayload(flight);
+    const { peaLine, gpuLine } = getPeaAndGpuSummary(flight);
     const lines: string[] = [];
     lines.push("SMARTOPS — Resumen de hitos");
     lines.push("");
@@ -227,7 +262,9 @@ export function buildHitosSummaryText(flight: Flight): string {
     lines.push(`Vuelo: ${p.meta.flt}`);
     lines.push(`Ruta: ${p.meta.dep} → ${p.meta.arr}`);
     lines.push(`Matrícula: ${p.meta.reg}`);
-    lines.push(`STD ${p.meta.std}  STA ${p.meta.sta}`);
+    lines.push(`STD/ATD: ${p.meta.std} / ${p.meta.atdDisplay}  STA ${p.meta.sta}`);
+    lines.push(`PEA: ${peaLine}`);
+    lines.push(`Uso total GPU: ${gpuLine}`);
     lines.push("");
     lines.push("=== Hitos operacionales ===");
     if (!p.operational.hasData) {
@@ -275,6 +312,7 @@ function demoraCellHtml(demora: string, kind: DemoraKind): string {
 export function buildHitosSummaryHtml(flight: Flight): string {
     const p = buildHitosSummaryPayload(flight);
     const m = p.meta;
+    const { peaLine, gpuLine } = getPeaAndGpuSummary(flight);
 
     const opRowsHtml = p.operational.rows
         .map(
@@ -504,9 +542,11 @@ export function buildHitosSummaryHtml(flight: Flight): string {
         <div><span>Vuelo</span><span class="v">${escapeHtml(m.flt)}</span></div>
         <div><span>Ruta</span><span class="v">${escapeHtml(m.dep)} → ${escapeHtml(m.arr)}</span></div>
         <div><span>Matrícula</span><span class="v mono">${escapeHtml(m.reg)}</span></div>
-        <div><span>STD</span><span class="v mono">${escapeHtml(m.std)}</span></div>
+        <div><span>STD/ATD</span><span class="v mono">${escapeHtml(m.std)} / ${escapeHtml(m.atdDisplay)}</span></div>
         ${m.etd ? `<div><span>ETD</span><span class="v mono">${escapeHtml(m.etd)}</span></div>` : ""}
         <div><span>STA</span><span class="v mono">${escapeHtml(m.sta)}</span></div>
+        <div><span>PEA</span><span class="v">${escapeHtml(peaLine)}</span></div>
+        <div><span>Uso total GPU</span><span class="v mono">${escapeHtml(gpuLine)}</span></div>
       </div>
     </header>
     ${opSection}
