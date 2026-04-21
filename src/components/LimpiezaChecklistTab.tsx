@@ -131,6 +131,16 @@ export function LimpiezaChecklistTab({ flight, dayFlights, selectedIso, currentU
         persist(next, observacionesRef.current, mode);
     };
 
+    const checkEntireSection = (sectionTasks: { id: string }[]) => {
+        if (readOnly || !mode || loading) return;
+        const next = { ...items };
+        for (const t of sectionTasks) {
+            next[t.id] = true;
+        }
+        setItems(next);
+        persist(next, observacionesRef.current, mode);
+    };
+
     const scheduleObsSave = (text: string) => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
@@ -204,9 +214,20 @@ export function LimpiezaChecklistTab({ flight, dayFlights, selectedIso, currentU
             <div className="space-y-8">
                 {grouped.map(([section, list]) => (
                     <section key={section} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h4 className="text-xs font-black uppercase tracking-wider text-violet-800 border-b border-slate-100 pb-2 mb-3">
-                            {section}
-                        </h4>
+                        <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-2 mb-3">
+                            <h4 className="text-xs font-black uppercase tracking-wider text-violet-800 min-w-0 pr-2">
+                                {section}
+                            </h4>
+                            <button
+                                type="button"
+                                disabled={readOnly || loading}
+                                onClick={() => checkEntireSection(list)}
+                                className="shrink-0 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-violet-900 shadow-sm transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                title="Tildar todos los ítems de esta sección"
+                            >
+                                Tildar todo el área
+                            </button>
+                        </div>
                         <ul className="space-y-3">
                             {list.map((task) => (
                                 <li key={task.id} className="flex gap-3 items-start">
