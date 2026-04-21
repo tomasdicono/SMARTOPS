@@ -62,6 +62,32 @@ export function flightVisibleToLimpiezaBoard(f: Flight, dayFlights: Flight[], se
     return flightNeedsCleaningWarning(f) || isPernocteLastJesSector(f, dayFlights, selectedIso);
 }
 
+/**
+ * Limpieza pendiente (tarjetas rol LIMPIEZA): casilla `limpieza` en `pernocte/{fecha}/{matrícula}` para último JES del día;
+ * si el vuelo entra solo por bloque largo (&gt;3:30 h), se considera pendiente hasta haber checklist/dato dedicado (hoy: siempre pendiente).
+ */
+export function isLimpiezaPendiente(
+    f: Flight,
+    selectedIso: string,
+    dayFlights: Flight[],
+    pernocteByReg: Record<string, PernocteRowState>
+): boolean {
+    if (f.cancelled || !String(selectedIso).trim()) return false;
+    if (!flightVisibleToLimpiezaBoard(f, dayFlights, selectedIso)) return false;
+
+    const reg = String(f.reg ?? "").trim();
+    const perno = isPernocteLastJesSector(f, dayFlights, selectedIso);
+
+    if (perno) {
+        const row = reg ? pernocteByReg[reg] : undefined;
+        return !row?.limpieza;
+    }
+
+    if (flightNeedsCleaningWarning(f)) return true;
+
+    return false;
+}
+
 export function defaultPernocteRow(): PernocteRowState {
     return { limpieza: false, precargaQ: "", precarga: false };
 }

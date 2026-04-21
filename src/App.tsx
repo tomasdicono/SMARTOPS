@@ -43,7 +43,12 @@ import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
 import { DiferidosView } from "./components/DiferidosView";
-import { computePernocteRows, coercePernocteRow, flightVisibleToLimpiezaBoard } from "./lib/pernocteHelpers";
+import {
+  computePernocteRows,
+  coercePernocteRow,
+  flightVisibleToLimpiezaBoard,
+  isLimpiezaPendiente,
+} from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
 import { normalizeMvtData, normalizeHitosData } from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
@@ -780,6 +785,13 @@ function App() {
             {[...boardFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
               const isCancelled = !!flight.cancelled;
               const hidePaxOnCard = isLimpiezaRole(userRole);
+              const showWeatherOnCard = !isLimpiezaRole(userRole);
+              const pernocteForDay = selectedDate ? pernocteData[selectedDate] ?? {} : {};
+              const limpiezaPendienteCard =
+                hidePaxOnCard &&
+                !isCancelled &&
+                !!selectedDate &&
+                isLimpiezaPendiente(flight, selectedDate, flightsForSelectedDate, pernocteForDay);
               const isLate = !isCancelled && isFlightIncompleteAndLate(flight);
               const hasMvt = isMvtCompleteForCard(flight);
               const hasHitos = isHitosCompleteForCard(flight);
@@ -795,6 +807,12 @@ function App() {
                 badgeText = "VUELO CANCELADO";
                 badgeColor = "bg-slate-700 border-white dark:border-slate-900 text-white";
                 badgeIcon = "ban";
+              } else if (limpiezaPendienteCard) {
+                cardBg =
+                  "bg-red-50 dark:bg-[#450a0a] border-red-600 dark:border-red-500 shadow-red-900/25 hover:border-red-500 dark:hover:border-red-400";
+                badgeText = "LIMPIEZA PENDIENTE";
+                badgeColor = "bg-red-600 border-white dark:border-[#450a0a] text-white";
+                badgeIcon = "alert";
               } else if (hasMvt && hasHitos) {
                 cardBg = "bg-emerald-50 dark:bg-[#064e3b] border-emerald-400 dark:border-emerald-500 shadow-emerald-900/20";
                 badgeText = "MVT ✓ · HITOS ✓";
@@ -944,13 +962,17 @@ function App() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">STD</span>
-                      <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.std} align="left" />
+                      {showWeatherOnCard ? (
+                        <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.std} align="left" />
+                      ) : null}
                       <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.dep}</span>
                       <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70 tabular-nums">{flight.std}</span>
                       {flight.etd?.trim() ? (
                         <div className="mt-1.5 pt-1.5 border-t border-dashed border-amber-300/80 dark:border-amber-700/60 w-full">
                           <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">ETD</span>
-                          <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.etd} align="left" />
+                          {showWeatherOnCard ? (
+                            <WeatherIndicator iata={flight.dep} date={flight.date} time={flight.etd} align="left" />
+                          ) : null}
                           <span className="text-sm font-black text-amber-900 dark:text-amber-200 tabular-nums">{flight.etd}</span>
                         </div>
                       ) : null}
@@ -962,7 +984,9 @@ function App() {
                       className="flex flex-col items-end leading-tight relative min-w-0 max-w-[45%]"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <WeatherIndicator iata={flight.arr} date={flight.date} time={flight.sta} align="right" />
+                      {showWeatherOnCard ? (
+                        <WeatherIndicator iata={flight.arr} date={flight.date} time={flight.sta} align="right" />
+                      ) : null}
                       <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.arr}</span>
                       <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70">{flight.sta}</span>
                     </div>
