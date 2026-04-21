@@ -1224,6 +1224,9 @@ function App() {
         <FlightModal
           flight={selectedFlight}
           userRole={userRole}
+          checklistDayFlights={flightsForSelectedDate}
+          checklistSelectedIso={selectedDate}
+          currentUser={currentUser}
           onClose={() => setSelectedFlight(null)}
           onSaveMVT={(data) => handleSaveMVT(selectedFlight.id, data)}
           onSaveHitos={(data) => handleSaveHitos(selectedFlight.id, data)}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Flight } from "../types";
+import type { Flight, User } from "../types";
 import { MVTForm } from "./MVTForm";
 import { HitosTab } from "./HitosTab";
 import { HitosCrewTab } from "./HitosCrewTab";
@@ -11,6 +11,7 @@ import {
     hasHitosDataForSummaryExport,
     canDownloadHitosSummaryRole,
 } from "../lib/flightHelpers";
+import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
 import { isLimpiezaRole } from "../types";
 import { downloadHitosSummary } from "../lib/downloadHitosSummary";
 import { X, Ban, Download } from "lucide-react";
@@ -19,6 +20,10 @@ import { BroomIcon } from "./BroomIcon";
 interface Props {
     flight: Flight;
     userRole: import("../types").UserRole;
+    /** Vuelos del día (misma fecha que el tablero) — modo tránsito vs pernocte del checklist */
+    checklistDayFlights: Flight[];
+    checklistSelectedIso: string;
+    currentUser: User | null;
     onClose: () => void;
     onSaveMVT: (data: Flight["mvtData"]) => void;
     onSaveHitos: (data: import("../types").HitosData) => void;
@@ -27,7 +32,19 @@ interface Props {
     onPersistCrewHitos?: (data: Record<string, string>) => void;
 }
 
-export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos, onPersistHitos, onSaveCrewHitos, onPersistCrewHitos }: Props) {
+export function FlightModal({
+    flight,
+    userRole,
+    checklistDayFlights,
+    checklistSelectedIso,
+    currentUser,
+    onClose,
+    onSaveMVT,
+    onSaveHitos,
+    onPersistHitos,
+    onSaveCrewHitos,
+    onPersistCrewHitos,
+}: Props) {
     const [activeTab, setActiveTab] = useState<"MVT" | "HITOS" | "CREW" | "LIMPIEZA">(() => {
         if (isLimpiezaRole(userRole)) return "LIMPIEZA";
         if (userRole === "CREW") return "CREW";
@@ -41,7 +58,14 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
     const canSeeHitos =
         !isLimpiezaRole(userRole) && (userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS");
     const canSeeCrew = userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS";
-    const canSeeLimpiezaChecklist = isLimpiezaRole(userRole);
+    const checklistMode = getLimpiezaChecklistMode(flight, checklistDayFlights, checklistSelectedIso);
+    const canSeeLimpiezaChecklist =
+        checklistMode != null &&
+        (isLimpiezaRole(userRole) ||
+            userRole === "ADMIN" ||
+            userRole === "HCC" ||
+            userRole === "SC" ||
+            userRole === "AJS");
     const isReadOnlyView = !!flight.cancelled;
     const canDownloadHitosSummary =
         canDownloadHitosSummaryRole(userRole) &&
@@ -51,7 +75,7 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-4xl h-[90vh] md:h-auto md:max-h-[85vh] rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full max-w-5xl h-[90vh] md:h-auto md:max-h-[90vh] rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 bg-slate-50 relative">
@@ -125,8 +149,19 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                     </div>
                 )}
 
-                {/* Tabs */}
+                {/* Tabs — Limpieza después de MVT para HCC/AJS/SC/ADMIN; solo Limpieza si es rol Limpieza */}
                 <div className="flex px-6 border-b border-border bg-slate-50/50">
+                    {canSeeMvt && (
+                        <button
+                            onClick={() => setActiveTab("MVT")}
+                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "MVT" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                            MVT
+                            {activeTab === "MVT" && (
+                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
+                            )}
+                        </button>
+                    )}
                     {canSeeLimpiezaChecklist && (
                         <button
                             type="button"
@@ -136,17 +171,6 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                             Limpieza
                             {activeTab === "LIMPIEZA" && (
                                 <span className="absolute bottom-0 left-0 w-full h-0.5 bg-violet-600 rounded-t-lg"></span>
-                            )}
-                        </button>
-                    )}
-                    {canSeeMvt && (
-                        <button
-                            onClick={() => setActiveTab("MVT")}
-                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "MVT" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
-                        >
-                            MVT
-                            {activeTab === "MVT" && (
-                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
                             )}
                         </button>
                     )}
@@ -176,11 +200,6 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
-                    {canSeeLimpiezaChecklist && (
-                        <div className={activeTab === "LIMPIEZA" ? "block" : "hidden"} aria-hidden={activeTab !== "LIMPIEZA"}>
-                            <LimpiezaChecklistTab />
-                        </div>
-                    )}
                     {/* Mantener pestañas montadas (hidden) para no perder estado local al cambiar de pestaña */}
                     {canSeeMvt && (
                         <div className={activeTab === "MVT" ? "block" : "hidden"} aria-hidden={activeTab !== "MVT"}>
@@ -191,6 +210,17 @@ export function FlightModal({ flight, userRole, onClose, onSaveMVT, onSaveHitos,
                                 onSave={(data) => {
                                     onSaveMVT(data);
                                 }}
+                            />
+                        </div>
+                    )}
+                    {canSeeLimpiezaChecklist && (
+                        <div className={activeTab === "LIMPIEZA" ? "block" : "hidden"} aria-hidden={activeTab !== "LIMPIEZA"}>
+                            <LimpiezaChecklistTab
+                                flight={flight}
+                                dayFlights={checklistDayFlights}
+                                selectedIso={checklistSelectedIso}
+                                currentUser={currentUser}
+                                readOnly={isReadOnlyView}
                             />
                         </div>
                     )}

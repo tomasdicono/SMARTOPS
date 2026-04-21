@@ -141,3 +141,13 @@ export interface PernocteRowState {
     precargaQ: string;
     precarga: boolean;
 }
+
+/** Checklist ANEXO A por vuelo (Firebase: limpiezaChecklist/{flightId}) — compartido Limpieza y HCC. */
+export interface LimpiezaChecklistState {
+    mode: "transito" | "pernocte";
+    items: Record<string, boolean>;
+    observaciones: string;
+    updatedAt?: string;
+    updatedByUid?: string;
+    updatedByName?: string;
+}
