@@ -520,7 +520,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-12">
-      <header className="bg-slate-900 border-b border-slate-800 text-white py-3 px-4 md:px-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 w-full mb-6 max-w-full overflow-hidden">
+      <header className="bg-slate-900 border-b border-slate-800 text-white py-3 px-4 md:px-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 w-full mb-6 max-w-full min-w-0">
         <div className="flex items-center justify-between w-full md:w-auto gap-3">
           <div className="flex items-center gap-3">
             <PlaneTakeoff className="w-8 h-8 text-cyan-400 shrink-0" />
@@ -548,16 +548,17 @@ function App() {
           </div>
           )}
 
-          {/* Date Picker */}
-          <div className="flex shrink-0 items-center gap-2 bg-slate-800 px-3 py-2 rounded-full border border-slate-700 shadow-inner">
-            <CalendarDays className="w-4 h-4 text-cyan-400 shrink-0" />
+          {/* Date Picker — sin overflow-hidden en el header: recorta el popup nativo del type="date". Label: clic en el ícono enfoca el input. */}
+          <label className="relative z-[60] flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-slate-700 bg-slate-800 px-3 py-2 shadow-inner min-h-[2.5rem]">
+            <CalendarDays className="h-4 w-4 shrink-0 text-cyan-400" aria-hidden />
             <input
+              id="header-flight-date"
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-sm font-bold text-white focus:outline-none cursor-pointer [color-scheme:light] uppercase tracking-wider w-[120px] md:w-auto"
+              className="min-w-[10.5rem] cursor-pointer bg-transparent py-1 text-sm font-bold uppercase tracking-wider text-white [color-scheme:light] focus:outline-none md:min-w-[11rem]"
             />
-          </div>
+          </label>
 
           <div className="flex gap-2 w-full md:w-auto justify-center mt-1 md:mt-0 items-center">
             {/* User Details */}
