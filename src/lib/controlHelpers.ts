@@ -209,7 +209,7 @@ export function computeAverageGpuUsageMinutes(flights: Flight[]): {
     return { avgMinutes: sum / mins.length, countWithGpu: mins.length };
 }
 
-/** Cantidad de vuelos con PEA manga / remota en hitos operacionales (mismo filtro que estadísticas). */
+/** Cantidad de vuelos con PEA manga / remota en hitos (lista ya filtrada por el llamador). */
 export function computePeaCounts(flights: Flight[]): { manga: number; remota: number } {
     let manga = 0;
     let remota = 0;
@@ -293,6 +293,13 @@ export function hasRecordedMvtDelay(f: Flight): boolean {
 /** Hay PAX declarado en el MVT (casilla PAX actual). */
 export function hasMvtPaxEntered(f: Flight): boolean {
     return (f.mvtData?.paxActual ?? "").trim() !== "";
+}
+
+/** MVT enviado al servidor (`mvtSentAt`), mismo criterio que factor ocupación en status día. */
+export function hasMvtSent(f: Flight): boolean {
+    if (f.cancelled) return false;
+    const m = f.mvtData;
+    return m != null && m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "";
 }
 
 /** MVT con ATD cargado (suficiente para medir OTP). Denominador “MVT enviados”. */

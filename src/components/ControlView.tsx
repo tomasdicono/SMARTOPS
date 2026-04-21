@@ -23,6 +23,7 @@ import {
     isStatsAtdTimeFilterActive,
     computeAverageGpuUsageMinutes,
     computePeaCounts,
+    hasMvtSent,
 } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
@@ -231,12 +232,14 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
     const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(statsFlights), [statsFlights]);
-    const peaCounts = useMemo(() => computePeaCounts(statsFlights), [statsFlights]);
+    const statsFlightsMvtSent = useMemo(() => statsFlights.filter(hasMvtSent), [statsFlights]);
+    const statsMvtSentTotal = statsFlightsMvtSent.length;
+    const peaCounts = useMemo(() => computePeaCounts(statsFlightsMvtSent), [statsFlightsMvtSent]);
     const statsFlightTotal = statsFlights.length;
     const peaMangaPct =
-        statsFlightTotal > 0 ? (peaCounts.manga / statsFlightTotal) * 100 : null;
+        statsMvtSentTotal > 0 ? (peaCounts.manga / statsMvtSentTotal) * 100 : null;
     const peaRemotaPct =
-        statsFlightTotal > 0 ? (peaCounts.remota / statsFlightTotal) * 100 : null;
+        statsMvtSentTotal > 0 ? (peaCounts.remota / statsMvtSentTotal) * 100 : null;
 
     const cancelledScheduledPaxTotal = useMemo(
         () => cancelledStatsFlights.reduce((s, f) => s + getScheduledPax(f), 0),
@@ -1020,15 +1023,17 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 Uso de manga
                             </p>
                             <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                                % sobre el total de vuelos del filtro (PEA en hitos operacionales)
+                                % sobre MVT enviados en el filtro (PEA en hitos operacionales)
                             </p>
                             <p className="text-3xl font-black text-violet-950 mt-2 tabular-nums">
                                 {peaMangaPct != null ? `${peaMangaPct.toFixed(1)}%` : "—"}
                             </p>
                             <p className="text-xs text-slate-600 mt-1">
-                                {statsFlightTotal > 0
-                                    ? `${peaCounts.manga} de ${statsFlightTotal} vuelo${statsFlightTotal !== 1 ? "s" : ""} con PEA «Manga»`
-                                    : "Sin vuelos en el filtro"}
+                                {statsMvtSentTotal > 0
+                                    ? `${peaCounts.manga} de ${statsMvtSentTotal} MVT enviado${statsMvtSentTotal !== 1 ? "s" : ""} con PEA «Manga»`
+                                    : statsFlightTotal > 0
+                                      ? "Sin MVT enviados en el filtro"
+                                      : "Sin vuelos en el filtro"}
                             </p>
                         </div>
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-sky-50/50 to-white">
@@ -1037,15 +1042,17 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 Uso de remota
                             </p>
                             <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                                % sobre el total de vuelos del filtro (PEA en hitos operacionales)
+                                % sobre MVT enviados en el filtro (PEA en hitos operacionales)
                             </p>
                             <p className="text-3xl font-black text-sky-950 mt-2 tabular-nums">
                                 {peaRemotaPct != null ? `${peaRemotaPct.toFixed(1)}%` : "—"}
                             </p>
                             <p className="text-xs text-slate-600 mt-1">
-                                {statsFlightTotal > 0
-                                    ? `${peaCounts.remota} de ${statsFlightTotal} vuelo${statsFlightTotal !== 1 ? "s" : ""} con PEA «Remota»`
-                                    : "Sin vuelos en el filtro"}
+                                {statsMvtSentTotal > 0
+                                    ? `${peaCounts.remota} de ${statsMvtSentTotal} MVT enviado${statsMvtSentTotal !== 1 ? "s" : ""} con PEA «Remota»`
+                                    : statsFlightTotal > 0
+                                      ? "Sin MVT enviados en el filtro"
+                                      : "Sin vuelos en el filtro"}
                             </p>
                         </div>
                     </div>
