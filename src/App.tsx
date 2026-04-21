@@ -3,6 +3,7 @@ import {
   normalizeUserRole,
   isHccDeskRole,
   isAdminOrHccDesk,
+  isLimpiezaRole,
   type Flight,
   type User,
   type HitosData,
@@ -42,7 +43,7 @@ import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
 import { DiferidosView } from "./components/DiferidosView";
-import { computePernocteRows, coercePernocteRow } from "./lib/pernocteHelpers";
+import { computePernocteRows, coercePernocteRow, flightVisibleToLimpiezaBoard } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
 import { normalizeMvtData, normalizeHitosData } from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
@@ -483,6 +484,14 @@ function App() {
     return fltU.includes(sq) || depU.includes(sq) || arrU.includes(sq);
   });
 
+  /** Rol Limpieza: solo vuelos con bloque largo (&gt;3:30) o último JES del día (pernocte). */
+  const boardFlights = useMemo(() => {
+    if (!isLimpiezaRole(userRole)) return filteredFlights;
+    const iso = selectedDate?.trim();
+    if (!iso) return filteredFlights;
+    return filteredFlights.filter((f) => flightVisibleToLimpiezaBoard(f, flightsForSelectedDate, iso));
+  }, [userRole, filteredFlights, flightsForSelectedDate, selectedDate]);
+
   const pernocteRows = useMemo(
     () => (pernocteDateEffective ? computePernocteRows(flights, pernocteDateEffective) : []),
     [flights, pernocteDateEffective]
@@ -573,6 +582,7 @@ function App() {
               </button>
             )}
 
+            {userRole !== "LIMPIEZA" && (
             <button
               onClick={() => setShowOpsMenu(true)}
               className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-5 py-2 rounded-full font-bold shadow-sm transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
@@ -581,6 +591,7 @@ function App() {
               <MessageSquareText className="w-4 h-4 text-cyan-400" />
               <span>MVT</span>
             </button>
+            )}
 
             {isAdminOrHccDesk(userRole) && (
               <button
@@ -699,7 +710,7 @@ function App() {
               <>
                 Vuelos
                 <span className="text-sm font-bold text-secondary-foreground bg-primary px-3 py-1 rounded-full shadow-sm">
-                  {filteredFlights.length}
+                  {boardFlights.length}
                 </span>
               </>
             )}
@@ -731,16 +742,28 @@ function App() {
             pernocteByReg={pernocteData[pernocteDateEffective] ?? {}}
             onPatchRow={handlePernoctePatch}
           />
-        ) : filteredFlights.length === 0 ? (
+        ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-6">
               <PlaneTakeoff className="w-16 h-16 text-primary/60" />
             </div>
             <p className="text-xl font-bold text-secondary mb-2">
-              {flights.length === 0 ? "No hay vuelos cargados en el sistema." : "Para esa fecha no hay vuelos cargados."}
+              {flights.length === 0
+                ? "No hay vuelos cargados en el sistema."
+                : filteredFlights.length === 0 && searchQuery.trim()
+                  ? "No hay vuelos que coincidan con la búsqueda."
+                  : flightsForSelectedDate.length === 0
+                    ? "Para esa fecha no hay vuelos cargados."
+                    : isLimpiezaRole(userRole) && filteredFlights.length > 0
+                      ? "No hay vuelos de limpieza o pernocte en el filtro actual."
+                      : isLimpiezaRole(userRole)
+                        ? "No hay vuelos con bloque largo (>3:30 h) ni último sector JES del día para esta fecha."
+                        : "Para esa fecha no hay vuelos cargados."}
             </p>
             <p className="text-md max-w-md mx-auto">
-              Usa el botón "Cargar" en la parte superior para pegar la programación de la jornada.
+              {isLimpiezaRole(userRole)
+                ? "Solo se listan vuelos que requieren limpieza por tiempo de bloque o el último JES de cada matrícula (pernocte)."
+                : 'Usa el botón "Cargar" en la parte superior para pegar la programación de la jornada.'}
             </p>
             {isAdminOrHccDesk(userRole) && (
             <button
@@ -753,8 +776,9 @@ function App() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...filteredFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
+            {[...boardFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
               const isCancelled = !!flight.cancelled;
+              const hidePaxOnCard = isLimpiezaRole(userRole);
               const isLate = !isCancelled && isFlightIncompleteAndLate(flight);
               const hasMvt = isMvtCompleteForCard(flight);
               const hasHitos = isHitosCompleteForCard(flight);
@@ -981,6 +1005,7 @@ function App() {
                         </div>
                       </div>
 
+                      {!hidePaxOnCard ? (
                       <div className="flex flex-col items-end shrink-0">
                         <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground dark:text-slate-400 mb-1">Pax</span>
                         <span className="font-bold text-lg text-primary dark:text-white flex items-center gap-1.5">
@@ -988,6 +1013,7 @@ function App() {
                           {paxExcess > 0 && <span className="text-red-700 dark:text-red-300 font-black text-[11px] bg-red-100 dark:bg-red-950/80 px-2 py-0.5 rounded-md shadow-sm">(+{paxExcess})</span>}
                         </span>
                       </div>
+                      ) : null}
                     </div>
 
                     {diferidoTxt ? (
@@ -1008,19 +1034,21 @@ function App() {
 
                     {hasMvt && (
                       <div className="mt-2 pt-2 border-t border-black/10 dark:border-white/10 w-full space-y-2">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-2 gap-y-2 w-full">
+                        <div className={`grid gap-x-2 gap-y-2 w-full ${hidePaxOnCard ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
                           <div className="flex flex-col items-start min-w-0">
                             <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">ATD</span>
                             <span className="font-bold text-primary dark:text-blue-300 tabular-nums">
                               {formatMinutesToHHMM(parseTimeToMinutes(flight.mvtData?.atd))}
                             </span>
                           </div>
+                          {!hidePaxOnCard ? (
                           <div className="flex flex-col items-start sm:items-center min-w-0">
                             <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">PAX (MVT)</span>
                             <span className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">
                               {flight.mvtData?.paxActual?.trim() || flight.pax || "—"}
                             </span>
                           </div>
+                          ) : null}
                           <div className="flex flex-col items-center text-center min-w-0">
                             <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">
                               SSEE

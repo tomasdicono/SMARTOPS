@@ -184,6 +184,7 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                         <option value="SC">SC (Supervisor de Carga)</option>
                                         <option value="CREW">CREW</option>
                                         <option value="AJS">AJS (Aeropuertos JetSMART)</option>
+                                        <option value="LIMPIEZA">LIMPIEZA (tablero filtrado, sin PAX)</option>
                                     </select>
                                 </div>
 
@@ -232,6 +233,7 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                                             u.role === 'HCC' ? 'bg-cyan-900/50 text-cyan-300 border border-cyan-700/50' :
                                                                 u.role === 'SC' ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50' :
                                                                     u.role === 'AJS' ? 'bg-blue-900/50 text-blue-300 border border-blue-700/50' :
+                                                                        u.role === 'LIMPIEZA' ? 'bg-violet-900/50 text-violet-300 border border-violet-700/50' :
                                                                         'bg-slate-800 text-slate-300 border border-slate-700'
                                                             }`}>
                                                             {u.role}
