@@ -39,12 +39,21 @@ export function Login({ onLoginSuccess, onOpenGantt }: LoginProps) {
                 setError("Usuario no encontrado en la base de datos interna. Contacte a un administrador.");
                 auth.signOut();
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Login error:", err);
-            if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
+            const code =
+                err && typeof err === "object" && "code" in err
+                    ? String((err as { code?: string }).code)
+                    : "";
+            const msg = err instanceof Error ? err.message : String(err ?? "");
+            if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
                 setError("Correo o contraseña incorrectos.");
-            } else if (err.code === "auth/too-many-requests") {
+            } else if (code === "auth/too-many-requests") {
                 setError("Demasiados intentos. Intente más tarde.");
+            } else if (msg.includes("permission") || msg.includes("PERMISSION_DENIED")) {
+                setError(
+                    "Sin permiso para leer tu perfil en Firebase. Contactá a un administrador o revisá las reglas de la base (users/{uid})."
+                );
             } else {
                 setError("Ocurrió un error al iniciar sesión.");
             }

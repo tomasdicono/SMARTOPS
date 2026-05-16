@@ -131,27 +131,42 @@ function App() {
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userRef = ref(db, `users/${user.uid}`);
-        const snapshot = await get(userRef);
-        if (snapshot.exists()) {
-          const raw = snapshot.val() as User;
-          setCurrentUser({ ...raw, role: normalizeUserRole(raw.role) });
+      try {
+        if (user) {
+          const userRef = ref(db, `users/${user.uid}`);
+          const snapshot = await get(userRef);
+          if (snapshot.exists()) {
+            const raw = snapshot.val() as User;
+            setCurrentUser({ ...raw, role: normalizeUserRole(raw.role) });
+          } else {
+            setCurrentUser(null);
+            await signOut(auth);
+          }
         } else {
           setCurrentUser(null);
-          await signOut(auth);
         }
-      } else {
+      } catch (err) {
+        console.error("Error al cargar perfil de usuario:", err);
         setCurrentUser(null);
+        try {
+          await signOut(auth);
+        } catch {
+          /* sesión ya cerrada */
+        }
+      } finally {
+        setLoadingAuth(false);
       }
-      setLoadingAuth(false);
     });
 
     return () => unsubscribeAuth();
   }, []);
 
-  // Live Cloud Synchronization via Firebase Realtime DB
+  // Live Cloud Synchronization via Firebase Realtime DB (solo con sesión válida)
   useEffect(() => {
+    if (!currentUser) {
+      setFlights([]);
+      return;
+    }
     const flightsRef = ref(db, 'flights');
     const unsubscribe = onValue(flightsRef, (snapshot) => {
       const data = snapshot.val();
@@ -175,10 +190,10 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
-    if (!selectedDate) {
+    if (!currentUser || !selectedDate) {
       setRouteAfectaciones([]);
       return;
     }
@@ -197,9 +212,13 @@ function App() {
       setRouteAfectaciones(list);
     });
     return () => unsub();
-  }, [selectedDate]);
+  }, [selectedDate, currentUser]);
 
   useEffect(() => {
+    if (!currentUser) {
+      setPernocteData({});
+      return;
+    }
     const pernocteRef = ref(db, "pernocte");
     const unsub = onValue(pernocteRef, (snapshot) => {
       const v = snapshot.val();
@@ -218,9 +237,13 @@ function App() {
       setPernocteData(out);
     });
     return () => unsub();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
+    if (!currentUser) {
+      setDiferidosMap({});
+      return;
+    }
     const dRef = ref(db, "diferidos");
     const unsub = onValue(dRef, (snapshot) => {
       const v = snapshot.val();
@@ -235,7 +258,7 @@ function App() {
       setDiferidosMap(out);
     });
     return () => unsub();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!selectedDate) {
