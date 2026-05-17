@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../lib/firebase";
-import { ref, get } from "firebase/database";
-import { normalizeUserRole, type User } from "../types";
+import { auth } from "../lib/firebase";
+import type { User } from "../types";
+import { loadUserProfile } from "../lib/loadUserProfile";
 import { PlaneTakeoff, Loader2, AlertCircle, Calculator } from "lucide-react";
 
 interface LoginProps {
@@ -27,13 +27,11 @@ export function Login({ onLoginSuccess, onOpenGantt }: LoginProps) {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const firebaseUser = userCredential.user;
 
-            // 2. Fetch User Profile & Role from Realtime DB
-            const userRef = ref(db, `users/${firebaseUser.uid}`);
-            const snapshot = await get(userRef);
+            // 2. Perfil y rol en Realtime DB (users/{uid})
+            const userData = await loadUserProfile(firebaseUser.uid);
 
-            if (snapshot.exists()) {
-                const userData = snapshot.val() as User;
-                onLoginSuccess({ ...userData, role: normalizeUserRole(userData.role) });
+            if (userData) {
+                onLoginSuccess(userData);
             } else {
                 // If user doesn't exist in our DB, we give them a default read-only or sign out
                 setError("Usuario no encontrado en la base de datos interna. Contacte a un administrador.");

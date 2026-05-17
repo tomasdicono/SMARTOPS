@@ -24,6 +24,11 @@ export function isAdminOrHccDesk(role: UserRole): boolean {
     return role === "ADMIN" || isHccDeskRole(role);
 }
 
+/** Supervisor de Carga — tablero de vuelos + herramientas útiles. */
+export function isScRole(role: UserRole): boolean {
+    return role === "SC";
+}
+
 export interface User {
     id: string; // auth uid
     email: string;

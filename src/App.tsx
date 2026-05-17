@@ -4,6 +4,7 @@ import {
   isHccDeskRole,
   isAdminOrHccDesk,
   isLimpiezaRole,
+  isScRole,
   type Flight,
   type User,
   type HitosData,
@@ -28,11 +29,12 @@ import {
 } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen } from "lucide-react";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
-import { ref, onValue, set, get, push, remove } from "firebase/database";
+import { ref, onValue, set, push, remove } from "firebase/database";
+import { loadUserProfile } from "./lib/loadUserProfile";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
 import { UserManagement } from "./components/UserManagement";
@@ -43,6 +45,7 @@ import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
 import { DiferidosView } from "./components/DiferidosView";
+import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import {
   computePernocteRows,
   coercePernocteRow,
@@ -65,7 +68,9 @@ import { coerceDiferido, getDiferidoTextForReg, normalizeRegDiferido } from "./l
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [mainTab, setMainTab] = useState<"tablero" | "control" | "reporte" | "pernocte" | "diferidos">("tablero");
+  const [mainTab, setMainTab] = useState<
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "documentos"
+  >("tablero");
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
@@ -133,11 +138,9 @@ function App() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       try {
         if (user) {
-          const userRef = ref(db, `users/${user.uid}`);
-          const snapshot = await get(userRef);
-          if (snapshot.exists()) {
-            const raw = snapshot.val() as User;
-            setCurrentUser({ ...raw, role: normalizeUserRole(raw.role) });
+          const profile = await loadUserProfile(user.uid);
+          if (profile) {
+            setCurrentUser(profile);
           } else {
             setCurrentUser(null);
             await signOut(auth);
@@ -660,6 +663,34 @@ function App() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-4 sm:px-6">
+        {isScRole(userRole) && (
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setMainTab("tablero")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "tablero"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Vuelos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("documentos")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "documentos"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <FolderOpen className="w-4 h-4 shrink-0" />
+              Herramientas útiles
+            </button>
+          </div>
+        )}
+
         {isHccDeskRole(userRole) && (
           <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
             <button
@@ -727,7 +758,9 @@ function App() {
 
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-black text-secondary flex items-center gap-3">
-            {mainTab === "diferidos" && isHccDeskRole(userRole) ? (
+            {mainTab === "documentos" && isScRole(userRole) ? (
+              <>Herramientas útiles</>
+            ) : mainTab === "diferidos" && isHccDeskRole(userRole) ? (
               <>Diferidos</>
             ) : mainTab === "control" && isHccDeskRole(userRole) ? (
               <>Control operacional</>
@@ -746,7 +779,9 @@ function App() {
           </h2>
         </div>
 
-        {mainTab === "diferidos" && isHccDeskRole(userRole) ? (
+        {mainTab === "documentos" && isScRole(userRole) ? (
+          <DocumentosUtilesView />
+        ) : mainTab === "diferidos" && isHccDeskRole(userRole) ? (
           <DiferidosView diferidos={diferidosMap} onSave={handleSaveDiferido} onRemove={handleRemoveDiferido} />
         ) : mainTab === "control" && isHccDeskRole(userRole) ? (
           <ControlView flights={flights} selectedDate={selectedDate} routeAfectaciones={routeAfectaciones} />

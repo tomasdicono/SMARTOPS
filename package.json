@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate:iata-icao": "node scripts/generateIataIcao.mjs"
+    "generate:iata-icao": "node scripts/generateIataIcao.mjs",
+    "firebase:deploy-rules": "firebase deploy --only database --project smartops-c22de"
   },
   "dependencies": {
     "@lucide/lab": "^0.1.2",
