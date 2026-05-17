@@ -66,6 +66,7 @@ import {
 } from "./lib/gestionesTableParse";
 import { coerceDiferido, getDiferidoTextForReg, normalizeRegDiferido } from "./lib/diferidosHelpers";
 import { removeDuplicateFlights } from "./lib/duplicateFlights";
+import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -996,6 +997,8 @@ function App() {
               const acInfo = getAircraftInfo(flight.reg);
               const paxExcess = acInfo ? paxNum - acInfo.capacity : 0;
               const diferidoTxt = getDiferidoTextForReg(diferidosMap, flight.reg);
+              const connectionBagsInLoad =
+                hasMvt && mvtLoadIndicatesConnectionBags(flight.mvtData);
 
               const canRescheduleFlight = isHccDeskRole(userRole) && !isCancelled;
               const canCancelFlight = isAdminOrHccDesk(userRole) && !isCancelled;
@@ -1244,6 +1247,14 @@ function App() {
                             <span className="font-bold text-slate-700 dark:text-slate-300 tabular-nums">{flight.mvtData?.totalBags || "0"}</span>
                           </div>
                         </div>
+                        {connectionBagsInLoad ? (
+                          <p
+                            className="w-full rounded-md border border-amber-400/70 bg-amber-100 px-2 py-1 text-center text-[10px] font-black uppercase leading-none tracking-wide text-amber-900 shadow-sm dark:border-amber-500/50 dark:bg-amber-950/80 dark:text-amber-100"
+                            role="status"
+                          >
+                            Bags en conexión cargadas
+                          </p>
+                        ) : null}
                         <div className="flex flex-col items-stretch text-left w-full pt-1 border-t border-black/5 dark:border-white/5">
                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Demoras</span>
                           {(() => {

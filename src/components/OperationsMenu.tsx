@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Copy, CheckCircle2, X, MessageSquareText, Search, ChevronRight } from "lucide-react";
+import { Copy, CheckCircle2, X, MessageSquareText, Search, ChevronRight, Luggage, ArrowRightLeft } from "lucide-react";
 import { BroomIcon } from "./BroomIcon";
 import type { Flight } from "../types";
 import { getAirlinePrefix, formatTimeInUTC, buildMvtOutListTitle, flightNeedsCleaningWarning } from "../lib/flightHelpers";
-import { mvtLoadLineForMessage } from "../lib/a321LoadBays";
+import { mvtLoadIndicatesConnectionBags, mvtLoadLineForMessage } from "../lib/a321LoadBays";
 
 interface Props {
     flights: Flight[];
@@ -152,12 +152,23 @@ export function OperationsMenu({ flights, onClose }: Props) {
                                                     <span className="font-bold text-slate-900 text-sm sm:text-base leading-snug tracking-tight">
                                                         {listTitle}
                                                     </span>
-                                                    {flightNeedsCleaningWarning(flight) ? (
-                                                        <span className="inline-flex items-center gap-1.5 self-start rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-950">
-                                                            <BroomIcon className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                                                            Limpieza al arribo (&gt; 03:30 hs)
-                                                        </span>
-                                                    ) : null}
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {flightNeedsCleaningWarning(flight) ? (
+                                                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-950">
+                                                                <BroomIcon className="w-3.5 h-3.5 shrink-0 text-amber-600" aria-hidden />
+                                                                Limpieza al arribo (&gt; 03:30 hs)
+                                                            </span>
+                                                        ) : null}
+                                                        {mvtLoadIndicatesConnectionBags(flight.mvtData) ? (
+                                                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-sky-950">
+                                                                <span className="inline-flex shrink-0 items-center text-sky-600" aria-hidden>
+                                                                    <Luggage className="h-3.5 w-3.5" />
+                                                                    <ArrowRightLeft className="-ml-0.5 h-3 w-3" />
+                                                                </span>
+                                                                Bags en conexión cargadas
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
                                                 </div>
                                             </button>
                                             <button

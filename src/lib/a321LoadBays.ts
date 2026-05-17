@@ -103,6 +103,26 @@ export function formatLoadBaysForMessage(loadBays: Record<string, string>, famil
     return parts.join("  ");
 }
 
+/** CNX / BT en LOAD (texto libre o bodegas); substring, p. ej. `19BT` o `POS11//19CNX`. */
+const LOAD_CONNECTION_BAGS_RE = /(?:CNX|BT)/i;
+
+export function mvtLoadIndicatesConnectionBags(
+    m: Pick<NonNullable<Flight["mvtData"]>, "load" | "loadBays"> | undefined | null,
+): boolean {
+    if (!m) return false;
+    const chunks: string[] = [];
+    const textLoad = (m.load ?? "").trim();
+    if (textLoad) chunks.push(textLoad);
+    if (m.loadBays && typeof m.loadBays === "object") {
+        for (const v of Object.values(m.loadBays)) {
+            const t = String(v ?? "").trim();
+            if (t) chunks.push(t);
+        }
+    }
+    const haystack = chunks.join(" ");
+    return haystack.length > 0 && LOAD_CONNECTION_BAGS_RE.test(haystack);
+}
+
 /** Una sola línea LOAD para mensajes (bodegas o campo libre). */
 export function mvtLoadLineForMessage(
     m: Pick<NonNullable<Flight["mvtData"]>, "load" | "loadBays">,
