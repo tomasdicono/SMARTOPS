@@ -29,7 +29,7 @@ import {
 } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown } from "lucide-react";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
@@ -85,6 +85,7 @@ function App() {
   const [showGestiones, setShowGestiones] = useState(false);
   const [showManualFlight, setShowManualFlight] = useState(false);
   const [showOpsMenu, setShowOpsMenu] = useState(false);
+  const [loadToolsMenuOpen, setLoadToolsMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   /** pernocte[YYYY-MM-DD][matrícula] */
@@ -129,6 +130,18 @@ function App() {
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [openFlightActionsMenuId]);
+
+  useEffect(() => {
+    if (!loadToolsMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const el = document.querySelector("[data-load-tools-menu]");
+      if (el && !el.contains(e.target as Node)) {
+        setLoadToolsMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [loadToolsMenuOpen]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -660,49 +673,86 @@ function App() {
             )}
 
             {isAdminOrHccDesk(userRole) && (
-              <button
-                type="button"
-                onClick={() => setShowGestiones(true)}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-                title="Pegar tabla de gestiones (matrículas, ETD/ETA, etc.)"
-              >
-                <Table2 className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Gestiones</span>
-                <span className="sm:hidden">Gest.</span>
-              </button>
-            )}
-            {isAdminOrHccDesk(userRole) && (
-              <button
-                onClick={() => setShowParser(true)}
-                className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-              >
-                <ClipboardPaste className="w-4 h-4" />
-                <span>Cargar</span>
-              </button>
-            )}
-            {isHccDeskRole(userRole) && (
-              <button
-                type="button"
-                onClick={() => setShowManualFlight(true)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-                title="Cargar un vuelo completando los datos a mano"
-              >
-                <CirclePlus className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Alta manual</span>
-                <span className="sm:hidden">Manual</span>
-              </button>
-            )}
-            {isHccDeskRole(userRole) && (
-              <button
-                type="button"
-                onClick={() => void handleRemoveDuplicateFlights()}
-                className="bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-                title="Eliminar vuelos duplicados (misma fecha, número y ruta)"
-              >
-                <ListMinus className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Quitar repetidos</span>
-                <span className="sm:hidden">Repetidos</span>
-              </button>
+              <div className="relative flex-1 md:flex-none" data-load-tools-menu>
+                <button
+                  type="button"
+                  onClick={() => setLoadToolsMenuOpen((o) => !o)}
+                  aria-expanded={loadToolsMenuOpen}
+                  aria-haspopup="menu"
+                  className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide w-full md:w-auto justify-center"
+                  title="Cargar programación, gestiones y más"
+                >
+                  <ClipboardPaste className="w-4 h-4 shrink-0" />
+                  <span>Programación</span>
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 transition-transform ${loadToolsMenuOpen ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </button>
+                {loadToolsMenuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-50 mt-1.5 min-w-[14.5rem] overflow-hidden rounded-xl border border-slate-600 bg-slate-800 py-1 shadow-xl ring-1 ring-black/20"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-indigo-200 hover:bg-indigo-950/60"
+                      title="Pegar tabla de gestiones (matrículas, ETD/ETA, etc.)"
+                      onClick={() => {
+                        setLoadToolsMenuOpen(false);
+                        setShowGestiones(true);
+                      }}
+                    >
+                      <Table2 className="w-4 h-4 shrink-0" aria-hidden />
+                      Gestiones
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-cyan-200 hover:bg-cyan-950/50"
+                      onClick={() => {
+                        setLoadToolsMenuOpen(false);
+                        setShowParser(true);
+                      }}
+                    >
+                      <ClipboardPaste className="w-4 h-4 shrink-0" aria-hidden />
+                      Cargar
+                    </button>
+                    {isHccDeskRole(userRole) && (
+                      <>
+                        <div className="my-1 border-t border-slate-700" role="separator" />
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-950/50"
+                          title="Cargar un vuelo completando los datos a mano"
+                          onClick={() => {
+                            setLoadToolsMenuOpen(false);
+                            setShowManualFlight(true);
+                          }}
+                        >
+                          <CirclePlus className="w-4 h-4 shrink-0" aria-hidden />
+                          Alta manual
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-rose-200 hover:bg-rose-950/50"
+                          title="Eliminar vuelos duplicados (misma fecha, número y ruta)"
+                          onClick={() => {
+                            setLoadToolsMenuOpen(false);
+                            void handleRemoveDuplicateFlights();
+                          }}
+                        >
+                          <ListMinus className="w-4 h-4 shrink-0" aria-hidden />
+                          Quitar repetidos
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -873,7 +923,7 @@ function App() {
             <p className="text-md max-w-md mx-auto">
               {isLimpiezaRole(userRole)
                 ? "Solo se listan vuelos que requieren limpieza por tiempo de bloque o el último JES de cada matrícula (pernocte)."
-                : 'Usa el botón "Cargar" en la parte superior para pegar la programación de la jornada.'}
+                : 'Usa el menú "Programación" en la parte superior para pegar la programación de la jornada.'}
             </p>
             {isAdminOrHccDesk(userRole) && (
             <button
