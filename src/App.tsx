@@ -532,12 +532,21 @@ function App() {
 
   /** Tablero: fecha + buscador de tarjetas (independiente del buscador del modal MVT) */
   const filteredFlights = flightsForSelectedDate.filter((f) => {
-    const sq = searchQuery.toUpperCase();
+    const sq = searchQuery.trim().toUpperCase();
     if (!sq) return true;
+    const sqNorm = sq.replace(/[-\s]/g, "");
     const fltU = String(f.flt ?? "").toUpperCase();
     const depU = String(f.dep ?? "").toUpperCase();
     const arrU = String(f.arr ?? "").toUpperCase();
-    return fltU.includes(sq) || depU.includes(sq) || arrU.includes(sq);
+    const regU = String(f.reg ?? "").toUpperCase();
+    const regNorm = regU.replace(/[-\s]/g, "");
+    return (
+      fltU.includes(sq) ||
+      depU.includes(sq) ||
+      arrU.includes(sq) ||
+      regU.includes(sq) ||
+      (sqNorm.length > 0 && regNorm.includes(sqNorm))
+    );
   });
 
   /** Rol Limpieza: solo vuelos con bloque largo (&gt;3:30) o último JES del día (pernocte). */
@@ -596,7 +605,7 @@ function App() {
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Buscar vuelo, AEP..."
+              placeholder="Buscar vuelo, matrícula, AEP..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-transparent text-sm font-semibold text-white focus:outline-none placeholder:text-slate-500 w-full md:w-32 focus:w-full md:focus:w-48 transition-all min-w-0"
