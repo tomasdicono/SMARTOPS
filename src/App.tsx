@@ -29,7 +29,7 @@ import {
 } from "./lib/flightHelpers";
 import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus } from "lucide-react";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
@@ -65,6 +65,7 @@ import {
     type ParseGestionesResult,
 } from "./lib/gestionesTableParse";
 import { coerceDiferido, getDiferidoTextForReg, normalizeRegDiferido } from "./lib/diferidosHelpers";
+import { removeDuplicateFlights } from "./lib/duplicateFlights";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -285,6 +286,30 @@ function App() {
     const updatedFlights = [...flights, ...normalized];
     set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
     setShowParser(false);
+  };
+
+  const handleRemoveDuplicateFlights = async () => {
+    const { kept, removedIds, removedCount, duplicateGroups } = removeDuplicateFlights(flights);
+    if (removedCount === 0) {
+      alert("No se encontraron vuelos repetidos.");
+      return;
+    }
+    const removedSet = new Set(removedIds);
+    const msg =
+      duplicateGroups === 1
+        ? `Hay 1 grupo de vuelos repetidos (${removedCount} registro${removedCount === 1 ? "" : "s"} de más). Se conservará el que tenga más datos (MVT/Hitos). ¿Eliminar los duplicados?`
+        : `Hay ${duplicateGroups} grupos de vuelos repetidos (${removedCount} registros de más). Se conservará el más completo de cada grupo. ¿Eliminar los duplicados?`;
+    if (!window.confirm(msg)) return;
+    try {
+      await set(ref(db, "flights"), forFirebaseDb(kept));
+      setSelectedFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
+      setCancelModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
+      setRescheduleModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
+      setRouteModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
+      alert(`Se eliminaron ${removedCount} vuelo${removedCount === 1 ? "" : "s"} repetido${removedCount === 1 ? "" : "s"}.`);
+    } catch {
+      alert("No se pudo guardar. Revisá la conexión e intentá de nuevo.");
+    }
   };
 
   const handleManualFlightAdd = (flight: Flight) => {
@@ -656,6 +681,18 @@ function App() {
                 <CirclePlus className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Alta manual</span>
                 <span className="sm:hidden">Manual</span>
+              </button>
+            )}
+            {isHccDeskRole(userRole) && (
+              <button
+                type="button"
+                onClick={() => void handleRemoveDuplicateFlights()}
+                className="bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-500/40 px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+                title="Eliminar vuelos duplicados (misma fecha, número y ruta)"
+              >
+                <ListMinus className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Quitar repetidos</span>
+                <span className="sm:hidden">Repetidos</span>
               </button>
             )}
           </div>

@@ -108,6 +108,8 @@ export function mvtLoadLineForMessage(
     m: Pick<NonNullable<Flight["mvtData"]>, "load" | "loadBays">,
     reg?: string | null,
 ): string {
+    const textLoad = (m.load ?? "").trim();
+    if (textLoad) return textLoad;
     if (m.loadBays && typeof m.loadBays === "object") {
         const merged = normalizeLoadBays(m.loadBays);
         if (merged) {
@@ -116,5 +118,5 @@ export function mvtLoadLineForMessage(
             if (formatted) return formatted;
         }
     }
-    return (m.load ?? "").trim();
+    return "";
 }

@@ -27,17 +27,10 @@ export function emptyMvtData(): NonNullable<Flight["mvtData"]> {
 export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Flight["mvtData"]> {
     const z = (v: string | undefined) => v ?? "";
     if (!raw || typeof raw !== "object") return emptyMvtData();
-    const rawLoadBays = raw.loadBays;
-    const userSentLoadBays =
-        rawLoadBays != null && typeof rawLoadBays === "object" && !Array.isArray(rawLoadBays);
-    const baysNorm = normalizeLoadBays(rawLoadBays);
-    const loadFromBays =
-        baysNorm != null ? formatLoadBaysForMessage(baysNorm, inferLoadBaysFamily(baysNorm)) : "";
-    let loadOut: string;
-    if (baysNorm) {
-        loadOut = loadFromBays;
-    } else {
-        loadOut = userSentLoadBays ? "" : z(raw.load);
+    const baysNorm = normalizeLoadBays(raw.loadBays);
+    let loadOut = z(raw.load);
+    if (!loadOut.trim() && baysNorm) {
+        loadOut = formatLoadBaysForMessage(baysNorm, inferLoadBaysFamily(baysNorm));
     }
     const out: NonNullable<Flight["mvtData"]> = {
         atd: z(raw.atd),

@@ -1,11 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import type { Flight } from "../types";
-import { Plus, Trash2, Calculator, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Calculator, CheckCircle2 } from "lucide-react";
 import { parseTimeToMinutes, formatMinutesToHHMM } from "../lib/mvtTime";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
-import { loadBaysFamilyFromReg, mergeLoadBays, sumLoadBaysForFamily } from "../lib/a321LoadBays";
-import { MvtLoadBayDiagram } from "./MvtLoadBayDiagram";
 
 interface Props {
     flight: Flight;
@@ -13,7 +11,6 @@ interface Props {
     onSave: (mvtData: Flight["mvtData"]) => void;
 }
 
-// Componentes extraídos para no perder foco
 const NumberInput = ({ label, value, onChange, placeholder = "" }: { label: string; value: string; onChange: (val: string) => void; placeholder?: string }) => (
     <div className="flex flex-col gap-1.5 focus-within:text-blue-600 transition-colors">
         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">{label}</label>
@@ -80,7 +77,6 @@ const TextInput = ({ label, value, onChange, placeholder = "" }: { label: string
 export function MVTForm({ flight, readOnly, onSave }: Props) {
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => getInitialMvtFormData(flight));
 
-    /** Borrador solo en el navegador (no sube a servidor hasta Enviar MVT) */
     useEffect(() => {
         if (readOnly) return;
         const t = window.setTimeout(() => {
@@ -123,46 +119,8 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
         }));
     };
 
-    const loadBayFamily = loadBaysFamilyFromReg(flight.reg);
-
-    const loadBaysMerged = useMemo(() => {
-        if (!loadBayFamily) return {} as Record<string, string>;
-        return mergeLoadBays(data.loadBays, loadBayFamily);
-    }, [data.loadBays, loadBayFamily]);
-
-    const totalBagsNum = useMemo(() => {
-        const n = parseInt(String(data.totalBags ?? "").replace(/\D/g, ""), 10);
-        return Number.isNaN(n) ? 0 : n;
-    }, [data.totalBags]);
-
-    const totalCargaNum = useMemo(() => {
-        const n = parseInt(String(data.totalCarga ?? "").replace(/\D/g, ""), 10);
-        return Number.isNaN(n) ? 0 : n;
-    }, [data.totalCarga]);
-
-    const loadBaysSum = useMemo(() => {
-        if (!loadBayFamily) return 0;
-        return sumLoadBaysForFamily(loadBaysMerged, loadBayFamily);
-    }, [loadBayFamily, loadBaysMerged]);
-
-    /** Sin carga (kg): PCS por bodega deben sumar TOTAL BAGS. Con carga: texto libre por posición, sin esa validación. */
-    const bagsMatchTotal =
-        !loadBayFamily || totalCargaNum > 0 || loadBaysSum === totalBagsNum;
-
-    const handleLoadBayChange = (code: string, value: string) => {
-        if (!loadBayFamily) return;
-        const stored = totalCargaNum > 0 ? value.trim() : value.replace(/[^0-9]/g, "");
-        setData((prev) => ({
-            ...prev,
-            loadBays: { ...mergeLoadBays(prev.loadBays, loadBayFamily), [code]: stored },
-        }));
-    };
-
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
-        if (loadBayFamily && totalCargaNum === 0 && loadBaysSum !== totalBagsNum) {
-            return;
-        }
         onSave(data);
         clearMvtDraft(flight.id);
     };
@@ -171,7 +129,6 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
         <form onSubmit={handleSave}>
           <fieldset disabled={readOnly} className="space-y-8 border-none p-0 m-0 pb-8">
 
-            {/* Horarios Básicos */}
             <section className="bg-slate-50/50 p-5 rounded-xl border border-border">
                 <h3
                     className={`text-sm font-bold text-foreground uppercase tracking-wider flex flex-wrap items-center gap-2 ${flight.etd?.trim() ? "mb-2" : "mb-4"}`}
@@ -196,7 +153,6 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                 </div>
             </section>
 
-            {/* Demoras Conditionales */}
             {isDelayed && (
                 <section className={`bg-red-50 p-5 rounded-xl border ${remDelay <= 0 ? 'border-emerald-500/50' : 'border-red-200'} animate-in fade-in slide-in-from-top-4 duration-300`}>
                     <div className="flex items-center justify-between mb-4">
@@ -228,65 +184,25 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                 </section>
             )}
 
-            {/* Datos Pasajeros y Carga */}
             <section className="p-5 rounded-xl border border-border">
                 <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider">Pasajeros & Carga</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <NumberInput label="PAX" value={data.paxActual} onChange={(v) => handleChange("paxActual", v)} />
                     <NumberInput label="INF" value={data.inf} onChange={(v) => handleChange("inf", v)} />
                     <NumberInput label="TOTAL BAGS (PCS)" value={data.totalBags} onChange={(v) => handleChange("totalBags", v)} />
                     <NumberInput label="TOTAL CARGA (KG)" value={data.totalCarga} onChange={(v) => handleChange("totalCarga", v)} />
                 </div>
-                {loadBayFamily && totalCargaNum === 0 ? (
-                    <div
-                        className={`mb-3 flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-xs sm:text-sm ${
-                            bagsMatchTotal
-                                ? "border-emerald-200 bg-emerald-50/70 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/35 dark:text-emerald-100"
-                                : "border-amber-400 bg-amber-50 text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100"
-                        }`}
-                        role="status"
-                    >
-                        <div className="flex items-center gap-2 font-semibold">
-                            {bagsMatchTotal ? (
-                                <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-                            ) : (
-                                <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
-                            )}
-                            <span>
-                                Suma PCS en bodegas: <strong className="tabular-nums">{loadBaysSum}</strong>
-                                {" · "}
-                                TOTAL BAGS: <strong className="tabular-nums">{totalBagsNum}</strong>
-                            </span>
-                        </div>
-                        {!bagsMatchTotal ? (
-                            <p className="pl-6 text-[11px] font-medium leading-snug opacity-95">
-                                Ambos valores deben coincidir (distribuí los {totalBagsNum || "…"} bultos entre las posiciones).
-                            </p>
-                        ) : null}
-                    </div>
-                ) : null}
-                <div className="grid grid-cols-1 select-none md:grid-cols-2 gap-4">
-                    {loadBayFamily ? (
-                        <div className="md:col-span-2 space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                LOAD por bodega ({loadBayFamily})
-                            </p>
-                            <MvtLoadBayDiagram
-                                family={loadBayFamily}
-                                values={loadBaysMerged}
-                                onBayChange={handleLoadBayChange}
-                                numericOnly={totalCargaNum === 0}
-                                disabled={readOnly}
-                            />
-                        </div>
-                    ) : (
-                        <TextInput label="LOAD" value={data.load} onChange={(v) => handleChange("load", v)} />
-                    )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <TextInput
+                        label="LOAD"
+                        value={data.load}
+                        onChange={(v) => handleChange("load", v)}
+                        placeholder="Texto libre (distribución de carga, posiciones, etc.)"
+                    />
                     <NumberInput label="FOB (KG)" value={data.fob} onChange={(v) => handleChange("fob", v)} />
                 </div>
             </section>
 
-            {/* SSEE */}
             <section className="p-5 rounded-xl border border-border bg-slate-50/50">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Servicios Especiales (SSEE)</h3>
@@ -334,7 +250,6 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                 )}
             </section>
 
-            {/* Info Extra */}
             <section className="p-5 rounded-xl border border-border">
                 <div className="space-y-4">
                     <div className="flex flex-col gap-1.5">
@@ -353,17 +268,7 @@ export function MVTForm({ flight, readOnly, onSave }: Props) {
                 <div className="sticky bottom-4 z-10 flex justify-end">
                     <button
                         type="submit"
-                        disabled={loadBayFamily != null && totalCargaNum === 0 && !bagsMatchTotal}
-                        title={
-                            loadBayFamily != null && totalCargaNum === 0 && !bagsMatchTotal
-                                ? "La suma de PCS por bodega debe coincidir con TOTAL BAGS"
-                                : undefined
-                        }
-                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${
-                            loadBayFamily != null && totalCargaNum === 0 && !bagsMatchTotal
-                                ? "cursor-not-allowed opacity-50 bg-muted text-muted-foreground"
-                                : `hover:shadow-xl hover:-translate-y-0.5 ${flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`
-                        }`}
+                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 hover:shadow-xl hover:-translate-y-0.5 ${flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}
                     >
                         {flight.mvtData?.atd ? <CheckCircle2 className="w-5 h-5" /> : null}
                         {flight.mvtData?.atd ? "Actualizar MVT" : "Enviar MVT"}
