@@ -4,6 +4,7 @@ import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { getHitosDepartureTime } from "../lib/flightHelpers";
+import { HITO_MILESTONE_HINTS } from "../lib/hitosReference";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 import { Save, AlertCircle, Clock, Zap } from "lucide-react";
 
@@ -283,6 +284,11 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
                                 <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:border-primary/30 transition-colors">
                                     <div className="flex-1">
                                         <div className="font-bold text-slate-800">{m.name}</div>
+                                        {HITO_MILESTONE_HINTS[m.name] ? (
+                                            <p className="text-[11px] text-slate-500 font-medium mt-0.5 normal-case">
+                                                {HITO_MILESTONE_HINTS[m.name]}
+                                            </p>
+                                        ) : null}
                                         <div className="text-xs text-muted-foreground mt-0.5 font-bold">Límite: T-{m.offsetMinutes}m</div>
                                     </div>
 

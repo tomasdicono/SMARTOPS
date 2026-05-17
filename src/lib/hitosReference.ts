@@ -13,6 +13,12 @@ export const CREW_LABEL_TO_GANTT_MILESTONE: Record<string, string> = {
     "Cierre puertas": "Cierre de puerta principal",
 };
 
+/** Texto aclaratorio bajo el nombre del hito en la pestaña Hitos. */
+export const HITO_MILESTONE_HINTS: Record<string, string> = {
+    "Inicio Embarque": "Primer pax sube al avión",
+    "Fin embarque": "Último pax sube al avión",
+};
+
 /** Claves reservadas en `hitosCrewData` para carta y ATA elegidos por tripulación */
 export const CREW_STORAGE_KEYS = {
     gantt: "__crewGanttChartName",
