@@ -102,7 +102,7 @@ export function isHitosCompleteForCard(f: Flight): boolean {
 
 /** Roles que pueden descargar el informe HTML de resumen de hitos (operacionales y tripulación). */
 export function canDownloadHitosSummaryRole(role: UserRole): boolean {
-    return role === "HCC" || role === "AJS" || role === "ADMIN";
+    return role === "HCC" || role === "AJS" || role === "ADMIN" || role === "SC";
 }
 
 /**
