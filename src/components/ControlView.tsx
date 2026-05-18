@@ -27,6 +27,7 @@ import {
 } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
+import { ControlFuelTab } from "./ControlFuelTab";
 import {
     BarChart3,
     GanttChartSquare,
@@ -48,6 +49,7 @@ import {
     Zap,
     Building2,
     MapPin,
+    Flame,
 } from "lucide-react";
 
 interface Props {
@@ -71,8 +73,7 @@ function formatHm(minutes: number): string {
     return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
-type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia";
-
+type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel";
 const FLIGHT_CARD_STYLES = [
     "from-cyan-500 via-cyan-600 to-teal-600 shadow-cyan-900/25",
     "from-sky-500 via-blue-600 to-indigo-600 shadow-indigo-900/25",
@@ -93,7 +94,6 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const [timelineWindowStartH, setTimelineWindowStartH] = useState(0);
     /** Filtro aeropuerto (salida o llegada) en pestaña OBVK */
     const [obvkAirport, setObvkAirport] = useState("");
-
     useEffect(() => {
         setStatsDateFrom(selectedDate);
         setStatsDateTo(selectedDate);
@@ -297,6 +297,18 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                     >
                         <BarChart3 className="w-4 h-4 shrink-0" />
                         Estadísticas
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSubTab("fuel")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                            subTab === "fuel"
+                                ? "bg-orange-600 text-white shadow-md"
+                                : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
+                        }`}
+                    >
+                        <Flame className="w-4 h-4 shrink-0" />
+                        Fuel
                     </button>
                     <button
                         type="button"
@@ -1129,6 +1141,8 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                 </div>
                 </div>
                 )}
+
+                {subTab === "fuel" && <ControlFuelTab flights={flights} selectedDate={selectedDate} />}
 
             </div>
         </div>

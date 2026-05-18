@@ -4,6 +4,7 @@ import { getAirlinePrefix } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
 import { parseTimeToMinutes } from "./mvtTime";
+import { getFuelSupplier, type FuelSupplier } from "./fuelSupplier";
 
 /** Convierte fecha de vuelo (DD-MM-YYYY o YYYY-MM-DD) a ISO YYYY-MM-DD */
 export function flightDateToIso(f: Flight): string {
@@ -52,6 +53,71 @@ export function getBags(f: Flight): number {
 export function getTotalCargaKg(f: Flight): number {
     const raw = String(f.mvtData?.totalCarga ?? "").replace(/\D/g, "");
     return parseInt(raw || "0", 10) || 0;
+}
+
+/** FOB (kg) del MVT; null si no hay valor numérico útil. */
+export function getFobKg(f: Flight): number | null {
+    const raw = String(f.mvtData?.fob ?? "").trim();
+    if (!raw) return null;
+    const n = parseInt(raw.replace(/\D/g, ""), 10);
+    return n > 0 ? n : null;
+}
+
+export interface AverageFobByDestinationRow {
+    destination: string;
+    avgKg: number;
+    flightCount: number;
+    totalKg: number;
+    /** Proveedor según escala de salida; null si hay más de uno en el mismo destino. */
+    supplier: FuelSupplier | null;
+    supplierMixed: boolean;
+}
+
+/** Promedio de FOB (kg) por aeropuerto de destino (ARR) en el conjunto filtrado. */
+export function computeAverageFobByDestination(flights: Flight[]): AverageFobByDestinationRow[] {
+    const map = new Map<string, { sum: number; count: number; suppliers: Set<FuelSupplier> }>();
+    for (const f of flights) {
+        const kg = getFobKg(f);
+        if (kg == null) continue;
+        const dest = String(f.arr ?? "").trim().toUpperCase() || "—";
+        const prev = map.get(dest) ?? { sum: 0, count: 0, suppliers: new Set<FuelSupplier>() };
+        prev.sum += kg;
+        prev.count += 1;
+        prev.suppliers.add(getFuelSupplier(f.dep, f.arr, f.std));
+        map.set(dest, prev);
+    }
+    return [...map.entries()]
+        .map(([destination, { sum, count, suppliers }]) => {
+            const supplierMixed = suppliers.size > 1;
+            const supplier = suppliers.size === 1 ? [...suppliers][0]! : null;
+            return {
+                destination,
+                avgKg: sum / count,
+                flightCount: count,
+                totalKg: sum,
+                supplier,
+                supplierMixed,
+            };
+        })
+        .sort((a, b) => b.flightCount - a.flightCount || a.destination.localeCompare(b.destination));
+}
+
+/** Suma o resta días a una fecha ISO YYYY-MM-DD. */
+export function addDaysIso(iso: string, days: number): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    const d = new Date(`${iso}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return iso;
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+}
+
+/** Primer día del mes de una fecha ISO. */
+export function startOfMonthIso(iso: string): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    return `${iso.slice(0, 7)}-01`;
 }
 
 export function isA321Model(model: string): boolean {
