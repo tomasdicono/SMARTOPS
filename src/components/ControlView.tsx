@@ -882,7 +882,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                 {subTab === "stats" && (
                 <div className="animate-in fade-in duration-200">
                 <div className="p-5 space-y-6">
-                    <div className="flex flex-nowrap items-end gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                    <div className="flex flex-wrap items-end gap-3 pb-1">
                         <div className="shrink-0">
                             <label className="block text-xs font-black uppercase text-slate-500 mb-1">Desde</label>
                             <input

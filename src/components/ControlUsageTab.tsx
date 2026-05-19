@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { Flight } from "../types";
 import {
     computeUsageControlByBase,
-    CONTROL_OPERATIONAL_HUBS,
     countDaysInclusiveIso,
     endOfMonthIso,
     normalizeIsoDateRange,
@@ -34,9 +33,9 @@ function UsageCell({ count, pct }: { count: number; pct: number | null }) {
     );
 }
 
-function UsageTableRow({ row, highlight }: { row: UsageControlBaseRow; highlight?: boolean }) {
+function UsageTableRow({ row, isTotal }: { row: UsageControlBaseRow; isTotal?: boolean }) {
     return (
-        <tr className={highlight ? "bg-teal-50/80" : "hover:bg-slate-50/80"}>
+        <tr className={isTotal ? "bg-teal-50/80 font-semibold" : "hover:bg-slate-50/80"}>
             <td className="px-3 py-2 font-black text-slate-900 whitespace-nowrap">{row.base}</td>
             <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-800">{row.totalFlights}</td>
             <td className="px-3 py-2 text-right tabular-nums">
@@ -60,8 +59,6 @@ export function ControlUsageTab({
     const [usageMonth, setUsageMonth] = useState(() =>
         selectedDate && /^\d{4}-\d{2}/.test(selectedDate) ? selectedDate.slice(0, 7) : "",
     );
-    const [hubFilter, setHubFilter] = useState<string>("");
-
     useEffect(() => {
         if (selectedDate && /^\d{4}-\d{2}/.test(selectedDate)) {
             setUsageMonth(selectedDate.slice(0, 7));
@@ -83,11 +80,6 @@ export function ControlUsageTab({
         [flights, dateFrom, dateTo, airportFilter, selectedAirports],
     );
 
-    const visibleRows = useMemo(() => {
-        if (!hubFilter) return usageData.rows;
-        return usageData.rows.filter((r) => r.base === hubFilter);
-    }, [usageData.rows, hubFilter]);
-
     const periodLabel = useMemo(() => {
         const { lo, hi } = normalizeIsoDateRange(dateFrom, dateTo);
         if (!lo || !hi) return "";
@@ -96,15 +88,10 @@ export function ControlUsageTab({
         return d0.toLocaleDateString("es-AR", { month: "long", year: "numeric" }) + ` · ${days} días`;
     }, [dateFrom, dateTo]);
 
-    const hubOptions = useMemo(
-        () => [...CONTROL_OPERATIONAL_HUBS, ...(usageData.rows.some((r) => r.base === "Otras escalas") ? ["Otras escalas"] : [])],
-        [usageData.rows],
-    );
-
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-5">
-                <div className="flex flex-nowrap items-end gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                <div className="flex flex-wrap items-end gap-3 pb-1">
                     <div className="shrink-0">
                         <label className="block text-xs font-black uppercase text-slate-500 mb-1">Mes</label>
                         <input
@@ -113,21 +100,6 @@ export function ControlUsageTab({
                             onChange={(e) => setUsageMonth(e.target.value)}
                             className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
                         />
-                    </div>
-                    <div className="shrink-0 min-w-[11rem]">
-                        <label className="block text-xs font-black uppercase text-slate-500 mb-1">Escala</label>
-                        <select
-                            value={hubFilter}
-                            onChange={(e) => setHubFilter(e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                        >
-                            <option value="">Todas las escalas</option>
-                            {hubOptions.map((hub) => (
-                                <option key={hub} value={hub}>
-                                    {hub}
-                                </option>
-                            ))}
-                        </select>
                     </div>
                     <ControlAirportMultiSelect
                         options={airportOptions}
@@ -189,19 +161,19 @@ export function ControlUsageTab({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {visibleRows.length === 0 ? (
+                                {usageData.rows.length === 0 && usageData.totals.totalFlights === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-3 py-8 text-center text-slate-500 font-semibold">
                                             Sin vuelos en el período con los filtros elegidos.
                                         </td>
                                     </tr>
                                 ) : (
-                                    visibleRows.map((row) => (
-                                        <UsageTableRow key={row.base} row={row} highlight={hubFilter === row.base} />
+                                    usageData.rows.map((row) => (
+                                        <UsageTableRow key={row.base} row={row} />
                                     ))
                                 )}
-                                {!hubFilter && usageData.totals.totalFlights > 0 ? (
-                                    <UsageTableRow row={usageData.totals} highlight />
+                                {usageData.totals.totalFlights > 0 ? (
+                                    <UsageTableRow row={usageData.totals} isTotal />
                                 ) : null}
                             </tbody>
                         </table>
