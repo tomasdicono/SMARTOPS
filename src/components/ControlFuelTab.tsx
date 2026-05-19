@@ -8,7 +8,6 @@ import {
     filterFlightsForStatsDepartureOnly,
     normalizeIsoDateRange,
     startOfMonthIso,
-    uniqueAirportsFromFlights,
 } from "../lib/controlHelpers";
 import type { AverageFobByDestinationRow } from "../lib/controlHelpers";
 import {
@@ -24,6 +23,7 @@ import {
     type FuelSupplier,
 } from "../lib/fuelSupplier";
 import { Clock, Flame } from "lucide-react";
+import { ControlAirportMultiSelect } from "./ControlAirportMultiSelect";
 
 function resolveFuelRowSupplier(
     row: AverageFobByDestinationRow,
@@ -48,14 +48,15 @@ interface Props {
     flights: Flight[];
     /** Fecha del header (ancla para presets «Hoy», 7 días, etc.) */
     selectedDate: string;
+    selectedAirports: string[];
+    onAirportsChange: (airports: string[]) => void;
+    airportOptions: string[];
 }
 
-export function ControlFuelTab({ flights, selectedDate }: Props) {
+export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirportsChange, airportOptions }: Props) {
     const [fuelDateFrom, setFuelDateFrom] = useState(selectedDate);
     const [fuelDateTo, setFuelDateTo] = useState(selectedDate);
     const [fuelRangePreset, setFuelRangePreset] = useState<FuelRangePreset>("day");
-    const [fuelAirport, setFuelAirport] = useState("");
-
     useEffect(() => {
         setFuelDateFrom(selectedDate);
         setFuelDateTo(selectedDate);
@@ -81,15 +82,13 @@ export function ControlFuelTab({ flights, selectedDate }: Props) {
         }
     };
 
-    const airportOptions = useMemo(() => uniqueAirportsFromFlights(flights), [flights]);
-
     const fuelScopeFlights = useMemo(() => {
-        const hub = fuelAirport.trim();
-        const inRange = hub
-            ? filterFlightsForStatsDepartureOnly(flights, fuelDateFrom, fuelDateTo, hub)
-            : filterFlightsForStats(flights, fuelDateFrom, fuelDateTo, "");
+        const inRange =
+            selectedAirports.length > 0
+                ? filterFlightsForStatsDepartureOnly(flights, fuelDateFrom, fuelDateTo, selectedAirports)
+                : filterFlightsForStats(flights, fuelDateFrom, fuelDateTo, "");
         return inRange.filter((f) => !f.cancelled);
-    }, [flights, fuelDateFrom, fuelDateTo, fuelAirport]);
+    }, [flights, fuelDateFrom, fuelDateTo, selectedAirports]);
 
     const fuelByDestination = useMemo(
         () => computeAverageFobByDestination(fuelScopeFlights),
@@ -135,6 +134,9 @@ export function ControlFuelTab({ flights, selectedDate }: Props) {
         if (lo === hi) return f0;
         return `${f0} – ${f1} · ${days} día${days !== 1 ? "s" : ""}`;
     }, [fuelDateFrom, fuelDateTo]);
+
+    const fuelHubForSupplier = selectedAirports.length === 1 ? selectedAirports[0] : "";
+    const fuelAirportsLabel = selectedAirports.length > 0 ? selectedAirports.join(", ") : "";
 
     return (
         <div className="animate-in fade-in duration-200">
@@ -190,29 +192,21 @@ export function ControlFuelTab({ flights, selectedDate }: Props) {
                             className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
                         />
                     </div>
-                    <div className="shrink-0 min-w-[11rem] max-w-[14rem]">
-                        <label className="block text-xs font-black uppercase text-slate-500 mb-1">Aeropuerto</label>
-                        <select
-                            value={fuelAirport}
-                            onChange={(e) => setFuelAirport(e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                        >
-                            <option value="">Todas las escalas (salida)</option>
-                            {airportOptions.map((ap) => (
-                                <option key={ap} value={ap}>
-                                    {ap}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    <ControlAirportMultiSelect
+                        options={airportOptions}
+                        selected={selectedAirports}
+                        onChange={onAirportsChange}
+                        label="Aeropuertos"
+                        emptyHint="Todas las escalas (salida)"
+                    />
                 </div>
 
                 <p className="text-[11px] text-slate-500 max-w-2xl leading-snug">
                     Promedio de <span className="font-bold text-slate-700">FOB (kg)</span> del MVT por aeropuerto de
                     destino. Solo vuelos operativos con FOB informado en el período
-                    {fuelAirport ? " (solo vuelos con salida desde el aeropuerto elegido)" : ""}.
+                    {fuelAirportsLabel ? " (solo vuelos con salida desde el/los aeropuerto(s) elegidos)" : ""}.
                 </p>
-                {fuelRangeLabel || fuelAirport ? (
+                {fuelRangeLabel || fuelAirportsLabel ? (
                     <p className="text-xs font-semibold text-slate-600">
                         {fuelRangeLabel ? (
                             <>
@@ -220,10 +214,10 @@ export function ControlFuelTab({ flights, selectedDate }: Props) {
                                 <span className="font-black text-slate-800 tabular-nums">{fuelRangeLabel}</span>
                             </>
                         ) : null}
-                        {fuelRangeLabel && fuelAirport ? " · " : null}
-                        {fuelAirport ? (
+                        {fuelRangeLabel && fuelAirportsLabel ? " · " : null}
+                        {fuelAirportsLabel ? (
                             <>
-                                Aeropuerto: <span className="font-black text-slate-800">{fuelAirport}</span>
+                                Aeropuerto(s): <span className="font-black text-slate-800">{fuelAirportsLabel}</span>
                             </>
                         ) : null}
                     </p>
@@ -293,7 +287,7 @@ export function ControlFuelTab({ flights, selectedDate }: Props) {
                             </thead>
                             <tbody className="divide-y divide-slate-200/80">
                                 {fuelByDestination.map((row) => {
-                                    const { supplier, mixed } = resolveFuelRowSupplier(row, fuelAirport);
+                                    const { supplier, mixed } = resolveFuelRowSupplier(row, fuelHubForSupplier);
                                     const rowClass = fuelSupplierRowClass(supplier, mixed);
                                     const title = mixed
                                         ? "Varios proveedores según STD / escala de salida"
@@ -329,8 +323,8 @@ export function ControlFuelTab({ flights, selectedDate }: Props) {
                 ) : (
                     <p className="text-center text-slate-500 py-6 text-sm leading-relaxed rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
                         {fuelScopeFlights.length === 0
-                            ? fuelAirport
-                                ? "Sin vuelos con salida desde ese aeropuerto."
+                            ? fuelAirportsLabel
+                                ? "Sin vuelos con salida desde el/los aeropuerto(s) elegidos."
                                 : "Sin vuelos en el período."
                             : "Sin FOB cargado en el MVT."}
                     </p>
@@ -398,8 +392,8 @@ export function ControlFuelTab({ flights, selectedDate }: Props) {
                         ) : (
                             <p className="text-center text-slate-500 py-6 text-sm leading-relaxed rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
                                 {fuelScopeFlights.length === 0
-                                    ? fuelAirport
-                                        ? "Sin vuelos con salida desde ese aeropuerto."
+                                    ? fuelAirportsLabel
+                                        ? "Sin vuelos con salida desde el/los aeropuerto(s) elegidos."
                                         : "Sin vuelos en el período."
                                     : "Sin vuelos operados asignables a proveedor en el filtro."}
                             </p>

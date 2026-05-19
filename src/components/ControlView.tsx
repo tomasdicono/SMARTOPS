@@ -24,10 +24,13 @@ import {
     computeAverageGpuUsageMinutes,
     computePeaCounts,
     hasMvtSent,
+    flightMatchesStatsAirports,
 } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
 import { ControlFuelTab } from "./ControlFuelTab";
+import { ControlUsageTab } from "./ControlUsageTab";
+import { ControlAirportMultiSelect } from "./ControlAirportMultiSelect";
 import {
     BarChart3,
     GanttChartSquare,
@@ -50,6 +53,7 @@ import {
     Building2,
     MapPin,
     Flame,
+    Gauge,
 } from "lucide-react";
 
 interface Props {
@@ -73,7 +77,7 @@ function formatHm(minutes: number): string {
     return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
-type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel";
+type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel" | "usage";
 const FLIGHT_CARD_STYLES = [
     "from-cyan-500 via-cyan-600 to-teal-600 shadow-cyan-900/25",
     "from-sky-500 via-blue-600 to-indigo-600 shadow-indigo-900/25",
@@ -89,11 +93,10 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     /** Filtro opcional: ventana de ATD (MVT), formato `HH:MM` de `<input type="time" />` o vacío */
     const [statsTimeFrom, setStatsTimeFrom] = useState("");
     const [statsTimeTo, setStatsTimeTo] = useState("");
-    const [statsAirport, setStatsAirport] = useState("");
+    /** Filtro multi-aeropuerto compartido entre pestañas de Control */
+    const [controlAirports, setControlAirports] = useState<string[]>([]);
     /** Inicio de la ventana visible en la línea de tiempo (0, 8 o 16 h) */
     const [timelineWindowStartH, setTimelineWindowStartH] = useState(0);
-    /** Filtro aeropuerto (salida o llegada) en pestaña OBVK */
-    const [obvkAirport, setObvkAirport] = useState("");
     useEffect(() => {
         setStatsDateFrom(selectedDate);
         setStatsDateTo(selectedDate);
@@ -117,10 +120,15 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         [flights, selectedDate]
     );
 
-    const obvkScopeFlights = useMemo(() => {
-        if (!obvkAirport) return dayFlights;
-        return dayFlights.filter((f) => f.dep === obvkAirport || f.arr === obvkAirport);
-    }, [dayFlights, obvkAirport]);
+    const dayFlightsAirportFiltered = useMemo(
+        () =>
+            controlAirports.length === 0
+                ? dayFlights
+                : dayFlights.filter((f) => flightMatchesStatsAirports(f, controlAirports, "depOrArr")),
+        [dayFlights, controlAirports],
+    );
+
+    const obvkScopeFlights = dayFlightsAirportFiltered;
 
     const obvkAirportOptions = useMemo(() => uniqueAirportsFromFlights(dayFlights), [dayFlights]);
 
@@ -177,10 +185,10 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const airportOptions = useMemo(() => uniqueAirportsFromFlights(flights), [flights]);
 
     const statsScope = useMemo(() => {
-        const dateAirportRaw = filterFlightsForStats(flights, statsDateFrom, statsDateTo, statsAirport);
+        const dateAirportRaw = filterFlightsForStats(flights, statsDateFrom, statsDateTo, controlAirports);
         const raw = dateAirportRaw.filter((f) => flightMatchesStatsAtdTimeFilter(f, statsTimeFrom, statsTimeTo));
         const operational = raw.filter((f) => !f.cancelled);
-        const cancelled = filterFlightsForStatsDepartureOnly(flights, statsDateFrom, statsDateTo, statsAirport)
+        const cancelled = filterFlightsForStatsDepartureOnly(flights, statsDateFrom, statsDateTo, controlAirports)
             .filter((f) => f.cancelled)
             .filter((f) => flightMatchesStatsAtdTimeFilter(f, statsTimeFrom, statsTimeTo))
             .sort((a, b) => {
@@ -189,7 +197,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                 return getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b));
             });
         return { raw, operational, cancelled, dateAirportMatchCount: dateAirportRaw.length };
-    }, [flights, statsDateFrom, statsDateTo, statsAirport, statsTimeFrom, statsTimeTo]);
+    }, [flights, statsDateFrom, statsDateTo, controlAirports, statsTimeFrom, statsTimeTo]);
 
     const statsRangeLabel = useMemo(() => {
         const { lo, hi } = normalizeIsoDateRange(statsDateFrom, statsDateTo);
@@ -247,8 +255,8 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     );
 
     const statusDia = useMemo(
-        () => computeStatusDiaDaySummary(dayFlights, routeAfectaciones.length),
-        [dayFlights, routeAfectaciones.length]
+        () => computeStatusDiaDaySummary(dayFlightsAirportFiltered, routeAfectaciones.length),
+        [dayFlightsAirportFiltered, routeAfectaciones.length]
     );
 
     const [prensaModal, setPrensaModal] = useState<{ open: boolean; text: string }>({
@@ -297,6 +305,18 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                     >
                         <BarChart3 className="w-4 h-4 shrink-0" />
                         Estadísticas
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSubTab("usage")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                            subTab === "usage"
+                                ? "bg-teal-600 text-white shadow-md"
+                                : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
+                        }`}
+                    >
+                        <Gauge className="w-4 h-4 shrink-0" />
+                        Control de uso
                     </button>
                     <button
                         type="button"
@@ -511,21 +531,13 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 </p>
                             )}
                         </div>
-                        <div className="flex flex-col justify-end min-w-[200px]">
-                            <label className="block text-xs font-black uppercase text-slate-600 mb-1">Aeropuerto</label>
-                            <select
-                                value={obvkAirport}
-                                onChange={(e) => setObvkAirport(e.target.value)}
-                                className="w-full max-w-xs border border-amber-300/80 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 bg-white shadow-sm [color-scheme:light] focus:outline-none focus:ring-2 focus:ring-amber-400/60"
-                            >
-                                <option value="">Todos</option>
-                                {obvkAirportOptions.map((code) => (
-                                    <option key={code} value={code}>
-                                        {code}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        <ControlAirportMultiSelect
+                            options={obvkAirportOptions}
+                            selected={controlAirports}
+                            onChange={setControlAirports}
+                            label="Aeropuertos"
+                            emptyHint="Todos"
+                        />
                     </div>
                     {dayFlights.length === 0 ? (
                         <p className="text-center text-slate-500 py-4">Sin vuelos este día.</p>
@@ -590,12 +602,20 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                 {subTab === "statusDia" && (
                 <div className="animate-in fade-in duration-200">
                 <div className="p-3 sm:p-4 space-y-3 bg-gradient-to-b from-indigo-50/30 to-white print:p-2 print:space-y-2 print:bg-white print:from-white print:shadow-none">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/90 pb-2 print:border-slate-400 print:pb-1.5">
+                    <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200/90 pb-2 print:border-slate-400 print:pb-1.5">
                         <p className="text-xs sm:text-sm text-slate-700 leading-snug">
                             <span className="font-black uppercase text-slate-900">Status día</span>
                             <span className="tabular-nums font-semibold mx-1">· {selectedDate}</span>
                             <span className="text-slate-500">· {statusDia.totalVuelosDia} vuelos</span>
                         </p>
+                        <ControlAirportMultiSelect
+                            options={obvkAirportOptions}
+                            selected={controlAirports}
+                            onChange={setControlAirports}
+                            label="Aeropuertos"
+                            emptyHint="Todos"
+                            className="print:hidden"
+                        />
                         <button
                             type="button"
                             onClick={() => {
@@ -605,7 +625,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                     text: buildStatusDiaPrensaText(selectedDate, statusDia, routeAfectaciones),
                                 });
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wide text-violet-950 shadow-sm hover:bg-violet-100"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wide text-violet-950 shadow-sm hover:bg-violet-100 print:hidden"
                             aria-label="Abrir texto listo para prensa o comunicaciones"
                         >
                             <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden />
@@ -883,21 +903,13 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
                             />
                         </div>
-                        <div className="shrink-0 min-w-[11rem] max-w-[14rem]">
-                            <label className="block text-xs font-black uppercase text-slate-500 mb-1">Aeropuerto</label>
-                            <select
-                                value={statsAirport}
-                                onChange={(e) => setStatsAirport(e.target.value)}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                            >
-                                <option value="">Todos los aeropuertos</option>
-                                {airportOptions.map((ap) => (
-                                    <option key={ap} value={ap}>
-                                        {ap}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        <ControlAirportMultiSelect
+                            options={airportOptions}
+                            selected={controlAirports}
+                            onChange={setControlAirports}
+                            label="Aeropuertos"
+                            emptyHint="Todos los aeropuertos"
+                        />
                         <div className="shrink-0">
                             <label className="block text-xs font-black uppercase text-slate-500 mb-1">ATD desde</label>
                             <input
@@ -1142,7 +1154,25 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                 </div>
                 )}
 
-                {subTab === "fuel" && <ControlFuelTab flights={flights} selectedDate={selectedDate} />}
+                {subTab === "usage" && (
+                    <ControlUsageTab
+                        flights={flights}
+                        selectedDate={selectedDate}
+                        selectedAirports={controlAirports}
+                        onAirportsChange={setControlAirports}
+                        airportOptions={airportOptions}
+                    />
+                )}
+
+                {subTab === "fuel" && (
+                    <ControlFuelTab
+                        flights={flights}
+                        selectedDate={selectedDate}
+                        selectedAirports={controlAirports}
+                        onAirportsChange={setControlAirports}
+                        airportOptions={airportOptions}
+                    />
+                )}
 
             </div>
         </div>

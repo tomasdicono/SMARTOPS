@@ -120,6 +120,133 @@ export function startOfMonthIso(iso: string): string {
     return `${iso.slice(0, 7)}-01`;
 }
 
+/** Último día del mes de una fecha ISO. */
+export function endOfMonthIso(iso: string): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    const y = parseInt(iso.slice(0, 4), 10);
+    const m = parseInt(iso.slice(5, 7), 10);
+    const last = new Date(y, m, 0);
+    const yy = last.getFullYear();
+    const mm = String(last.getMonth() + 1).padStart(2, "0");
+    const dd = String(last.getDate()).padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+}
+
+/** Escalas operativas principales (salida) para control de uso. */
+export const CONTROL_OPERATIONAL_HUBS = ["AEP", "EZE", "COR"] as const;
+
+export type StatsAirportFilter = string | readonly string[];
+
+function resolveStatsAirportList(airport: StatsAirportFilter): string[] {
+    if (Array.isArray(airport)) {
+        return airport.map((a) => String(a).trim().toUpperCase()).filter(Boolean);
+    }
+    const s = String(airport ?? "").trim().toUpperCase();
+    return s ? [s] : [];
+}
+
+/** Filtro multi-aeropuerto: vacío = todos; si no, coincide dep o arr (o solo dep). */
+export function flightMatchesStatsAirports(
+    f: Flight,
+    airports: StatsAirportFilter,
+    mode: "depOrArr" | "depOnly" = "depOrArr",
+): boolean {
+    const list = resolveStatsAirportList(airports);
+    if (list.length === 0) return true;
+    const set = new Set(list);
+    const dep = String(f.dep ?? "").trim().toUpperCase();
+    const arr = String(f.arr ?? "").trim().toUpperCase();
+    if (mode === "depOnly") return set.has(dep);
+    return set.has(dep) || set.has(arr);
+}
+
+function pct(count: number, total: number): number | null {
+    if (total <= 0) return null;
+    return (count / total) * 100;
+}
+
+export interface UsageControlBaseRow {
+    base: string;
+    totalFlights: number;
+    mvtSentCount: number;
+    mvtUtilizationPct: number | null;
+    mvtOnlyCount: number;
+    mvtOnlyPct: number | null;
+    completeCount: number;
+    completePct: number | null;
+    incompleteCount: number;
+    incompletePct: number | null;
+}
+
+function classifyUsageFlight(f: Flight): {
+    mvtSent: boolean;
+    hitosComplete: boolean;
+    mvtOnly: boolean;
+    complete: boolean;
+    incomplete: boolean;
+} {
+    const mvtSent = hasMvtSent(f);
+    const hitosSentAt = f.hitosData?.hitosSentAt;
+    const hitosComplete = hitosSentAt != null && String(hitosSentAt).trim() !== "";
+    return {
+        mvtSent,
+        hitosComplete,
+        mvtOnly: mvtSent && !hitosComplete,
+        complete: mvtSent && hitosComplete,
+        incomplete: !mvtSent && !hitosComplete,
+    };
+}
+
+function buildUsageRow(base: string, flights: Flight[]): UsageControlBaseRow {
+    const total = flights.length;
+    let mvtSentCount = 0;
+    let mvtOnlyCount = 0;
+    let completeCount = 0;
+    let incompleteCount = 0;
+    for (const f of flights) {
+        const c = classifyUsageFlight(f);
+        if (c.mvtSent) mvtSentCount += 1;
+        if (c.mvtOnly) mvtOnlyCount += 1;
+        if (c.complete) completeCount += 1;
+        if (c.incomplete) incompleteCount += 1;
+    }
+    return {
+        base,
+        totalFlights: total,
+        mvtSentCount,
+        mvtUtilizationPct: pct(mvtSentCount, total),
+        mvtOnlyCount,
+        mvtOnlyPct: pct(mvtOnlyCount, total),
+        completeCount,
+        completePct: pct(completeCount, total),
+        incompleteCount,
+        incompletePct: pct(incompleteCount, total),
+    };
+}
+
+/** Métricas de adopción MVT / hitos por escala de salida en un rango de fechas. */
+export function computeUsageControlByBase(
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+    airports: StatsAirportFilter = "",
+    hubs: readonly string[] = CONTROL_OPERATIONAL_HUBS,
+): { rows: UsageControlBaseRow[]; totals: UsageControlBaseRow } {
+    const scoped = filterFlightsForStats(flights, isoFrom, isoTo, airports).filter((f) => !f.cancelled);
+    const hubSet = new Set(hubs.map((h) => h.toUpperCase()));
+    const rows: UsageControlBaseRow[] = [];
+    for (const hub of hubs) {
+        const hubFlights = scoped.filter((f) => String(f.dep ?? "").trim().toUpperCase() === hub);
+        rows.push(buildUsageRow(hub, hubFlights));
+    }
+    const otherFlights = scoped.filter((f) => !hubSet.has(String(f.dep ?? "").trim().toUpperCase()));
+    if (otherFlights.length > 0) {
+        rows.push(buildUsageRow("Otras escalas", otherFlights));
+    }
+    const totals = buildUsageRow("TOTAL", scoped);
+    return { rows, totals };
+}
+
 export function isA321Model(model: string): boolean {
     return model.includes("321");
 }
@@ -150,37 +277,34 @@ export function countDaysInclusiveIso(lo: string, hi: string): number {
     return Math.round((t1 - t0) / 86400000) + 1;
 }
 
-/** Vuelos con fecha en [isoFrom, isoTo] inclusive; opcional filtro aeropuerto (dep o arr) */
-export function filterFlightsForStats(flights: Flight[], isoFrom: string, isoTo: string, airport: string | ""): Flight[] {
+/** Vuelos con fecha en [isoFrom, isoTo] inclusive; opcional filtro aeropuerto(s) (dep o arr) */
+export function filterFlightsForStats(
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+    airport: StatsAirportFilter = "",
+): Flight[] {
     const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
     if (!lo || !hi) return [];
-    let list = flights.filter((f) => {
+    return flights.filter((f) => {
         const d = flightDateToIso(f);
-        return d >= lo && d <= hi;
+        return d >= lo && d <= hi && flightMatchesStatsAirports(f, airport, "depOrArr");
     });
-    if (airport) {
-        list = list.filter((f) => f.dep === airport || f.arr === airport);
-    }
-    return list;
 }
 
-/** Mismo rango de fechas; filtro aeropuerto solo por origen (dep). Usado p. ej. en vuelos cancelados. */
+/** Mismo rango de fechas; filtro aeropuerto(s) solo por origen (dep). Usado p. ej. en vuelos cancelados. */
 export function filterFlightsForStatsDepartureOnly(
     flights: Flight[],
     isoFrom: string,
     isoTo: string,
-    airport: string | ""
+    airport: StatsAirportFilter = "",
 ): Flight[] {
     const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
     if (!lo || !hi) return [];
-    let list = flights.filter((f) => {
+    return flights.filter((f) => {
         const d = flightDateToIso(f);
-        return d >= lo && d <= hi;
+        return d >= lo && d <= hi && flightMatchesStatsAirports(f, airport, "depOnly");
     });
-    if (airport) {
-        list = list.filter((f) => f.dep === airport);
-    }
-    return list;
 }
 
 /** MVT con ATD cargado con al menos hora:minuto parseables (mismo umbral que OTP en status día). */
