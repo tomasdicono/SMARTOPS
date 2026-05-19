@@ -13,7 +13,14 @@ import {
   type RouteAfectacionEntry,
   type DiferidoEntry,
 } from "./types";
-import { formatDelayLine, formatMvtSseeSummary, formatMinutesToHHMM, parseTimeToMinutes } from "./lib/mvtTime";
+import {
+  formatDelayLine,
+  formatMvtSseeSummary,
+  formatMinutesToHHMM,
+  parseTimeToMinutes,
+  computeMvtDelayStatus,
+  getMvtDelaySendBlockMessage,
+} from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
@@ -356,6 +363,17 @@ function App() {
       payload = applyMvtDelayPatch(prevMvt, normalizeMvtData(mvtData));
     } else {
       payload = normalizeMvtData(mvtData);
+      const delayStatus = computeMvtDelayStatus(
+        existingFlight?.std ?? "",
+        payload.atd,
+        payload.dlyTime1,
+        payload.dlyTime2,
+      );
+      const delayBlock = getMvtDelaySendBlockMessage(delayStatus);
+      if (delayBlock) {
+        alert(delayBlock);
+        return;
+      }
       payload.mvtSentAt = new Date().toISOString();
     }
 

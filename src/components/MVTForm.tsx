@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
-import { parseTimeToMinutes, formatMinutesToHHMM } from "../lib/mvtTime";
+import { formatMinutesToHHMM, computeMvtDelayStatus, getMvtDelaySendBlockMessage } from "../lib/mvtTime";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
 
@@ -128,14 +128,14 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
         setData((prev) => ({ ...prev, [field]: value }));
     };
 
-    const stdMinutes = useMemo(() => parseTimeToMinutes(flight.std), [flight.std]);
-    const atdMinutes = useMemo(() => parseTimeToMinutes(data.atd), [data.atd]);
-
-    const isDelayed = (data.atd ?? "").length >= 3 && atdMinutes > stdMinutes;
-    const delayMinutes = isDelayed ? atdMinutes - stdMinutes : 0;
-
-    const justifiedMinutes = useMemo(() => parseTimeToMinutes(data.dlyTime1) + parseTimeToMinutes(data.dlyTime2), [data.dlyTime1, data.dlyTime2]);
-    const remDelay = delayMinutes - justifiedMinutes;
+    const delayStatus = useMemo(
+        () => computeMvtDelayStatus(flight.std, data.atd, data.dlyTime1, data.dlyTime2),
+        [flight.std, data.atd, data.dlyTime1, data.dlyTime2],
+    );
+    const { isDelayed, remDelay } = delayStatus;
+    const sendingNewMvt = !mvtSent && !delayOnlyMode;
+    const cannotSendForDelays = sendingNewMvt && !delayStatus.delaysJustified;
+    const delaySendBlockMessage = cannotSendForDelays ? getMvtDelaySendBlockMessage(delayStatus) : null;
 
     const handleAddSSEE = () => {
         setData((prev) => ({
@@ -160,6 +160,11 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
+        if (cannotSendForDelays) {
+            const msg = getMvtDelaySendBlockMessage(delayStatus);
+            if (msg) window.alert(msg);
+            return;
+        }
         onSave(data);
         clearMvtDraft(flight.id);
     };
@@ -322,13 +327,26 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                 </div>
             </section>
 
+            {delaySendBlockMessage ? (
+                <p
+                    className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 leading-snug"
+                    role="alert"
+                >
+                    {delaySendBlockMessage}
+                </p>
+            ) : null}
+
             {showSaveButton ? (
-                <div className="sticky bottom-4 z-10 flex justify-end">
+                <div className="sticky bottom-4 z-10 flex flex-col items-end gap-2">
                     <button
                         type="submit"
-                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 hover:shadow-xl hover:-translate-y-0.5 ${delayOnlyMode || flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"}`}
+                        disabled={cannotSendForDelays}
+                        title={cannotSendForDelays ? delaySendBlockMessage ?? undefined : undefined}
+                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${cannotSendForDelays ? "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none" : delayOnlyMode || flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5"}`}
                     >
-                        {(delayOnlyMode || flight.mvtData?.atd) ? <CheckCircle2 className="w-5 h-5" /> : null}
+                        {(delayOnlyMode || flight.mvtData?.atd) && !cannotSendForDelays ? (
+                            <CheckCircle2 className="w-5 h-5" />
+                        ) : null}
                         {delayOnlyMode ? "Guardar códigos de demora" : flight.mvtData?.atd ? "Actualizar MVT" : "Enviar MVT"}
                     </button>
                 </div>

@@ -47,3 +47,40 @@ export function formatDelayLine(cod: string, timeRaw: string): string {
     const t = formatMinutesToHHMM(parseTimeToMinutes(timeRaw));
     return `COD ${c} - ${t}`;
 }
+
+export interface MvtDelayStatus {
+    isDelayed: boolean;
+    delayMinutes: number;
+    justifiedMinutes: number;
+    remDelay: number;
+    /** Sin demora ATD>STD, o demora cubierta por DLY TIME 1+2. */
+    delaysJustified: boolean;
+}
+
+/** Misma lógica que el formulario MVT (ATD vs STD de programación). */
+export function computeMvtDelayStatus(
+    std: string,
+    atd: string,
+    dlyTime1: string,
+    dlyTime2: string,
+): MvtDelayStatus {
+    const stdMinutes = parseTimeToMinutes(std);
+    const atdMinutes = parseTimeToMinutes(atd);
+    const atdStr = String(atd ?? "");
+    const isDelayed = atdStr.replace(/\D/g, "").length >= 3 && atdMinutes > stdMinutes;
+    const delayMinutes = isDelayed ? atdMinutes - stdMinutes : 0;
+    const justifiedMinutes = parseTimeToMinutes(dlyTime1) + parseTimeToMinutes(dlyTime2);
+    const remDelay = delayMinutes - justifiedMinutes;
+    return {
+        isDelayed,
+        delayMinutes,
+        justifiedMinutes,
+        remDelay,
+        delaysJustified: !isDelayed || remDelay <= 0,
+    };
+}
+
+export function getMvtDelaySendBlockMessage(status: MvtDelayStatus): string | null {
+    if (status.delaysJustified) return null;
+    return `No se puede enviar el MVT: quedan ${formatMinutesToHHMM(status.remDelay)} de demora sin justificar. Completá códigos y tiempos DLY hasta que «A justificar» sea 00:00.`;
+}
