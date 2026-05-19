@@ -4,8 +4,10 @@ import {
     computeUsageControlByBase,
     countDaysInclusiveIso,
     endOfMonthIso,
+    flightDateToIso,
     normalizeIsoDateRange,
     startOfMonthIso,
+    uniqueAirportsFromFlights,
     type StatsAirportFilter,
     type UsageControlBaseRow,
 } from "../lib/controlHelpers";
@@ -36,7 +38,9 @@ function UsageCell({ count, pct }: { count: number; pct: number | null }) {
 function UsageTableRow({ row, isTotal }: { row: UsageControlBaseRow; isTotal?: boolean }) {
     return (
         <tr className={isTotal ? "bg-teal-50/80 font-semibold" : "hover:bg-slate-50/80"}>
-            <td className="px-3 py-2 font-black text-slate-900 whitespace-nowrap">{row.base}</td>
+            <td className="px-3 py-2 font-black text-slate-900 whitespace-nowrap" title="Escala de salida (dep)">
+                {row.base}
+            </td>
             <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-800">{row.totalFlights}</td>
             <td className="px-3 py-2 text-right tabular-nums">
                 <span className="font-black text-cyan-900">{row.mvtSentCount}</span>
@@ -75,9 +79,19 @@ export function ControlUsageTab({
 
     const airportFilter: StatsAirportFilter = selectedAirports;
 
+    const usageAirportOptions = useMemo(() => {
+        if (!dateFrom || !dateTo) return airportOptions;
+        const inMonth = flights.filter((f) => {
+            const iso = flightDateToIso(f);
+            return iso >= dateFrom && iso <= dateTo;
+        });
+        const fromMonth = uniqueAirportsFromFlights(inMonth);
+        return fromMonth.length > 0 ? fromMonth : airportOptions;
+    }, [flights, dateFrom, dateTo, airportOptions]);
+
     const usageData = useMemo(
-        () => computeUsageControlByBase(flights, dateFrom, dateTo, airportFilter),
-        [flights, dateFrom, dateTo, airportFilter, selectedAirports],
+        () => computeUsageControlByBase(flights, dateFrom, dateTo, airportFilter, usageAirportOptions),
+        [flights, dateFrom, dateTo, airportFilter, selectedAirports, usageAirportOptions],
     );
 
     const periodLabel = useMemo(() => {
@@ -102,7 +116,7 @@ export function ControlUsageTab({
                         />
                     </div>
                     <ControlAirportMultiSelect
-                        options={airportOptions}
+                        options={usageAirportOptions}
                         selected={selectedAirports}
                         onChange={onAirportsChange}
                         label="Aeropuertos"
@@ -130,7 +144,7 @@ export function ControlUsageTab({
                 <div className="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50/80 to-white p-4">
                     <p className="text-xs font-black uppercase text-teal-900 flex items-center gap-1.5">
                         <Gauge className="w-4 h-4" aria-hidden />
-                        Utilización global MVT (todas las escalas)
+                        Utilización global MVT (filtro aplicado)
                     </p>
                     <p className="text-3xl font-black text-teal-950 mt-2 tabular-nums">
                         {formatPct(usageData.totals.mvtUtilizationPct)}
@@ -145,14 +159,14 @@ export function ControlUsageTab({
                     <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80 flex items-center gap-2">
                         <Percent className="w-4 h-4 text-slate-600" aria-hidden />
                         <h4 className="text-sm font-black uppercase tracking-wide text-slate-800">
-                            Adopción por escala
+                            Adopción por aeropuerto
                         </h4>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm min-w-[720px]">
                             <thead>
                                 <tr className="text-left text-[10px] font-black uppercase text-slate-500 border-b border-slate-200 bg-slate-50/50">
-                                    <th className="px-3 py-2">Escala</th>
+                                    <th className="px-3 py-2">Aeropuerto</th>
                                     <th className="px-3 py-2 text-right">Vuelos</th>
                                     <th className="px-3 py-2 text-right">MVT enviados</th>
                                     <th className="px-3 py-2 text-right">MVT solo (hitos pend.)</th>

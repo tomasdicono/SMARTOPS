@@ -224,25 +224,58 @@ function buildUsageRow(base: string, flights: Flight[]): UsageControlBaseRow {
     };
 }
 
-/** Métricas de adopción MVT / hitos por escala de salida en un rango de fechas. */
+function flightDepUpper(f: Flight): string {
+    return String(f.dep ?? "").trim().toUpperCase();
+}
+
+/**
+ * Aeropuertos que aparecen como filas en la tabla de adopción.
+ * - Sin selección: todas las escalas de salida con vuelos en el período.
+ * - Selección parcial: solo las elegidas en el filtro.
+ * - Todas las opciones del selector marcadas: todas las opciones (aunque tengan 0 vuelos).
+ */
+export function resolveUsageTableRowAirports(
+    flightsInPeriod: Flight[],
+    selectedAirports: StatsAirportFilter,
+    selectorOptions: readonly string[] = [],
+): string[] {
+    const selected = resolveStatsAirportList(selectedAirports);
+    const opts = selectorOptions.map((a) => String(a).trim().toUpperCase()).filter(Boolean);
+
+    const allSelected =
+        opts.length > 0 && selected.length >= opts.length && opts.every((o) => selected.includes(o));
+
+    if (allSelected) {
+        return [...opts].sort((a, b) => a.localeCompare(b));
+    }
+
+    if (selected.length > 0) {
+        return [...selected].sort((a, b) => a.localeCompare(b));
+    }
+
+    const deps = new Set<string>();
+    for (const f of flightsInPeriod) {
+        const d = flightDepUpper(f);
+        if (d) deps.add(d);
+    }
+    return [...deps].sort((a, b) => a.localeCompare(b));
+}
+
+/** Métricas de adopción MVT / hitos por escala de salida (dep) en un rango de fechas. */
 export function computeUsageControlByBase(
     flights: Flight[],
     isoFrom: string,
     isoTo: string,
     airports: StatsAirportFilter = "",
-    hubs: readonly string[] = CONTROL_OPERATIONAL_HUBS,
+    selectorOptions: readonly string[] = [],
 ): { rows: UsageControlBaseRow[]; totals: UsageControlBaseRow } {
+    const inPeriod = filterFlightsForStats(flights, isoFrom, isoTo, "").filter((f) => !f.cancelled);
     const scoped = filterFlightsForStats(flights, isoFrom, isoTo, airports).filter((f) => !f.cancelled);
-    const hubSet = new Set(hubs.map((h) => h.toUpperCase()));
-    const rows: UsageControlBaseRow[] = [];
-    for (const hub of hubs) {
-        const hubFlights = scoped.filter((f) => String(f.dep ?? "").trim().toUpperCase() === hub);
-        rows.push(buildUsageRow(hub, hubFlights));
-    }
-    const otherFlights = scoped.filter((f) => !hubSet.has(String(f.dep ?? "").trim().toUpperCase()));
-    if (otherFlights.length > 0) {
-        rows.push(buildUsageRow("Otras escalas", otherFlights));
-    }
+    const rowAirports = resolveUsageTableRowAirports(inPeriod, airports, selectorOptions);
+    const rows = rowAirports.map((ap) => {
+        const hubFlights = scoped.filter((f) => flightDepUpper(f) === ap);
+        return buildUsageRow(ap, hubFlights);
+    });
     const totals = buildUsageRow("TOTAL", scoped);
     return { rows, totals };
 }
