@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
-import { formatMinutesToHHMM, computeMvtDelayStatus, getMvtDelaySendBlockMessage } from "../lib/mvtTime";
+import { formatMinutesToHHMM, computeMvtDelayStatus, validateMvtSendDelays } from "../lib/mvtTime";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
 
@@ -134,8 +134,20 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
     );
     const { isDelayed, remDelay } = delayStatus;
     const sendingNewMvt = !mvtSent && !delayOnlyMode;
-    const cannotSendForDelays = sendingNewMvt && !delayStatus.delaysJustified;
-    const delaySendBlockMessage = cannotSendForDelays ? getMvtDelaySendBlockMessage(delayStatus) : null;
+    const sendDelayValidation = useMemo(
+        () =>
+            validateMvtSendDelays(
+                flight.std,
+                data.atd,
+                data.dlyCod1,
+                data.dlyTime1,
+                data.dlyCod2,
+                data.dlyTime2,
+            ),
+        [flight.std, data.atd, data.dlyCod1, data.dlyTime1, data.dlyCod2, data.dlyTime2],
+    );
+    const cannotSendForDelays = sendingNewMvt && !sendDelayValidation.ok;
+    const delaySendBlockMessage = sendingNewMvt && !sendDelayValidation.ok ? sendDelayValidation.message : null;
 
     const handleAddSSEE = () => {
         setData((prev) => ({
@@ -161,8 +173,7 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         if (cannotSendForDelays) {
-            const msg = getMvtDelaySendBlockMessage(delayStatus);
-            if (msg) window.alert(msg);
+            window.alert(sendDelayValidation.message);
             return;
         }
         onSave(data);

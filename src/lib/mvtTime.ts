@@ -84,3 +84,77 @@ export function getMvtDelaySendBlockMessage(status: MvtDelayStatus): string | nu
     if (status.delaysJustified) return null;
     return `No se puede enviar el MVT: quedan ${formatMinutesToHHMM(status.remDelay)} de demora sin justificar. Completá códigos y tiempos DLY hasta que «A justificar» sea 00:00.`;
 }
+
+function isMvtDelayLineComplete(dlyCod: string, dlyTime: string): boolean {
+    const code = String(dlyCod ?? "").trim();
+    const minutes = parseTimeToMinutes(dlyTime);
+    return code !== "" && minutes > 0;
+}
+
+export type MvtSendDelayValidation =
+    | { ok: true; status: MvtDelayStatus }
+    | { ok: false; status: MvtDelayStatus; message: string };
+
+/**
+ * Validación para enviar MVT (no aplica a corrección HCC post-envío).
+ * - ATD obligatorio.
+ * - Si ATD > STD: tiempos DLY deben cubrir la demora (remDelay 0) y al menos un par código+tiempo completo.
+ */
+export function validateMvtSendDelays(
+    std: string,
+    atd: string,
+    dlyCod1: string,
+    dlyTime1: string,
+    dlyCod2: string,
+    dlyTime2: string,
+): MvtSendDelayValidation {
+    const status = computeMvtDelayStatus(std, atd, dlyTime1, dlyTime2);
+    const atdDigits = String(atd ?? "").replace(/\D/g, "");
+
+    if (atdDigits.length < 3) {
+        return {
+            ok: false,
+            status,
+            message: "Ingresá ATD (hora de salida) antes de enviar el MVT.",
+        };
+    }
+
+    if (!status.isDelayed) {
+        return { ok: true, status };
+    }
+
+    if (status.remDelay > 0) {
+        return {
+            ok: false,
+            status,
+            message: getMvtDelaySendBlockMessage(status)!,
+        };
+    }
+
+    const line1 = isMvtDelayLineComplete(dlyCod1, dlyTime1);
+    const line2 = isMvtDelayLineComplete(dlyCod2, dlyTime2);
+    if (!line1 && !line2) {
+        return {
+            ok: false,
+            status,
+            message: `Hay ${formatMinutesToHHMM(status.delayMinutes)} de demora vs STD: cargá al menos un código DLY con su tiempo hasta que «A justificar» quede en 00:00.`,
+        };
+    }
+
+    if (parseTimeToMinutes(dlyTime1) > 0 && !String(dlyCod1 ?? "").trim()) {
+        return {
+            ok: false,
+            status,
+            message: "Seleccioná el código de demora 1 o borrá el tiempo DLY 1.",
+        };
+    }
+    if (parseTimeToMinutes(dlyTime2) > 0 && !String(dlyCod2 ?? "").trim()) {
+        return {
+            ok: false,
+            status,
+            message: "Seleccioná el código de demora 2 o borrá el tiempo DLY 2.",
+        };
+    }
+
+    return { ok: true, status };
+}

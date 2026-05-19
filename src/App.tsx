@@ -18,8 +18,7 @@ import {
   formatMvtSseeSummary,
   formatMinutesToHHMM,
   parseTimeToMinutes,
-  computeMvtDelayStatus,
-  getMvtDelaySendBlockMessage,
+  validateMvtSendDelays,
 } from "./lib/mvtTime";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
@@ -363,15 +362,16 @@ function App() {
       payload = applyMvtDelayPatch(prevMvt, normalizeMvtData(mvtData));
     } else {
       payload = normalizeMvtData(mvtData);
-      const delayStatus = computeMvtDelayStatus(
+      const delayCheck = validateMvtSendDelays(
         existingFlight?.std ?? "",
         payload.atd,
+        payload.dlyCod1,
         payload.dlyTime1,
+        payload.dlyCod2,
         payload.dlyTime2,
       );
-      const delayBlock = getMvtDelaySendBlockMessage(delayStatus);
-      if (delayBlock) {
-        alert(delayBlock);
+      if (!delayCheck.ok) {
+        alert(delayCheck.message);
         return;
       }
       payload.mvtSentAt = new Date().toISOString();
