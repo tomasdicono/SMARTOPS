@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import type { User, UserRole } from "../types";
+import { normalizeUserRole } from "../types";
 import { db } from "../lib/firebase";
 import { ref, onValue, set, remove } from "firebase/database";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, type Auth } from "firebase/auth";
-import { Users, UserPlus, Trash2, Loader2, X, FileSpreadsheet, Upload } from "lucide-react";
+import { Users, UserPlus, Trash2, Loader2, X, FileSpreadsheet, Upload, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
     parseUserBulkSheet,
@@ -95,6 +96,23 @@ function readExcelFile(file: File): Promise<unknown[][]> {
     });
 }
 
+function usersFromSnapshot(data: Record<string, unknown> | null): User[] {
+    if (!data) return [];
+    const list: User[] = [];
+    for (const [uid, raw] of Object.entries(data)) {
+        if (!raw || typeof raw !== "object") continue;
+        const u = raw as Partial<User>;
+        list.push({
+            id: u.id ?? uid,
+            name: String(u.name ?? ""),
+            email: String(u.email ?? ""),
+            role: normalizeUserRole(u.role),
+            ...(u.createdAt ? { createdAt: u.createdAt } : {}),
+        });
+    }
+    return list;
+}
+
 const ROLE_SELECT = (
     <>
         <option value="ADMIN">ADMIN</option>
@@ -109,6 +127,7 @@ const ROLE_SELECT = (
 export function UserManagement({ onClose }: UserManagementProps) {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     const [formName, setFormName] = useState("");
     const [formEmail, setFormEmail] = useState("");
@@ -128,15 +147,22 @@ export function UserManagement({ onClose }: UserManagementProps) {
 
     useEffect(() => {
         const usersRef = ref(db, "users");
-        const unsubscribe = onValue(usersRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                setUsers(Object.values(data) as User[]);
-            } else {
+        const unsubscribe = onValue(
+            usersRef,
+            (snapshot) => {
+                setLoadError(null);
+                setUsers(usersFromSnapshot(snapshot.val() as Record<string, unknown> | null));
+                setLoading(false);
+            },
+            (err) => {
+                console.error("Error loading users:", err);
                 setUsers([]);
-            }
-            setLoading(false);
-        });
+                setLoadError(
+                    "No se pudo cargar la lista de usuarios. Verificá que tu rol sea ADMIN o AJS y que las reglas de Firebase estén actualizadas.",
+                );
+                setLoading(false);
+            },
+        );
         return () => unsubscribe();
     }, []);
 
@@ -497,6 +523,11 @@ export function UserManagement({ onClose }: UserManagementProps) {
                             {loading ? (
                                 <div className="flex-1 flex items-center justify-center">
                                     <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+                                </div>
+                            ) : loadError ? (
+                                <div className="flex-1 flex flex-col items-center justify-center text-red-400 p-6 text-center">
+                                    <AlertCircle className="w-10 h-10 mb-3 opacity-80" />
+                                    <p className="text-sm font-semibold max-w-md">{loadError}</p>
                                 </div>
                             ) : users.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
