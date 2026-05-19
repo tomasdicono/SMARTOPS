@@ -12,7 +12,8 @@ import {
     canDownloadHitosSummaryRole,
 } from "../lib/flightHelpers";
 import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
-import { isLimpiezaRole } from "../types";
+import { isLimpiezaRole, canEditMvtDelayAfterSent } from "../types";
+import { hasMvtSent } from "../lib/controlHelpers";
 import { downloadHitosSummary } from "../lib/downloadHitosSummary";
 import { X, Ban, Download } from "lucide-react";
 import { BroomIcon } from "./BroomIcon";
@@ -67,6 +68,9 @@ export function FlightModal({
             userRole === "SC" ||
             userRole === "AJS");
     const isReadOnlyView = !!flight.cancelled;
+    const mvtSent = hasMvtSent(flight);
+    const canEditMvtDelays = mvtSent && canEditMvtDelayAfterSent(userRole) && !isReadOnlyView;
+    const mvtFormReadOnly = isReadOnlyView || (mvtSent && !canEditMvtDelays);
     const canDownloadHitosSummary =
         canDownloadHitosSummaryRole(userRole) &&
         !isReadOnlyView &&
@@ -206,7 +210,8 @@ export function FlightModal({
                             <MVTForm
                                 key={flight.id}
                                 flight={flight}
-                                readOnly={isReadOnlyView}
+                                readOnly={mvtFormReadOnly}
+                                canEditDelayFields={canEditMvtDelays}
                                 onSave={(data) => {
                                     onSaveMVT(data);
                                 }}

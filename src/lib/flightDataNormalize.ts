@@ -59,6 +59,21 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
     return out;
 }
 
+/** Actualiza solo campos de demora sobre un MVT ya enviado (corrección HCC). */
+export function applyMvtDelayPatch(
+    existing: NonNullable<Flight["mvtData"]>,
+    patch: NonNullable<Flight["mvtData"]>,
+): NonNullable<Flight["mvtData"]> {
+    return {
+        ...existing,
+        dlyCod1: patch.dlyCod1,
+        dlyTime1: patch.dlyTime1,
+        dlyCod2: patch.dlyCod2,
+        dlyTime2: patch.dlyTime2,
+        observaciones: patch.observaciones,
+    };
+}
+
 export function emptyHitosData(): HitosData {
     return {
         ganttChartName: "",

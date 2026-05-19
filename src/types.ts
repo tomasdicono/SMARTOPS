@@ -29,6 +29,11 @@ export function isScRole(role: UserRole): boolean {
     return role === "SC";
 }
 
+/** Tras enviar el MVT, solo HCC puede corregir códigos/tiempos de demora y observaciones. */
+export function canEditMvtDelayAfterSent(role: UserRole): boolean {
+    return role === "HCC";
+}
+
 export interface User {
     id: string; // auth uid
     email: string;

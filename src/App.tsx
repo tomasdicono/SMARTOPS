@@ -3,6 +3,7 @@ import {
   normalizeUserRole,
   isHccDeskRole,
   isAdminOrHccDesk,
+  canEditMvtDelayAfterSent,
   isLimpiezaRole,
   isScRole,
   type Flight,
@@ -53,7 +54,7 @@ import {
   isLimpiezaPendiente,
 } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
-import { normalizeMvtData, normalizeHitosData } from "./lib/flightDataNormalize";
+import { normalizeMvtData, normalizeHitosData, applyMvtDelayPatch } from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
 import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
@@ -341,14 +342,31 @@ function App() {
   };
 
   const handleSaveMVT = async (id: string, mvtData: Flight["mvtData"]) => {
-    const payload = normalizeMvtData(mvtData);
-    payload.mvtSentAt = new Date().toISOString();
+    const existingFlight = flights.find((x) => x.id === id);
+    const prevMvt = normalizeMvtData(existingFlight?.mvtData);
+    const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
+
+    if (alreadySent && !canEditMvtDelayAfterSent(userRole)) {
+      alert("El MVT ya fue enviado y no puede modificarse.");
+      return;
+    }
+
+    let payload: NonNullable<Flight["mvtData"]>;
+    if (alreadySent && canEditMvtDelayAfterSent(userRole)) {
+      payload = applyMvtDelayPatch(prevMvt, normalizeMvtData(mvtData));
+    } else {
+      payload = normalizeMvtData(mvtData);
+      payload.mvtSentAt = new Date().toISOString();
+    }
+
     const updatedFlights = flights.map((f) => (f.id === id ? { ...f, mvtData: payload } : f));
-    const f = flights.find((x) => x.id === id);
+    const f = existingFlight;
     const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
     try {
       await set(ref(db, "flights"), forFirebaseDb(updatedFlights));
-      setMvtSentToast({ open: true, subtitle });
+      if (!alreadySent) {
+        setMvtSentToast({ open: true, subtitle });
+      }
     } catch {
       alert("No se pudo guardar el MVT. Revisá la conexión e intentá de nuevo.");
     }
