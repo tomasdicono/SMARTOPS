@@ -9,8 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "generate:iata-icao": "node scripts/generateIataIcao.mjs",
-    "firebase:deploy-rules": "firebase deploy --only database --project smartops-c22de",
-    "firebase:deploy-functions": "firebase deploy --only functions --project smartops-c22de"
+    "firebase:deploy-rules": "firebase deploy --only database --project smartops-c22de"
   },
   "dependencies": {
     "@lucide/lab": "^0.1.2",

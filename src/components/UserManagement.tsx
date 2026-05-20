@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { User, UserRole } from "../types";
 import { normalizeUserRole } from "../types";
 import { db } from "../lib/firebase";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, set, remove } from "firebase/database";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, type Auth } from "firebase/auth";
 import {
@@ -20,7 +20,6 @@ import {
     sendUserPasswordResetEmail,
     passwordResetEmailErrorMessage,
 } from "../lib/sendPasswordResetEmail";
-import { deleteAppUser, deleteAppUserErrorMessage } from "../lib/deleteAppUser";
 import * as XLSX from "xlsx";
 import {
     parseUserBulkSheet,
@@ -321,7 +320,7 @@ export function UserManagement({ onClose }: UserManagementProps) {
     const handleDeleteUser = async (user: User) => {
         if (
             !window.confirm(
-                `¿Eliminar a ${user.name} (${user.email})?\n\nSe borrará el acceso en Firebase Authentication y el perfil en Smartops. Podrás volver a crear el mismo correo.`,
+                `¿Eliminar a ${user.name} (${user.email}) de Smartops?\n\nEl acceso en Firebase Authentication no se borra solo. Si no vas a usar más ese correo, eliminalo también en Firebase Console → Authentication.`,
             )
         ) {
             return;
@@ -330,15 +329,13 @@ export function UserManagement({ onClose }: UserManagementProps) {
         setDeletingUid(user.id);
         setError(null);
         try {
-            await deleteAppUser(user.id);
-            alert("Usuario eliminado por completo (Authentication y Smartops).");
-        } catch (err: unknown) {
-            console.error("Error deleting user:", err);
-            const code =
-                err && typeof err === "object" && "code" in err
-                    ? String((err as { code?: string }).code)
-                    : undefined;
-            setError(deleteAppUserErrorMessage(code));
+            await remove(ref(db, `users/${user.id}`));
+            alert(
+                "Usuario eliminado de Smartops. Si necesitás reutilizar el mismo correo, borralo también en Firebase Console → Authentication.",
+            );
+        } catch (err) {
+            console.error("Error deleting user from DB", err);
+            setError("Hubo un problema al eliminar al usuario en Smartops.");
         } finally {
             setDeletingUid(null);
         }
@@ -592,7 +589,11 @@ export function UserManagement({ onClose }: UserManagementProps) {
                         </div>
                     </div>
 
-                    <div className="w-full md:w-2/3 flex flex-col min-h-0">
+                    <div className="w-full md:w-2/3 flex flex-col min-h-0 gap-2">
+                        <p className="text-xs text-slate-500 leading-relaxed px-1">
+                            Eliminar aquí solo quita el perfil en Smartops. Para liberar el correo, borrá el usuario en{" "}
+                            <span className="text-slate-400 font-semibold">Firebase Console → Authentication</span>.
+                        </p>
                         <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl flex-1 overflow-hidden flex flex-col min-h-[12rem]">
                             {loading ? (
                                 <div className="flex-1 flex items-center justify-center">
@@ -676,7 +677,7 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                                                 }
                                                                 onClick={() => void handleDeleteUser(u)}
                                                                 className="p-2 bg-red-950/30 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-colors inline-block disabled:opacity-50"
-                                                                title="Eliminar usuario (Auth + Smartops)"
+                                                                title="Eliminar de Smartops (Auth: Firebase Console)"
                                                             >
                                                                 {deletingUid === u.id ? (
                                                                     <Loader2 className="w-4 h-4 animate-spin" />
