@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { User, UserRole } from "../types";
 import { normalizeUserRole } from "../types";
 import { db } from "../lib/firebase";
-import { ref, onValue, set, remove } from "firebase/database";
+import { ref, onValue, set } from "firebase/database";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, type Auth } from "firebase/auth";
 import {
@@ -20,6 +20,7 @@ import {
     sendUserPasswordResetEmail,
     passwordResetEmailErrorMessage,
 } from "../lib/sendPasswordResetEmail";
+import { deleteAppUser, deleteAppUserErrorMessage } from "../lib/deleteAppUser";
 import * as XLSX from "xlsx";
 import {
     parseUserBulkSheet,
@@ -161,6 +162,7 @@ export function UserManagement({ onClose }: UserManagementProps) {
     const [bulkProgress, setBulkProgress] = useState<BulkImportProgress | null>(null);
     const [bulkOutcome, setBulkOutcome] = useState<BulkImportOutcome | null>(null);
 
+    const [deletingUid, setDeletingUid] = useState<string | null>(null);
     const [sendingResetUid, setSendingResetUid] = useState<string | null>(null);
     const [resetEmailSuccess, setResetEmailSuccess] = useState<string | null>(null);
 
@@ -317,13 +319,28 @@ export function UserManagement({ onClose }: UserManagementProps) {
     };
 
     const handleDeleteUser = async (user: User) => {
-        if (!window.confirm(`¿Estás seguro de eliminar a ${user.name} (${user.email})?`)) return;
+        if (
+            !window.confirm(
+                `¿Eliminar a ${user.name} (${user.email})?\n\nSe borrará el acceso en Firebase Authentication y el perfil en Smartops. Podrás volver a crear el mismo correo.`,
+            )
+        ) {
+            return;
+        }
+
+        setDeletingUid(user.id);
+        setError(null);
         try {
-            await remove(ref(db, `users/${user.id}`));
-            alert("Usuario eliminado de la base de datos de Smartops.");
-        } catch (err) {
-            console.error("Error deleting user from DB", err);
-            alert("Hubo un problema al eliminar al usuario.");
+            await deleteAppUser(user.id);
+            alert("Usuario eliminado por completo (Authentication y Smartops).");
+        } catch (err: unknown) {
+            console.error("Error deleting user:", err);
+            const code =
+                err && typeof err === "object" && "code" in err
+                    ? String((err as { code?: string }).code)
+                    : undefined;
+            setError(deleteAppUserErrorMessage(code));
+        } finally {
+            setDeletingUid(null);
         }
     };
 
@@ -651,11 +668,21 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => handleDeleteUser(u)}
-                                                                className="p-2 bg-red-950/30 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-colors inline-block"
-                                                                title="Eliminar acceso"
+                                                                disabled={
+                                                                    deletingUid === u.id ||
+                                                                    sendingResetUid === u.id ||
+                                                                    bulkImporting ||
+                                                                    creating
+                                                                }
+                                                                onClick={() => void handleDeleteUser(u)}
+                                                                className="p-2 bg-red-950/30 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-colors inline-block disabled:opacity-50"
+                                                                title="Eliminar usuario (Auth + Smartops)"
                                                             >
-                                                                <Trash2 className="w-4 h-4" />
+                                                                {deletingUid === u.id ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                )}
                                                             </button>
                                                         </div>
                                                     </td>

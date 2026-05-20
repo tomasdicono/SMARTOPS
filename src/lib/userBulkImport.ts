@@ -177,7 +177,7 @@ export function parseUserBulkSheet(rows: unknown[][]): BulkUserParseResult {
 export function authErrorMessage(code: string | undefined): string {
     switch (code) {
         case "auth/email-already-in-use":
-            return "El correo ya está en uso.";
+            return "El correo ya está en Firebase Authentication. Si lo eliminaste solo de Smartops, borralo en Firebase Console → Authentication o usá Eliminar en Gestión de usuarios (con Functions desplegadas).";
         case "auth/weak-password":
             return "La contraseña debe tener al menos 6 caracteres.";
         case "auth/invalid-email":
