@@ -11,6 +11,7 @@ function coerceUser(raw: unknown, uid: string): User | null {
     name: typeof u.name === "string" ? u.name : "",
     role: normalizeUserRole(u.role),
     createdAt: typeof u.createdAt === "string" ? u.createdAt : undefined,
+    mustChangePassword: u.mustChangePassword === true ? true : undefined,
   };
 }
 

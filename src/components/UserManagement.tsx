@@ -5,7 +5,21 @@ import { db } from "../lib/firebase";
 import { ref, onValue, set, remove } from "firebase/database";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, type Auth } from "firebase/auth";
-import { Users, UserPlus, Trash2, Loader2, X, FileSpreadsheet, Upload, AlertCircle } from "lucide-react";
+import {
+    Users,
+    UserPlus,
+    Trash2,
+    Loader2,
+    X,
+    FileSpreadsheet,
+    Upload,
+    AlertCircle,
+    Mail,
+} from "lucide-react";
+import {
+    sendUserPasswordResetEmail,
+    passwordResetEmailErrorMessage,
+} from "../lib/sendPasswordResetEmail";
 import * as XLSX from "xlsx";
 import {
     parseUserBulkSheet,
@@ -59,6 +73,7 @@ async function createAppUser(
         email: input.email.trim().toLowerCase(),
         role: input.role,
         createdAt: new Date().toISOString(),
+        mustChangePassword: true,
     };
 
     await set(ref(db, `users/${newUid}`), newUser);
@@ -108,6 +123,7 @@ function usersFromSnapshot(data: Record<string, unknown> | null): User[] {
             email: String(u.email ?? ""),
             role: normalizeUserRole(u.role),
             ...(u.createdAt ? { createdAt: u.createdAt } : {}),
+            ...(u.mustChangePassword === true ? { mustChangePassword: true } : {}),
         });
     }
     return list;
@@ -144,6 +160,9 @@ export function UserManagement({ onClose }: UserManagementProps) {
     const [bulkImporting, setBulkImporting] = useState(false);
     const [bulkProgress, setBulkProgress] = useState<BulkImportProgress | null>(null);
     const [bulkOutcome, setBulkOutcome] = useState<BulkImportOutcome | null>(null);
+
+    const [sendingResetUid, setSendingResetUid] = useState<string | null>(null);
+    const [resetEmailSuccess, setResetEmailSuccess] = useState<string | null>(null);
 
     useEffect(() => {
         const usersRef = ref(db, "users");
@@ -268,6 +287,35 @@ export function UserManagement({ onClose }: UserManagementProps) {
         setBulkImporting(false);
     };
 
+    const handleSendPasswordReset = async (user: User) => {
+        if (
+            !window.confirm(
+                `¿Enviar correo de recuperación de contraseña a ${user.name} (${user.email})?\n\nEl usuario recibirá un enlace de Firebase para definir una nueva clave. Vos no verás la contraseña nueva.`,
+            )
+        ) {
+            return;
+        }
+
+        setSendingResetUid(user.id);
+        setError(null);
+        setResetEmailSuccess(null);
+        try {
+            await sendUserPasswordResetEmail(user.email);
+            setResetEmailSuccess(
+                `Se envió el correo de recuperación a ${user.email}. Revisá también spam.`,
+            );
+        } catch (err: unknown) {
+            console.error("Send password reset error:", err);
+            const code =
+                err && typeof err === "object" && "code" in err
+                    ? String((err as { code?: string }).code)
+                    : undefined;
+            setError(passwordResetEmailErrorMessage(code));
+        } finally {
+            setSendingResetUid(null);
+        }
+    };
+
     const handleDeleteUser = async (user: User) => {
         if (!window.confirm(`¿Estás seguro de eliminar a ${user.name} (${user.email})?`)) return;
         try {
@@ -312,6 +360,11 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                     {error}
                                 </div>
                             )}
+                            {resetEmailSuccess && (
+                                <div className="text-emerald-300 bg-emerald-950/50 p-3 rounded-lg text-sm mb-4 border border-emerald-900/50 font-semibold">
+                                    {resetEmailSuccess}
+                                </div>
+                            )}
 
                             <form onSubmit={handleCreateUser} className="flex flex-col gap-4">
                                 <div>
@@ -353,6 +406,10 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                         className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-400 transition-colors"
                                         placeholder="Min 6 caracteres"
                                     />
+                                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                                        El usuario la usará una sola vez; en el primer ingreso elegirá su propia
+                                        contraseña.
+                                    </p>
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">
@@ -574,14 +631,33 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                                         </span>
                                                     </td>
                                                     <td className="p-4 text-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDeleteUser(u)}
-                                                            className="p-2 bg-red-950/30 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-colors inline-block"
-                                                            title="Eliminar acceso"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                disabled={
+                                                                    sendingResetUid === u.id ||
+                                                                    bulkImporting ||
+                                                                    creating
+                                                                }
+                                                                onClick={() => void handleSendPasswordReset(u)}
+                                                                className="p-2 bg-cyan-950/30 hover:bg-cyan-500 text-cyan-400 hover:text-slate-900 rounded-lg transition-colors inline-block disabled:opacity-50"
+                                                                title="Enviar recuperación por email"
+                                                            >
+                                                                {sendingResetUid === u.id ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <Mail className="w-4 h-4" />
+                                                                )}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteUser(u)}
+                                                                className="p-2 bg-red-950/30 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-colors inline-block"
+                                                                title="Eliminar acceso"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}

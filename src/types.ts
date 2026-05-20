@@ -40,6 +40,8 @@ export interface User {
     name: string;
     role: UserRole;
     createdAt?: string;
+    /** true = debe elegir contraseña propia antes de usar Smartops (clave temporal de admin). */
+    mustChangePassword?: boolean;
 }
 
 export interface SSEE {

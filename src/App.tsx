@@ -44,7 +44,9 @@ import { ref, onValue, set, push, remove } from "firebase/database";
 import { loadUserProfile } from "./lib/loadUserProfile";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
+import { ChangePassword } from "./components/ChangePassword";
 import { UserManagement } from "./components/UserManagement";
+import { userMustChangePassword } from "./lib/userMustChangePassword";
 import { ControlView } from "./components/ControlView";
 import { CancelFlightModal } from "./components/CancelFlightModal";
 import { DailyReportView } from "./components/DailyReportView";
@@ -631,6 +633,15 @@ function App() {
       return <GanttCalculatorView onBack={() => setPublicGanttOpen(false)} />;
     }
     return <Login onLoginSuccess={setCurrentUser} onOpenGantt={() => setPublicGanttOpen(true)} />;
+  }
+
+  if (userMustChangePassword(currentUser)) {
+    return (
+      <ChangePassword
+        user={currentUser}
+        onComplete={(user) => setCurrentUser(user)}
+      />
+    );
   }
 
   return (
