@@ -46,7 +46,7 @@ export interface User {
 
 export interface SSEE {
     id: string;
-    type: "WCHS" | "WCHC" | "WCHR" | "BLND" | "";
+    type: "WCHS" | "WCHC" | "WCHR" | "BLND" | "DEAF" | "";
     qty: string;
 }
 

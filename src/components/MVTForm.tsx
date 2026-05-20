@@ -3,6 +3,7 @@ import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, computeMvtDelayStatus, validateMvtSendDelays } from "../lib/mvtTime";
+import { getMvtMaxPax, getMvtMaxPaxLabel, validateMvtPax } from "../lib/mvtPaxLimits";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
 
@@ -128,6 +129,18 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
         setData((prev) => ({ ...prev, [field]: value }));
     };
 
+    const handlePaxActualChange = (value: string) => {
+        const digits = value.replace(/[^0-9]/g, "");
+        if (maxPax != null && digits !== "") {
+            const n = parseInt(digits, 10);
+            if (!Number.isNaN(n) && n > maxPax) {
+                handleChange("paxActual", String(maxPax));
+                return;
+            }
+        }
+        handleChange("paxActual", digits);
+    };
+
     const delayStatus = useMemo(
         () => computeMvtDelayStatus(flight.std, data.atd, data.dlyTime1, data.dlyTime2),
         [flight.std, data.atd, data.dlyTime1, data.dlyTime2],
@@ -146,8 +159,19 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
             ),
         [flight.std, data.atd, data.dlyCod1, data.dlyTime1, data.dlyCod2, data.dlyTime2],
     );
+    const paxValidation = useMemo(
+        () => validateMvtPax(data.paxActual, flight.reg),
+        [data.paxActual, flight.reg],
+    );
+    const maxPax = useMemo(() => getMvtMaxPax(flight.reg), [flight.reg]);
+    const maxPaxHint = useMemo(() => getMvtMaxPaxLabel(flight.reg), [flight.reg]);
+
     const cannotSendForDelays = sendingNewMvt && !sendDelayValidation.ok;
+    const cannotSendForPax = !delayOnlyMode && !paxValidation.ok;
+    const cannotSend = cannotSendForDelays || cannotSendForPax;
     const delaySendBlockMessage = sendingNewMvt && !sendDelayValidation.ok ? sendDelayValidation.message : null;
+    const paxSendBlockMessage = !paxValidation.ok ? paxValidation.message : null;
+    const sendBlockMessage = delaySendBlockMessage ?? paxSendBlockMessage;
 
     const handleAddSSEE = () => {
         setData((prev) => ({
@@ -172,8 +196,8 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
-        if (cannotSendForDelays) {
-            window.alert(sendDelayValidation.message);
+        if (cannotSend) {
+            window.alert(sendBlockMessage ?? "Revisá los datos del MVT antes de enviar.");
             return;
         }
         onSave(data);
@@ -256,7 +280,17 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
             <section className="p-5 rounded-xl border border-border">
                 <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider">Pasajeros & Carga</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <NumberInput label="PAX" value={data.paxActual} onChange={(v) => handleChange("paxActual", v)} disabled={fieldDisabled(false)} />
+                    <div className="flex flex-col gap-1.5">
+                        <NumberInput
+                            label="PAX"
+                            value={data.paxActual}
+                            onChange={handlePaxActualChange}
+                            disabled={fieldDisabled(false)}
+                        />
+                        {maxPaxHint && !fieldDisabled(false) ? (
+                            <p className="text-[11px] font-semibold text-muted-foreground ml-1">{maxPaxHint}</p>
+                        ) : null}
+                    </div>
                     <NumberInput label="INF" value={data.inf} onChange={(v) => handleChange("inf", v)} disabled={fieldDisabled(false)} />
                     <NumberInput label="TOTAL BAGS (PCS)" value={data.totalBags} onChange={(v) => handleChange("totalBags", v)} disabled={fieldDisabled(false)} />
                     <NumberInput label="TOTAL CARGA (KG)" value={data.totalCarga} onChange={(v) => handleChange("totalCarga", v)} disabled={fieldDisabled(false)} />
@@ -308,6 +342,7 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                                     <option value="WCHC">WCHC</option>
                                     <option value="WCHR">WCHR</option>
                                     <option value="BLND">BLND</option>
+                                    <option value="DEAF">DEAF</option>
                                 </select>
                                 <button
                                     type="button"
@@ -338,12 +373,12 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                 </div>
             </section>
 
-            {delaySendBlockMessage ? (
+            {sendBlockMessage ? (
                 <p
                     className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 leading-snug"
                     role="alert"
                 >
-                    {delaySendBlockMessage}
+                    {sendBlockMessage}
                 </p>
             ) : null}
 
@@ -351,11 +386,11 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                 <div className="sticky bottom-4 z-10 flex flex-col items-end gap-2">
                     <button
                         type="submit"
-                        disabled={cannotSendForDelays}
-                        title={cannotSendForDelays ? delaySendBlockMessage ?? undefined : undefined}
-                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${cannotSendForDelays ? "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none" : delayOnlyMode || flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5"}`}
+                        disabled={cannotSend}
+                        title={cannotSend ? sendBlockMessage ?? undefined : undefined}
+                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${cannotSend ? "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none" : delayOnlyMode || flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5"}`}
                     >
-                        {(delayOnlyMode || flight.mvtData?.atd) && !cannotSendForDelays ? (
+                        {(delayOnlyMode || flight.mvtData?.atd) && !cannotSend ? (
                             <CheckCircle2 className="w-5 h-5" />
                         ) : null}
                         {delayOnlyMode ? "Guardar códigos de demora" : flight.mvtData?.atd ? "Actualizar MVT" : "Enviar MVT"}

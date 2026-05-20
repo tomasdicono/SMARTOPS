@@ -20,6 +20,7 @@ import {
   parseTimeToMinutes,
   validateMvtSendDelays,
 } from "./lib/mvtTime";
+import { validateMvtPax } from "./lib/mvtPaxLimits";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
@@ -374,6 +375,11 @@ function App() {
       );
       if (!delayCheck.ok) {
         alert(delayCheck.message);
+        return;
+      }
+      const paxCheck = validateMvtPax(payload.paxActual, existingFlight?.reg);
+      if (!paxCheck.ok) {
+        alert(paxCheck.message);
         return;
       }
       payload.mvtSentAt = new Date().toISOString();
