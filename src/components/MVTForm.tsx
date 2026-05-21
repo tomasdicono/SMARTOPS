@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
-import { formatMinutesToHHMM, computeMvtDelayStatus, validateMvtSendDelays } from "../lib/mvtTime";
-import { getMvtMaxPax, getMvtMaxPaxLabel, validateMvtPax } from "../lib/mvtPaxLimits";
-import { validateMvtSendRequired } from "../lib/mvtRequiredFields";
+import { formatMinutesToHHMM, computeMvtDelayStatus } from "../lib/mvtTime";
+import { getMvtMaxPax, getMvtMaxPaxLabel } from "../lib/mvtPaxLimits";
+import { evaluateMvtSendGate } from "../lib/mvtSendGate";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
 
@@ -147,35 +147,37 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
         [flight.std, data.atd, data.dlyTime1, data.dlyTime2],
     );
     const { isDelayed, remDelay } = delayStatus;
-    const sendingNewMvt = !mvtSent && !delayOnlyMode;
-    const sendDelayValidation = useMemo(
+    const sendGate = useMemo(
         () =>
-            validateMvtSendDelays(
-                flight.std,
-                data.atd,
-                data.dlyCod1,
-                data.dlyTime1,
-                data.dlyCod2,
-                data.dlyTime2,
-            ),
-        [flight.std, data.atd, data.dlyCod1, data.dlyTime1, data.dlyCod2, data.dlyTime2],
+            evaluateMvtSendGate({
+                mvt: data,
+                std: flight.std,
+                reg: flight.reg,
+                delayOnlyMode,
+            }),
+        [
+            delayOnlyMode,
+            flight.std,
+            flight.reg,
+            data.atd,
+            data.off,
+            data.eta,
+            data.paxActual,
+            data.inf,
+            data.totalBags,
+            data.load,
+            data.fob,
+            data.supervisor,
+            data.dlyCod1,
+            data.dlyTime1,
+            data.dlyCod2,
+            data.dlyTime2,
+        ],
     );
-    const paxValidation = useMemo(
-        () => validateMvtPax(data.paxActual, flight.reg),
-        [data.paxActual, flight.reg],
-    );
-    const requiredValidation = useMemo(() => validateMvtSendRequired(data), [data]);
+    const canSendMvt = sendGate.ok;
+    const sendBlockMessage = !sendGate.ok ? sendGate.message : null;
     const maxPax = useMemo(() => getMvtMaxPax(flight.reg), [flight.reg]);
     const maxPaxHint = useMemo(() => getMvtMaxPaxLabel(flight.reg), [flight.reg]);
-
-    const cannotSendForDelays = sendingNewMvt && !sendDelayValidation.ok;
-    const cannotSendForPax = !delayOnlyMode && !paxValidation.ok;
-    const cannotSendForRequired = !delayOnlyMode && !requiredValidation.ok;
-    const cannotSend = cannotSendForDelays || cannotSendForPax || cannotSendForRequired;
-    const delaySendBlockMessage = sendingNewMvt && !sendDelayValidation.ok ? sendDelayValidation.message : null;
-    const paxSendBlockMessage = !paxValidation.ok ? paxValidation.message : null;
-    const requiredSendBlockMessage = !requiredValidation.ok ? requiredValidation.message : null;
-    const sendBlockMessage = requiredSendBlockMessage ?? delaySendBlockMessage ?? paxSendBlockMessage;
 
     const handleAddSSEE = () => {
         setData((prev) => ({
@@ -200,7 +202,7 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
 
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
-        if (cannotSend) {
+        if (!canSendMvt) {
             window.alert(sendBlockMessage ?? "Revisá los datos del MVT antes de enviar.");
             return;
         }
@@ -377,7 +379,7 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                 </div>
             </section>
 
-            {sendBlockMessage ? (
+            {!delayOnlyMode && !canSendMvt && sendBlockMessage ? (
                 <p
                     className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 leading-snug"
                     role="alert"
@@ -390,14 +392,14 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                 <div className="sticky bottom-4 z-10 flex flex-col items-end gap-2">
                     <button
                         type="submit"
-                        disabled={cannotSend}
-                        title={cannotSend ? sendBlockMessage ?? undefined : undefined}
-                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${cannotSend ? "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none" : delayOnlyMode || flight.mvtData?.atd ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5"}`}
+                        disabled={!canSendMvt}
+                        title={!canSendMvt ? sendBlockMessage ?? undefined : undefined}
+                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${canSendMvt ? (delayOnlyMode || mvtSent ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5") : "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none opacity-70"}`}
                     >
-                        {(delayOnlyMode || flight.mvtData?.atd) && !cannotSend ? (
+                        {canSendMvt && (delayOnlyMode || mvtSent) ? (
                             <CheckCircle2 className="w-5 h-5" />
                         ) : null}
-                        {delayOnlyMode ? "Guardar códigos de demora" : flight.mvtData?.atd ? "Actualizar MVT" : "Enviar MVT"}
+                        {delayOnlyMode ? "Guardar códigos de demora" : mvtSent ? "Actualizar MVT" : "Enviar MVT"}
                     </button>
                 </div>
             ) : null}

@@ -18,10 +18,8 @@ import {
   formatMvtSseeSummary,
   formatMinutesToHHMM,
   parseTimeToMinutes,
-  validateMvtSendDelays,
 } from "./lib/mvtTime";
-import { validateMvtPax } from "./lib/mvtPaxLimits";
-import { validateMvtSendRequired } from "./lib/mvtRequiredFields";
+import { evaluateMvtSendGate } from "./lib/mvtSendGate";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
@@ -366,26 +364,14 @@ function App() {
       payload = applyMvtDelayPatch(prevMvt, normalizeMvtData(mvtData));
     } else {
       payload = normalizeMvtData(mvtData);
-      const delayCheck = validateMvtSendDelays(
-        existingFlight?.std ?? "",
-        payload.atd,
-        payload.dlyCod1,
-        payload.dlyTime1,
-        payload.dlyCod2,
-        payload.dlyTime2,
-      );
-      if (!delayCheck.ok) {
-        alert(delayCheck.message);
-        return;
-      }
-      const requiredCheck = validateMvtSendRequired(payload);
-      if (!requiredCheck.ok) {
-        alert(requiredCheck.message);
-        return;
-      }
-      const paxCheck = validateMvtPax(payload.paxActual, existingFlight?.reg);
-      if (!paxCheck.ok) {
-        alert(paxCheck.message);
+      const sendGate = evaluateMvtSendGate({
+        mvt: payload,
+        std: existingFlight?.std ?? "",
+        reg: existingFlight?.reg,
+        delayOnlyMode: false,
+      });
+      if (!sendGate.ok) {
+        alert(sendGate.message);
         return;
       }
       payload.mvtSentAt = new Date().toISOString();
