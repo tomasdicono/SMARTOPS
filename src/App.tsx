@@ -21,6 +21,7 @@ import {
   validateMvtSendDelays,
 } from "./lib/mvtTime";
 import { validateMvtPax } from "./lib/mvtPaxLimits";
+import { validateMvtSendRequired } from "./lib/mvtRequiredFields";
 import { ScheduleParser } from "./components/ScheduleParser";
 import { FlightModal } from "./components/FlightModal";
 import { OperationsMenu } from "./components/OperationsMenu";
@@ -375,6 +376,11 @@ function App() {
       );
       if (!delayCheck.ok) {
         alert(delayCheck.message);
+        return;
+      }
+      const requiredCheck = validateMvtSendRequired(payload);
+      if (!requiredCheck.ok) {
+        alert(requiredCheck.message);
         return;
       }
       const paxCheck = validateMvtPax(payload.paxActual, existingFlight?.reg);

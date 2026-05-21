@@ -4,6 +4,7 @@ import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, computeMvtDelayStatus, validateMvtSendDelays } from "../lib/mvtTime";
 import { getMvtMaxPax, getMvtMaxPaxLabel, validateMvtPax } from "../lib/mvtPaxLimits";
+import { validateMvtSendRequired } from "../lib/mvtRequiredFields";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
 
@@ -163,15 +164,18 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
         () => validateMvtPax(data.paxActual, flight.reg),
         [data.paxActual, flight.reg],
     );
+    const requiredValidation = useMemo(() => validateMvtSendRequired(data), [data]);
     const maxPax = useMemo(() => getMvtMaxPax(flight.reg), [flight.reg]);
     const maxPaxHint = useMemo(() => getMvtMaxPaxLabel(flight.reg), [flight.reg]);
 
     const cannotSendForDelays = sendingNewMvt && !sendDelayValidation.ok;
     const cannotSendForPax = !delayOnlyMode && !paxValidation.ok;
-    const cannotSend = cannotSendForDelays || cannotSendForPax;
+    const cannotSendForRequired = !delayOnlyMode && !requiredValidation.ok;
+    const cannotSend = cannotSendForDelays || cannotSendForPax || cannotSendForRequired;
     const delaySendBlockMessage = sendingNewMvt && !sendDelayValidation.ok ? sendDelayValidation.message : null;
     const paxSendBlockMessage = !paxValidation.ok ? paxValidation.message : null;
-    const sendBlockMessage = delaySendBlockMessage ?? paxSendBlockMessage;
+    const requiredSendBlockMessage = !requiredValidation.ok ? requiredValidation.message : null;
+    const sendBlockMessage = requiredSendBlockMessage ?? delaySendBlockMessage ?? paxSendBlockMessage;
 
     const handleAddSSEE = () => {
         setData((prev) => ({
