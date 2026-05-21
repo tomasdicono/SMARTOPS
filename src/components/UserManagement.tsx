@@ -196,10 +196,27 @@ export function UserManagement({ onClose }: UserManagementProps) {
         return () => unsubscribe();
     }, []);
 
+    const findProfileByEmail = (email: string) => {
+        const norm = email.trim().toLowerCase();
+        return users.find((u) => u.email.trim().toLowerCase() === norm);
+    };
+
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
         setCreating(true);
         setError(null);
+        setResetEmailSuccess(null);
+
+        const emailNorm = formEmail.trim().toLowerCase();
+        const existingProfile = findProfileByEmail(emailNorm);
+        if (existingProfile) {
+            setError(
+                `Ya existe un perfil en Smartops para ${emailNorm}. Eliminá ese usuario con la papelera (id: ${existingProfile.id}) y volvé a crearlo. Si solo borraste Authentication, el perfil viejo sigue bloqueando el alta.`,
+            );
+            setCreating(false);
+            return;
+        }
+
         try {
             await createAppUser(secondaryAuth, {
                 name: formName,
@@ -245,7 +262,7 @@ export function UserManagement({ onClose }: UserManagementProps) {
         if (!bulkParse?.rows.length) return;
 
         const existingEmails = new Set(users.map((u) => u.email.trim().toLowerCase()));
-        const alreadyInDb = bulkParse.rows.filter((r) => existingEmails.has(r.email));
+        const alreadyInDb = bulkParse.rows.filter((r) => existingEmails.has(r.email.trim().toLowerCase()));
         if (alreadyInDb.length) {
             const list = alreadyInDb.map((r) => r.email).join(", ");
             if (

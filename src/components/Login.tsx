@@ -3,6 +3,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import type { User } from "../types";
 import { loadUserProfile } from "../lib/loadUserProfile";
+import { loginErrorMessage, PROFILE_NOT_IN_SMARTOPS_MESSAGE } from "../lib/loginErrors";
 import { PlaneTakeoff, Loader2, AlertCircle, Calculator } from "lucide-react";
 
 interface LoginProps {
@@ -33,28 +34,17 @@ export function Login({ onLoginSuccess, onOpenGantt }: LoginProps) {
             if (userData) {
                 onLoginSuccess(userData);
             } else {
-                // If user doesn't exist in our DB, we give them a default read-only or sign out
-                setError("Usuario no encontrado en la base de datos interna. Contacte a un administrador.");
-                auth.signOut();
+                console.warn(
+                    "Login: Auth OK pero sin perfil en users/",
+                    firebaseUser.uid,
+                    firebaseUser.email,
+                );
+                setError(PROFILE_NOT_IN_SMARTOPS_MESSAGE);
+                await auth.signOut();
             }
         } catch (err: unknown) {
             console.error("Login error:", err);
-            const code =
-                err && typeof err === "object" && "code" in err
-                    ? String((err as { code?: string }).code)
-                    : "";
-            const msg = err instanceof Error ? err.message : String(err ?? "");
-            if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
-                setError("Correo o contraseña incorrectos.");
-            } else if (code === "auth/too-many-requests") {
-                setError("Demasiados intentos. Intente más tarde.");
-            } else if (msg.includes("permission") || msg.includes("PERMISSION_DENIED")) {
-                setError(
-                    "Sin permiso para leer tu perfil en Firebase. Contactá a un administrador o revisá las reglas de la base (users/{uid})."
-                );
-            } else {
-                setError("Ocurrió un error al iniciar sesión.");
-            }
+            setError(loginErrorMessage(err));
         } finally {
             setLoading(false);
         }
