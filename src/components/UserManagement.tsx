@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { User, UserRole } from "../types";
 import { normalizeUserRole } from "../types";
 import { db } from "../lib/firebase";
@@ -15,6 +15,7 @@ import {
     Upload,
     AlertCircle,
     Mail,
+    Search,
 } from "lucide-react";
 import {
     sendUserPasswordResetEmail,
@@ -164,6 +165,15 @@ export function UserManagement({ onClose }: UserManagementProps) {
     const [deletingUid, setDeletingUid] = useState<string | null>(null);
     const [sendingResetUid, setSendingResetUid] = useState<string | null>(null);
     const [resetEmailSuccess, setResetEmailSuccess] = useState<string | null>(null);
+    const [userSearch, setUserSearch] = useState("");
+
+    const filteredUsers = useMemo(() => {
+        const q = userSearch.trim().toLowerCase();
+        if (!q) return users;
+        return users.filter(
+            (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+        );
+    }, [users, userSearch]);
 
     useEffect(() => {
         const usersRef = ref(db, "users");
@@ -590,6 +600,24 @@ export function UserManagement({ onClose }: UserManagementProps) {
                     </div>
 
                     <div className="w-full md:w-2/3 flex flex-col min-h-0 gap-2">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                            <input
+                                type="search"
+                                value={userSearch}
+                                onChange={(e) => setUserSearch(e.target.value)}
+                                placeholder="Buscar por nombre o email…"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
+                                aria-label="Buscar usuarios por nombre o email"
+                            />
+                        </div>
+                        {!loading && !loadError && users.length > 0 ? (
+                            <p className="text-xs text-slate-500 px-1 font-semibold">
+                                {userSearch.trim()
+                                    ? `${filteredUsers.length} de ${users.length} usuario${users.length === 1 ? "" : "s"}`
+                                    : `${users.length} usuario${users.length === 1 ? "" : "s"}`}
+                            </p>
+                        ) : null}
                         <p className="text-xs text-slate-500 leading-relaxed px-1">
                             Eliminar aquí solo quita el perfil en Smartops. Para liberar el correo, borrá el usuario en{" "}
                             <span className="text-slate-400 font-semibold">Firebase Console → Authentication</span>.
@@ -609,6 +637,12 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                     <Users className="w-12 h-12 mb-4 opacity-50" />
                                     <p>No hay usuarios registrados</p>
                                 </div>
+                            ) : filteredUsers.length === 0 ? (
+                                <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
+                                    <Search className="w-10 h-10 mb-3 opacity-50" />
+                                    <p className="font-semibold">Sin resultados para &quot;{userSearch.trim()}&quot;</p>
+                                    <p className="text-xs mt-1 text-slate-600">Probá otro nombre o correo</p>
+                                </div>
                             ) : (
                                 <div className="overflow-x-auto overflow-y-auto flex-1">
                                     <table className="w-full text-left border-collapse">
@@ -620,7 +654,7 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {users.map((u) => (
+                                            {filteredUsers.map((u) => (
                                                 <tr
                                                     key={u.id}
                                                     className="border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors"
