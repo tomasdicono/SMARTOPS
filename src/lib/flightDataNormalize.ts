@@ -56,6 +56,9 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
     if (raw.mvtSentAt != null && String(raw.mvtSentAt).trim() !== "") {
         out.mvtSentAt = String(raw.mvtSentAt);
     }
+    if (raw.mvtEditedByHccAt != null && String(raw.mvtEditedByHccAt).trim() !== "") {
+        out.mvtEditedByHccAt = String(raw.mvtEditedByHccAt);
+    }
     return out;
 }
 

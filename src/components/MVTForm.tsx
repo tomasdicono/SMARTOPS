@@ -11,8 +11,8 @@ import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mv
 interface Props {
     flight: Flight;
     readOnly?: boolean;
-    /** MVT enviado: HCC puede editar solo códigos/tiempos de demora y observaciones. */
-    canEditDelayFields?: boolean;
+    /** MVT enviado: HCC puede editar y guardar todo el formulario. */
+    canEditFullMvtAfterSent?: boolean;
     onSave: (mvtData: Flight["mvtData"]) => void;
 }
 
@@ -108,23 +108,23 @@ const TextInput = ({
     </div>
 );
 
-export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props) {
+export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave }: Props) {
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => getInitialMvtFormData(flight));
     const mvtSent = hasMvtSent(flight);
-    const delayOnlyMode = Boolean(canEditDelayFields && mvtSent);
-    const fieldDisabled = (isDelayField: boolean) => Boolean(readOnly) || (delayOnlyMode && !isDelayField);
+    const fullEditAfterSent = Boolean(canEditFullMvtAfterSent && mvtSent);
+    const fieldDisabled = (_isDelayField: boolean) => Boolean(readOnly);
 
     useEffect(() => {
-        if (readOnly && !delayOnlyMode) clearMvtDraft(flight.id);
-    }, [readOnly, delayOnlyMode, flight.id]);
+        if (readOnly && !fullEditAfterSent) clearMvtDraft(flight.id);
+    }, [readOnly, fullEditAfterSent, flight.id]);
 
     useEffect(() => {
-        if (readOnly || mvtSent) return;
+        if (readOnly || (mvtSent && !fullEditAfterSent)) return;
         const t = window.setTimeout(() => {
             persistMvtDraft(flight.id, data);
         }, 400);
         return () => window.clearTimeout(t);
-    }, [data, flight.id, readOnly, mvtSent]);
+    }, [data, flight.id, readOnly, mvtSent, fullEditAfterSent]);
 
     const handleChange = (field: keyof typeof data, value: string) => {
         setData((prev) => ({ ...prev, [field]: value }));
@@ -153,10 +153,9 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                 mvt: data,
                 std: flight.std,
                 reg: flight.reg,
-                delayOnlyMode,
+                delayOnlyMode: false,
             }),
         [
-            delayOnlyMode,
             flight.std,
             flight.reg,
             data.atd,
@@ -217,11 +216,11 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
           <fieldset className="space-y-8 border-none p-0 m-0 pb-8">
 
             {mvtSent ? (
-                <div className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${delayOnlyMode ? "border-cyan-200 bg-cyan-50 text-cyan-950" : "border-slate-200 bg-slate-100 text-slate-800"}`}>
+                <div className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${fullEditAfterSent ? "border-cyan-200 bg-cyan-50 text-cyan-950" : "border-slate-200 bg-slate-100 text-slate-800"}`}>
                     <Lock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
                     <p className="font-semibold leading-snug">
-                        {delayOnlyMode
-                            ? "MVT enviado. Solo podés modificar códigos de demora, tiempos y observaciones."
+                        {fullEditAfterSent
+                            ? "MVT enviado. Podés corregir cualquier dato y guardar con «Actualizar MVT»."
                             : "MVT enviado. El formulario no puede editarse."}
                     </p>
                 </div>
@@ -379,7 +378,7 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                 </div>
             </section>
 
-            {!delayOnlyMode && !canSendMvt && sendBlockMessage ? (
+            {!canSendMvt && sendBlockMessage ? (
                 <p
                     className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 leading-snug"
                     role="alert"
@@ -394,26 +393,39 @@ export function MVTForm({ flight, readOnly, canEditDelayFields, onSave }: Props)
                         type="submit"
                         disabled={!canSendMvt}
                         title={!canSendMvt ? sendBlockMessage ?? undefined : undefined}
-                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${canSendMvt ? (delayOnlyMode || mvtSent ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5") : "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none opacity-70"}`}
+                        className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${canSendMvt ? (mvtSent ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5") : "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none opacity-70"}`}
                     >
-                        {canSendMvt && (delayOnlyMode || mvtSent) ? (
+                        {canSendMvt && mvtSent ? (
                             <CheckCircle2 className="w-5 h-5" />
                         ) : null}
-                        {delayOnlyMode ? "Guardar códigos de demora" : mvtSent ? "Actualizar MVT" : "Enviar MVT"}
+                        {mvtSent ? "Actualizar MVT" : "Enviar MVT"}
                     </button>
                 </div>
             ) : null}
 
             {flight.mvtData?.mvtSentAt ? (
-                <p className="text-center text-xs font-semibold text-muted-foreground pt-6 mt-2 border-t border-border">
-                    MVT enviado:{" "}
-                    <span className="text-foreground tabular-nums">
-                        {new Date(flight.mvtData.mvtSentAt).toLocaleString("es-AR", {
-                            dateStyle: "short",
-                            timeStyle: "medium",
-                        })}
-                    </span>
-                </p>
+                <div className="text-center text-xs font-semibold text-muted-foreground pt-6 mt-2 border-t border-border space-y-1">
+                    <p>
+                        MVT enviado:{" "}
+                        <span className="text-foreground tabular-nums">
+                            {new Date(flight.mvtData.mvtSentAt).toLocaleString("es-AR", {
+                                dateStyle: "short",
+                                timeStyle: "medium",
+                            })}
+                        </span>
+                    </p>
+                    {flight.mvtData.mvtEditedByHccAt ? (
+                        <p className="text-cyan-800 dark:text-cyan-300">
+                            Editado por HCC:{" "}
+                            <span className="tabular-nums">
+                                {new Date(flight.mvtData.mvtEditedByHccAt).toLocaleString("es-AR", {
+                                    dateStyle: "short",
+                                    timeStyle: "medium",
+                                })}
+                            </span>
+                        </p>
+                    ) : null}
+                </div>
             ) : null}
           </fieldset>
         </form>

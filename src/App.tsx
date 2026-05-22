@@ -70,7 +70,7 @@ import {
   isLimpiezaPendiente,
 } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
-import { normalizeMvtData, normalizeHitosData, applyMvtDelayPatch } from "./lib/flightDataNormalize";
+import { normalizeMvtData, normalizeHitosData } from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
 import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
@@ -166,6 +166,21 @@ function App() {
   const handleLogout = async () => {
     await signOut(auth);
     setCurrentUser(null);
+  };
+
+  const goToFlightsTab = () => {
+    setMainTab("tablero");
+    setShowUserManagement(false);
+    setSelectedFlight(null);
+    setCancelModalFlight(null);
+    setRescheduleModalFlight(null);
+    setRouteModalFlight(null);
+    setShowParser(false);
+    setShowGestiones(false);
+    setShowManualFlight(false);
+    setShowOpsMenu(false);
+    setLoadToolsMenuOpen(false);
+    setOpenFlightActionsMenuId(null);
   };
 
   useEffect(() => {
@@ -381,7 +396,19 @@ function App() {
 
     let payload: NonNullable<Flight["mvtData"]>;
     if (alreadySent && canEditMvtDelayAfterSent(userRole)) {
-      payload = applyMvtDelayPatch(prevMvt, normalizeMvtData(mvtData));
+      payload = normalizeMvtData(mvtData);
+      payload.mvtSentAt = prevMvt.mvtSentAt;
+      payload.mvtEditedByHccAt = new Date().toISOString();
+      const sendGate = evaluateMvtSendGate({
+        mvt: payload,
+        std: existingFlight?.std ?? "",
+        reg: existingFlight?.reg,
+        delayOnlyMode: false,
+      });
+      if (!sendGate.ok) {
+        alert(sendGate.message);
+        return;
+      }
     } else {
       payload = normalizeMvtData(mvtData);
       const sendGate = evaluateMvtSendGate({
@@ -681,15 +708,20 @@ function App() {
     <div className="min-h-screen bg-background text-foreground pb-12">
       <header className="bg-slate-900 border-b border-slate-800 text-white py-3 px-4 md:px-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 w-full mb-6 max-w-full min-w-0">
         <div className="flex items-center justify-between w-full md:w-auto gap-3">
-          <div className="flex items-center gap-3">
-            <PlaneTakeoff className="w-8 h-8 text-cyan-400 shrink-0" />
+          <button
+            type="button"
+            onClick={goToFlightsTab}
+            className="flex items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            title="Ir a vuelos"
+          >
+            <PlaneTakeoff className="w-8 h-8 text-cyan-400 shrink-0" aria-hidden />
             <h1 className="text-2xl font-black tracking-tight flex items-center gap-2 text-white truncate">
               SMARTOPS
               <span className="text-cyan-400 font-bold hidden sm:inline border-l-2 border-slate-700 pl-3">
                 Management
               </span>
             </h1>
-          </div>
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">

@@ -29,7 +29,7 @@ export function isScRole(role: UserRole): boolean {
     return role === "SC";
 }
 
-/** Tras enviar el MVT, solo HCC puede corregir códigos/tiempos de demora y observaciones. */
+/** Tras enviar el MVT, solo HCC puede editar y guardar cualquier campo del formulario. */
 export function canEditMvtDelayAfterSent(role: UserRole): boolean {
     return role === "HCC";
 }
@@ -104,8 +104,10 @@ export interface Flight {
         ssee: SSEE[];
         infoSup: string;
         supervisor: string;
-        /** ISO 8601 — última vez que se envió/actualizó el MVT */
+        /** ISO 8601 — primera vez que se envió el MVT */
         mvtSentAt?: string;
+        /** ISO 8601 — última corrección del MVT por un usuario HCC tras el envío */
+        mvtEditedByHccAt?: string;
     };
 
     // Custom Gantt Chart / Turnaround Performance Data
