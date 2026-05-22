@@ -19,9 +19,11 @@ interface Props {
     selectedIso: string;
     currentUser: User | null;
     readOnly?: boolean;
+    /** SC / escritorio: checklist de referencia, no condiciona MVT ni Hitos. */
+    guideOnly?: boolean;
 }
 
-export function LimpiezaChecklistTab({ flight, dayFlights, selectedIso, currentUser, readOnly }: Props) {
+export function LimpiezaChecklistTab({ flight, dayFlights, selectedIso, currentUser, readOnly, guideOnly }: Props) {
     const mode = useMemo(
         () => getLimpiezaChecklistMode(flight, dayFlights, selectedIso),
         [flight, dayFlights, selectedIso]
@@ -170,6 +172,11 @@ export function LimpiezaChecklistTab({ flight, dayFlights, selectedIso, currentU
 
     return (
         <div className="space-y-6">
+            {guideOnly ? (
+                <p className="rounded-xl border border-violet-200 bg-violet-50/80 px-4 py-3 text-sm font-semibold text-violet-950 leading-snug">
+                    Guía operativa: completar el checklist ayuda al seguimiento de limpieza, pero no es requisito para enviar MVT ni guardar Hitos.
+                </p>
+            ) : null}
             <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50/80 to-white p-4 shadow-sm">
                 <div className="flex items-start gap-3 min-w-0">
                     <div className="rounded-xl bg-violet-100 p-2.5 text-violet-700 shrink-0">

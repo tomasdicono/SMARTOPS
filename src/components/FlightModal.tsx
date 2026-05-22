@@ -13,6 +13,8 @@ import {
 } from "../lib/flightHelpers";
 import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
 import { isLimpiezaRole, canEditMvtDelayAfterSent } from "../types";
+
+type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA";
 import { hasMvtSent } from "../lib/controlHelpers";
 import { downloadHitosSummary } from "../lib/downloadHitosSummary";
 import { X, Ban, Download } from "lucide-react";
@@ -46,7 +48,7 @@ export function FlightModal({
     onSaveCrewHitos,
     onPersistCrewHitos,
 }: Props) {
-    const [activeTab, setActiveTab] = useState<"MVT" | "HITOS" | "CREW" | "LIMPIEZA">(() => {
+    const [activeTab, setActiveTab] = useState<FlightModalTab>(() => {
         if (isLimpiezaRole(userRole)) return "LIMPIEZA";
         if (userRole === "CREW") return "CREW";
         return "MVT";
@@ -76,6 +78,55 @@ export function FlightModal({
         !isReadOnlyView &&
         isMvtCompleteForCard(flight) &&
         hasHitosDataForSummaryExport(flight);
+
+    /** SC / escritorio: Limpieza es guía ANEXO A, no bloquea MVT ni Hitos. */
+    const limpiezaAsGuide = canSeeLimpiezaChecklist && !isLimpiezaRole(userRole);
+
+    const tabOrder: FlightModalTab[] = limpiezaAsGuide
+        ? [
+              ...(canSeeMvt ? (["MVT"] as const) : []),
+              ...(canSeeHitos ? (["HITOS"] as const) : []),
+              ...(canSeeCrew ? (["CREW"] as const) : []),
+              ...(canSeeLimpiezaChecklist ? (["LIMPIEZA"] as const) : []),
+          ]
+        : [
+              ...(canSeeMvt ? (["MVT"] as const) : []),
+              ...(canSeeLimpiezaChecklist ? (["LIMPIEZA"] as const) : []),
+              ...(canSeeHitos ? (["HITOS"] as const) : []),
+              ...(canSeeCrew ? (["CREW"] as const) : []),
+          ];
+
+    const selectTab = (tab: FlightModalTab) => setActiveTab(tab);
+
+    const tabButton = (tab: FlightModalTab) => {
+        const isLimpieza = tab === "LIMPIEZA";
+        const active = activeTab === tab;
+        const label =
+            tab === "MVT" ? "MVT" : tab === "HITOS" ? "Hitos" : tab === "CREW" ? "Hitos Crew" : "Limpieza";
+        return (
+            <button
+                key={tab}
+                type="button"
+                onClick={() => selectTab(tab)}
+                className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${
+                    active
+                        ? isLimpieza
+                            ? "text-violet-700"
+                            : "text-blue-600"
+                        : "text-muted-foreground hover:text-foreground"
+                }`}
+            >
+                {label}
+                {active ? (
+                    <span
+                        className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-lg ${
+                            isLimpieza ? "bg-violet-600" : "bg-blue-600"
+                        }`}
+                    />
+                ) : null}
+            </button>
+        );
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -153,54 +204,16 @@ export function FlightModal({
                     </div>
                 )}
 
-                {/* Tabs — Limpieza después de MVT para HCC/AJS/SC/ADMIN; solo Limpieza si es rol Limpieza */}
-                <div className="flex px-6 border-b border-border bg-slate-50/50">
-                    {canSeeMvt && (
-                        <button
-                            onClick={() => setActiveTab("MVT")}
-                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "MVT" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
-                        >
-                            MVT
-                            {activeTab === "MVT" && (
-                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
-                            )}
-                        </button>
-                    )}
-                    {canSeeLimpiezaChecklist && (
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab("LIMPIEZA")}
-                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "LIMPIEZA" ? "text-violet-700" : "text-muted-foreground hover:text-foreground"}`}
-                        >
-                            Limpieza
-                            {activeTab === "LIMPIEZA" && (
-                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-violet-600 rounded-t-lg"></span>
-                            )}
-                        </button>
-                    )}
-                    {canSeeHitos && (
-                        <button
-                            onClick={() => setActiveTab("HITOS")}
-                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "HITOS" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
-                        >
-                            Hitos
-                            {activeTab === "HITOS" && (
-                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
-                            )}
-                        </button>
-                    )}
-                    {canSeeCrew && (
-                        <button
-                            onClick={() => setActiveTab("CREW")}
-                            className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${activeTab === "CREW" ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
-                        >
-                            Hitos Crew
-                            {activeTab === "CREW" && (
-                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-lg"></span>
-                            )}
-                        </button>
-                    )}
-                </div>
+                {limpiezaAsGuide ? (
+                    <div className="px-4 sm:px-6 py-2.5 bg-violet-50 border-b border-violet-200">
+                        <p className="text-sm font-semibold text-violet-950 leading-snug">
+                            La pestaña Limpieza es una guía (ANEXO A). Podés cargar MVT e Hitos sin completar el checklist.
+                        </p>
+                    </div>
+                ) : null}
+
+                {/* Tabs — rol Limpieza: solo checklist; SC/escritorio: MVT y Hitos antes que la guía Limpieza */}
+                <div className="flex px-6 border-b border-border bg-slate-50/50">{tabOrder.map(tabButton)}</div>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
@@ -226,6 +239,7 @@ export function FlightModal({
                                 selectedIso={checklistSelectedIso}
                                 currentUser={currentUser}
                                 readOnly={isReadOnlyView}
+                                guideOnly={limpiezaAsGuide}
                             />
                         </div>
                     )}
