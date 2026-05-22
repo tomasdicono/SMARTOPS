@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
@@ -6,7 +6,9 @@ import { formatMinutesToHHMM, computeMvtDelayStatus } from "../lib/mvtTime";
 import { getMvtMaxPax, getMvtMaxPaxLabel } from "../lib/mvtPaxLimits";
 import { evaluateMvtSendGate } from "../lib/mvtSendGate";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
-import { getInitialMvtFormData, persistMvtDraft, clearMvtDraft } from "../lib/mvtDraftStorage";
+import { normalizeMvtData } from "../lib/flightDataNormalize";
+import { clearMvtDraft, readLegacyMvtDraft } from "../lib/mvtDraftStorage";
+import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 
 interface Props {
     flight: Flight;
@@ -14,6 +16,16 @@ interface Props {
     /** MVT enviado: HCC puede editar y guardar todo el formulario. */
     canEditFullMvtAfterSent?: boolean;
     onSave: (mvtData: Flight["mvtData"]) => void;
+    /** Persistencia en Firebase al editar (sin mvtSentAt). */
+    onPersistMvt?: (mvtData: Flight["mvtData"]) => void;
+}
+
+function mvtHasOperationalContent(m: NonNullable<Flight["mvtData"]>): boolean {
+    const atd = String(m.atd ?? "").replace(/\D/g, "");
+    if (atd.length >= 3) return true;
+    return ["off", "eta", "paxActual", "totalBags", "fob", "dlyCod1"].some((k) =>
+        String(m[k as keyof typeof m] ?? "").trim(),
+    );
 }
 
 const NumberInput = ({
@@ -108,23 +120,33 @@ const TextInput = ({
     </div>
 );
 
-export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave }: Props) {
-    const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => getInitialMvtFormData(flight));
+export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onPersistMvt }: Props) {
+    const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
     const mvtSent = hasMvtSent(flight);
     const fullEditAfterSent = Boolean(canEditFullMvtAfterSent && mvtSent);
     const fieldDisabled = (_isDelayField: boolean) => Boolean(readOnly);
+    const canPersist = !readOnly && (!mvtSent || fullEditAfterSent);
+    const onPersistRef = useRef(onPersistMvt);
+    onPersistRef.current = onPersistMvt;
 
     useEffect(() => {
-        if (readOnly && !fullEditAfterSent) clearMvtDraft(flight.id);
-    }, [readOnly, fullEditAfterSent, flight.id]);
+        const server = normalizeMvtData(flight.mvtData);
+        let initial = server;
+        if (!mvtHasOperationalContent(server)) {
+            const legacy = readLegacyMvtDraft(flight.id);
+            if (legacy && mvtHasOperationalContent(legacy)) {
+                initial = legacy;
+                onPersistRef.current?.(legacy);
+            }
+        }
+        clearMvtDraft(flight.id);
+        setData(initial);
+    }, [flight.id]);
 
-    useEffect(() => {
-        if (readOnly || (mvtSent && !fullEditAfterSent)) return;
-        const t = window.setTimeout(() => {
-            persistMvtDraft(flight.id, data);
-        }, 400);
-        return () => window.clearTimeout(t);
-    }, [data, flight.id, readOnly, mvtSent, fullEditAfterSent]);
+    useDebouncedFlightPersist(data, canPersist ? onPersistMvt : undefined, {
+        readOnly: !canPersist,
+        flightId: flight.id,
+    });
 
     const handleChange = (field: keyof typeof data, value: string) => {
         setData((prev) => ({ ...prev, [field]: value }));

@@ -29,6 +29,8 @@ interface Props {
     currentUser: User | null;
     onClose: () => void;
     onSaveMVT: (data: Flight["mvtData"]) => void;
+    /** Auto-guardado MVT en Firebase (sin marcar enviado). */
+    onPersistMvt?: (data: Flight["mvtData"]) => void;
     onSaveHitos: (data: import("../types").HitosData) => void;
     onPersistHitos?: (data: import("../types").HitosData) => void;
     onSaveCrewHitos: (data: Record<string, string>) => void;
@@ -43,6 +45,7 @@ export function FlightModal({
     currentUser,
     onClose,
     onSaveMVT,
+    onPersistMvt,
     onSaveHitos,
     onPersistHitos,
     onSaveCrewHitos,
@@ -228,6 +231,7 @@ export function FlightModal({
                                 onSave={(data) => {
                                     onSaveMVT(data);
                                 }}
+                                onPersistMvt={onPersistMvt}
                             />
                         </div>
                     )}

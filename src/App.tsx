@@ -405,6 +405,25 @@ function App() {
     }
   };
 
+  /** Auto-guardado MVT en Firebase (sin mvtSentAt); preserva envío si ya fue enviado. */
+  const handlePersistMvt = async (id: string, mvtData: Flight["mvtData"]) => {
+    const existingFlight = flights.find((x) => x.id === id);
+    const prevMvt = normalizeMvtData(existingFlight?.mvtData);
+    const payload = normalizeMvtData(mvtData);
+    const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
+    if (alreadySent) {
+      payload.mvtSentAt = prevMvt.mvtSentAt;
+      if (prevMvt.mvtEditedByHccAt) {
+        payload.mvtEditedByHccAt = prevMvt.mvtEditedByHccAt;
+      }
+    }
+    try {
+      await updateFlight(id, { mvtData: payload });
+    } catch (e) {
+      console.error("No se pudo auto-guardar MVT:", e);
+    }
+  };
+
   const handleSaveMVT = async (id: string, mvtData: Flight["mvtData"]) => {
     const existingFlight = flights.find((x) => x.id === id);
     const prevMvt = normalizeMvtData(existingFlight?.mvtData);
@@ -1593,6 +1612,7 @@ function App() {
           currentUser={currentUser}
           onClose={() => setSelectedFlight(null)}
           onSaveMVT={(data) => handleSaveMVT(selectedFlight.id, data)}
+          onPersistMvt={(data) => handlePersistMvt(selectedFlight.id, data)}
           onSaveHitos={(data) => handleSaveHitos(selectedFlight.id, data)}
           onPersistHitos={(data) => handlePersistHitos(selectedFlight.id, data)}
           onSaveCrewHitos={(data) => handleSaveCrewHitos(selectedFlight.id, data)}
