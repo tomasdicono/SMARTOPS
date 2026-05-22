@@ -48,6 +48,15 @@ import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, push, remove } from "firebase/database";
+import {
+  parseFlightsSnapshot,
+  isLegacyFlightsArray,
+  saveFlight,
+  updateFlight,
+  saveFlightsBatch,
+  removeFlightsByIds,
+  migrateFlightsArrayToMap,
+} from "./lib/flightsDb";
 import { loadUserProfile } from "./lib/loadUserProfile";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
@@ -222,23 +231,27 @@ function App() {
     const flightsRef = ref(db, 'flights');
     const unsubscribe = onValue(flightsRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        const flightsArray = Array.isArray(data) ? data : Object.values(data);
-        const validFlights = (flightsArray.filter(Boolean) as Flight[]).map(coerceFlightFromDb);
-        setFlights(validFlights);
-
-        // Assure modal stays linked to the latest realtime database version
-        setSelectedFlight((prev) => {
-          if (!prev) return null;
-          return validFlights.find((f) => f.id === prev.id) || prev;
-        });
-        setRouteModalFlight((prev) => {
-          if (!prev) return null;
-          return validFlights.find((f) => f.id === prev.id) || prev;
-        });
-      } else {
+      if (!data) {
         setFlights([]);
+        return;
       }
+      const validFlights = parseFlightsSnapshot(data);
+      setFlights(validFlights);
+
+      if (isLegacyFlightsArray(data)) {
+        void migrateFlightsArrayToMap(validFlights).catch((e) =>
+          console.error("Error al migrar flights a guardado por vuelo:", e)
+        );
+      }
+
+      setSelectedFlight((prev) => {
+        if (!prev) return null;
+        return validFlights.find((f) => f.id === prev.id) || prev;
+      });
+      setRouteModalFlight((prev) => {
+        if (!prev) return null;
+        return validFlights.find((f) => f.id === prev.id) || prev;
+      });
     });
 
     return () => unsubscribe();
@@ -339,15 +352,18 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleLoadFlights = (newFlights: Flight[]) => {
+  const handleLoadFlights = async (newFlights: Flight[]) => {
     const normalized = newFlights.map(coerceFlightFromDb);
-    const updatedFlights = [...flights, ...normalized];
-    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
-    setShowParser(false);
+    try {
+      await saveFlightsBatch(normalized);
+      setShowParser(false);
+    } catch {
+      alert("No se pudo cargar la programación. Revisá la conexión e intentá de nuevo.");
+    }
   };
 
   const handleRemoveDuplicateFlights = async () => {
-    const { kept, removedIds, removedCount, duplicateGroups } = removeDuplicateFlights(flights);
+    const { removedIds, removedCount, duplicateGroups } = removeDuplicateFlights(flights);
     if (removedCount === 0) {
       alert("No se encontraron vuelos repetidos.");
       return;
@@ -359,7 +375,7 @@ function App() {
         : `Hay ${duplicateGroups} grupos de vuelos repetidos (${removedCount} registros de más). Se conservará el más completo de cada grupo. ¿Eliminar los duplicados?`;
     if (!window.confirm(msg)) return;
     try {
-      await set(ref(db, "flights"), forFirebaseDb(kept));
+      await removeFlightsByIds(removedIds);
       setSelectedFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
       setCancelModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
       setRescheduleModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
@@ -370,9 +386,14 @@ function App() {
     }
   };
 
-  const handleManualFlightAdd = (flight: Flight) => {
+  const handleManualFlightAdd = async (flight: Flight) => {
     const normalized = coerceFlightFromDb(flight);
-    set(ref(db, "flights"), forFirebaseDb([...flights, normalized]));
+    try {
+      await saveFlight(normalized);
+    } catch {
+      alert("No se pudo agregar el vuelo. Revisá la conexión e intentá de nuevo.");
+      return;
+    }
     setShowManualFlight(false);
     const raw = normalized.date;
     if (raw && raw.includes("-")) {
@@ -424,11 +445,10 @@ function App() {
       payload.mvtSentAt = new Date().toISOString();
     }
 
-    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, mvtData: payload } : f));
     const f = existingFlight;
     const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
     try {
-      await set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+      await updateFlight(id, { mvtData: payload });
       if (!alreadySent) {
         setMvtSentToast({ open: true, subtitle });
       }
@@ -438,74 +458,83 @@ function App() {
   };
 
   /** Auto-guardado de borrador Hitos: no marca “enviado”; preserva hitosSentAt si la carta no cambió. */
-  const handlePersistHitos = (id: string, hitosData: HitosData) => {
+  const handlePersistHitos = async (id: string, hitosData: HitosData) => {
     const prev = flights.find((f) => f.id === id)?.hitosData;
     const payload = normalizeHitosData(hitosData);
     if (prev?.hitosSentAt && prev.ganttChartName === payload.ganttChartName) {
       payload.hitosSentAt = prev.hitosSentAt;
     }
-    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData: payload } : f));
-    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+    try {
+      await updateFlight(id, { hitosData: payload });
+    } catch (e) {
+      console.error("No se pudo auto-guardar hitos:", e);
+    }
   };
 
   /** Guardar Hitos validado desde la pestaña (botón Guardar). */
   const handleSaveHitos = async (id: string, hitosData: HitosData) => {
     const payload = normalizeHitosData(hitosData);
     payload.hitosSentAt = new Date().toISOString();
-    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosData: payload } : f));
     const f = flights.find((x) => x.id === id);
     const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
     try {
-      await set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+      await updateFlight(id, { hitosData: payload });
       setHitosSavedToast({ open: true, subtitle });
     } catch {
       alert("No se pudieron guardar los hitos. Revisá la conexión e intentá de nuevo.");
     }
   };
 
-  const handleSaveCrewHitos = (id: string, hitosCrewData: Record<string, string>) => {
-    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, hitosCrewData } : f));
-    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
+  const handleSaveCrewHitos = async (id: string, hitosCrewData: Record<string, string>) => {
+    try {
+      await updateFlight(id, { hitosCrewData });
+    } catch (e) {
+      console.error("No se pudo guardar hitos crew:", e);
+    }
   };
 
-  const handleUpdateDailyReportObs = (id: string, text: string) => {
-    const updatedFlights = flights.map((f) => (f.id === id ? { ...f, dailyReportObs: text } : f));
-    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+  const handleUpdateDailyReportObs = async (id: string, text: string) => {
+    try {
+      await updateFlight(id, { dailyReportObs: text });
+    } catch (e) {
+      console.error("No se pudo guardar observación del reporte:", e);
+    }
   };
 
-  const handleCancelFlight = (id: string, reason: string) => {
-    const updatedFlights = flights.map((f) =>
-      f.id === id ? { ...f, cancelled: true, cancellationReason: reason } : f
-    );
-    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+  const handleCancelFlight = async (id: string, reason: string) => {
+    try {
+      await updateFlight(id, { cancelled: true, cancellationReason: reason });
+    } catch {
+      alert("No se pudo cancelar el vuelo. Revisá la conexión e intentá de nuevo.");
+      return;
+    }
     setCancelModalFlight(null);
-    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
+    setSelectedFlight((prev) => (prev?.id === id ? flights.find((x) => x.id === id) ?? null : prev));
   };
 
-  const handleReactivateFlight = (id: string) => {
+  const handleReactivateFlight = async (id: string) => {
     if (!window.confirm("¿Reactivar este vuelo? Dejará de figurar como cancelado.")) return;
-    const updatedFlights = flights.map((f) =>
-      f.id === id ? { ...f, cancelled: false, cancellationReason: "" } : f
-    );
-    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
-    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
+    try {
+      await updateFlight(id, { cancelled: false, cancellationReason: "" });
+    } catch {
+      alert("No se pudo reactivar el vuelo. Revisá la conexión e intentá de nuevo.");
+      return;
+    }
+    setSelectedFlight((prev) => (prev?.id === id ? flights.find((x) => x.id === id) ?? null : prev));
   };
 
-  const handleRescheduleFlight = (id: string, newEtd: string, reason: string) => {
-    const updatedFlights = flights.map((f) => {
-      if (f.id !== id) return f;
-      return {
-        ...f,
-        etd: newEtd,
-        rescheduleReason: reason,
-      };
-    });
-    set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+  const handleRescheduleFlight = async (id: string, newEtd: string, reason: string) => {
+    try {
+      await updateFlight(id, { etd: newEtd, rescheduleReason: reason });
+    } catch {
+      alert("No se pudo reprogramar el vuelo. Revisá la conexión e intentá de nuevo.");
+      return;
+    }
     setRescheduleModalFlight(null);
-    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
+    setSelectedFlight((prev) => (prev?.id === id ? flights.find((x) => x.id === id) ?? null : prev));
   };
 
-  const handleUpdateRegistration = (id: string, newReg: string) => {
+  const handleUpdateRegistration = async (id: string, newReg: string) => {
     const flight = flights.find(f => f.id === id);
     if (!flight) return;
 
@@ -519,8 +548,11 @@ function App() {
       }
     }
 
-    const updatedFlights = flights.map(f => f.id === id ? { ...f, reg: newReg } : f);
-    set(ref(db, 'flights'), forFirebaseDb(updatedFlights));
+    try {
+      await updateFlight(id, { reg: newReg });
+    } catch {
+      alert("No se pudo actualizar la matrícula. Revisá la conexión e intentá de nuevo.");
+    }
   };
 
   const handleRouteChangeConfirm = async (newDep: string, newArr: string) => {
@@ -536,12 +568,13 @@ function App() {
       throw new Error("No se pudo determinar la fecha del vuelo para registrar la afectación.");
     }
     const byName = currentUser?.name?.trim() || currentUser?.email || "—";
-    const updatedFlights = flights.map((f) =>
-      f.id === id ? { ...f, dep: depDespues, arr: arrDespues, route: `${depDespues}-${arrDespues}` } : f
-    );
     const logRef = push(ref(db, `routeAfectaciones/${dateKey}`));
     try {
-      await set(ref(db, "flights"), forFirebaseDb(updatedFlights));
+      await updateFlight(id, {
+        dep: depDespues,
+        arr: arrDespues,
+        route: `${depDespues}-${arrDespues}`,
+      });
       await set(logRef, {
         flightId: id,
         flt: String(flight.flt ?? ""),
@@ -562,26 +595,31 @@ function App() {
       );
     }
     setRouteModalFlight(null);
-    setSelectedFlight((prev) => (prev?.id === id ? updatedFlights.find((x) => x.id === id) ?? null : prev));
+    setSelectedFlight((prev) => (prev?.id === id ? flights.find((x) => x.id === id) ?? null : prev));
   };
 
   const handleGestionesApply = async (
     parsed: ParseGestionesResult,
     opts: { syncStdSta: boolean; defaultRescheduleReason: string }
   ) => {
+    const updates: Promise<void>[] = [];
+    const seen = new Set<string>();
     let next = [...flights];
     for (const row of parsed.rows) {
       const f = findFlightForGestiones(next, row);
-      if (!f) continue;
+      if (!f || seen.has(f.id)) continue;
       const i = next.findIndex((x) => x.id === f.id);
       if (i === -1) continue;
-      next[i] = applyGestionesRowToFlight(next[i], row, {
+      const patched = applyGestionesRowToFlight(next[i], row, {
         syncStdSta: opts.syncStdSta,
         defaultRescheduleReason: opts.defaultRescheduleReason,
       });
+      next[i] = patched;
+      seen.add(f.id);
+      updates.push(saveFlight(patched));
     }
     try {
-      await set(ref(db, "flights"), forFirebaseDb(next));
+      await Promise.all(updates);
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : String(e));
     }

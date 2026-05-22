@@ -9,7 +9,11 @@
     },
     "flights": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$flightId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
     },
     "pernocte": {
       ".read": "auth != null",
