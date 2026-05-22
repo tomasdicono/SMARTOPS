@@ -26,6 +26,12 @@
     "limpiezaChecklist": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "fleet": {
+      ".read": "auth != null",
+      "$reg": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('users').child(auth.uid).child('role').val() === 'AJS' || root.child('users').child(auth.uid).child('role').val() === 'HCC')"
+      }
     }
   }
 }

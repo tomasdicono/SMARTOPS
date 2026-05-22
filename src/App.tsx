@@ -34,9 +34,16 @@ import {
   hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
 } from "./lib/flightHelpers";
-import { FLEET_DATA, getAircraftInfo } from "./lib/fleetData";
+import {
+  applyFleetFromFirebase,
+  FLEET_DATA,
+  getAircraftInfo,
+  normalizeFleetReg,
+  fleetRegExists,
+  type FleetModelOption,
+} from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane } from "lucide-react";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
@@ -54,6 +61,7 @@ import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
 import { DiferidosView } from "./components/DiferidosView";
+import { MatriculasView } from "./components/MatriculasView";
 import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import {
   computePernocteRows,
@@ -80,8 +88,10 @@ import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "documentos"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "documentos"
   >("tablero");
+  /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
+  const [fleetVersion, setFleetVersion] = useState(0);
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
@@ -283,6 +293,16 @@ function App() {
         out[String(k).trim().toUpperCase()] = coerceDiferido(raw);
       }
       setDiferidosMap(out);
+    });
+    return () => unsub();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const fleetRef = ref(db, "fleet");
+    const unsub = onValue(fleetRef, (snapshot) => {
+      applyFleetFromFirebase(snapshot.val() as Record<string, unknown> | null);
+      setFleetVersion((v) => v + 1);
     });
     return () => unsub();
   }, [currentUser]);
@@ -556,6 +576,21 @@ function App() {
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const handleSaveFleetModel = async (regRaw: string, model: FleetModelOption) => {
+    const reg = normalizeFleetReg(regRaw);
+    if (!reg) return;
+    await set(ref(db, `fleet/${reg}`), { model });
+  };
+
+  const handleAddFleetReg = async (regRaw: string, model: FleetModelOption) => {
+    const reg = normalizeFleetReg(regRaw);
+    if (!reg) return;
+    if (fleetRegExists(reg)) {
+      throw new Error("La matrícula ya existe.");
+    }
+    await set(ref(db, `fleet/${reg}`), { model });
   };
 
   const handleRemoveDiferido = async (regRaw: string) => {
@@ -895,6 +930,46 @@ function App() {
                 Diferidos
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setMainTab("matriculas")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "matriculas"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Plane className="w-4 h-4 shrink-0" />
+              Matrículas
+            </button>
+          </div>
+        )}
+
+        {userRole === "ADMIN" && (
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setMainTab("tablero")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "tablero"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Vuelos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("matriculas")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "matriculas"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Plane className="w-4 h-4 shrink-0" />
+              Matrículas
+            </button>
           </div>
         )}
 
@@ -910,6 +985,8 @@ function App() {
               <>Reporte Diario</>
             ) : mainTab === "pernocte" && isHccDeskRole(userRole) ? (
               <>Pernocte</>
+            ) : mainTab === "matriculas" && isAdminOrHccDesk(userRole) ? (
+              <>Matrículas</>
             ) : (
               <>
                 Vuelos
@@ -947,6 +1024,13 @@ function App() {
             rows={pernocteRows}
             pernocteByReg={pernocteData[pernocteDateEffective] ?? {}}
             onPatchRow={handlePernoctePatch}
+          />
+        ) : mainTab === "matriculas" && isAdminOrHccDesk(userRole) ? (
+          <MatriculasView
+            fleetVersion={fleetVersion}
+            canEdit={isAdminOrHccDesk(userRole)}
+            onSaveModel={handleSaveFleetModel}
+            onAdd={handleAddFleetReg}
           />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
