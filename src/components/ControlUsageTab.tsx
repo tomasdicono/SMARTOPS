@@ -3,10 +3,8 @@ import type { Flight } from "../types";
 import {
     computeUsageControlByBase,
     countDaysInclusiveIso,
-    endOfMonthIso,
     flightDateToIso,
     normalizeIsoDateRange,
-    startOfMonthIso,
     uniqueAirportsFromFlights,
     type StatsAirportFilter,
     type UsageControlBaseRow,
@@ -60,33 +58,28 @@ export function ControlUsageTab({
     onAirportsChange,
     airportOptions,
 }: Props) {
-    const [usageMonth, setUsageMonth] = useState(() =>
-        selectedDate && /^\d{4}-\d{2}/.test(selectedDate) ? selectedDate.slice(0, 7) : "",
-    );
+    const [usageDateFrom, setUsageDateFrom] = useState(selectedDate);
+    const [usageDateTo, setUsageDateTo] = useState(selectedDate);
     useEffect(() => {
-        if (selectedDate && /^\d{4}-\d{2}/.test(selectedDate)) {
-            setUsageMonth(selectedDate.slice(0, 7));
-        }
+        setUsageDateFrom(selectedDate);
+        setUsageDateTo(selectedDate);
     }, [selectedDate]);
 
     const { dateFrom, dateTo } = useMemo(() => {
-        if (!usageMonth || !/^\d{4}-\d{2}$/.test(usageMonth)) {
-            return { dateFrom: "", dateTo: "" };
-        }
-        const anchor = `${usageMonth}-01`;
-        return { dateFrom: startOfMonthIso(anchor), dateTo: endOfMonthIso(anchor) };
-    }, [usageMonth]);
+        const { lo, hi } = normalizeIsoDateRange(usageDateFrom, usageDateTo);
+        return { dateFrom: lo, dateTo: hi };
+    }, [usageDateFrom, usageDateTo]);
 
     const airportFilter: StatsAirportFilter = selectedAirports;
 
     const usageAirportOptions = useMemo(() => {
         if (!dateFrom || !dateTo) return airportOptions;
-        const inMonth = flights.filter((f) => {
+        const inRange = flights.filter((f) => {
             const iso = flightDateToIso(f);
             return iso >= dateFrom && iso <= dateTo;
         });
-        const fromMonth = uniqueAirportsFromFlights(inMonth);
-        return fromMonth.length > 0 ? fromMonth : airportOptions;
+        const fromRange = uniqueAirportsFromFlights(inRange);
+        return fromRange.length > 0 ? fromRange : airportOptions;
     }, [flights, dateFrom, dateTo, airportOptions]);
 
     const usageData = useMemo(
@@ -95,11 +88,14 @@ export function ControlUsageTab({
     );
 
     const periodLabel = useMemo(() => {
-        const { lo, hi } = normalizeIsoDateRange(dateFrom, dateTo);
-        if (!lo || !hi) return "";
-        const d0 = new Date(`${lo}T12:00:00`);
-        const days = countDaysInclusiveIso(lo, hi);
-        return d0.toLocaleDateString("es-AR", { month: "long", year: "numeric" }) + ` · ${days} días`;
+        if (!dateFrom || !dateTo) return "";
+        const d0 = new Date(`${dateFrom}T12:00:00`);
+        const d1 = new Date(`${dateTo}T12:00:00`);
+        const f0 = d0.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+        const f1 = d1.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+        const days = countDaysInclusiveIso(dateFrom, dateTo);
+        if (dateFrom === dateTo) return f0;
+        return `${f0} – ${f1} · ${days} día${days !== 1 ? "s" : ""}`;
     }, [dateFrom, dateTo]);
 
     return (
@@ -107,11 +103,22 @@ export function ControlUsageTab({
             <div className="p-5 space-y-5">
                 <div className="flex flex-wrap items-end gap-3 pb-1">
                     <div className="shrink-0">
-                        <label className="block text-xs font-black uppercase text-slate-500 mb-1">Mes</label>
+                        <label className="block text-xs font-black uppercase text-slate-500 mb-1">Desde</label>
                         <input
-                            type="month"
-                            value={usageMonth}
-                            onChange={(e) => setUsageMonth(e.target.value)}
+                            type="date"
+                            value={usageDateFrom}
+                            onChange={(e) => setUsageDateFrom(e.target.value)}
+                            max={usageDateTo || undefined}
+                            className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
+                        />
+                    </div>
+                    <div className="shrink-0">
+                        <label className="block text-xs font-black uppercase text-slate-500 mb-1">Hasta</label>
+                        <input
+                            type="date"
+                            value={usageDateTo}
+                            onChange={(e) => setUsageDateTo(e.target.value)}
+                            min={usageDateFrom || undefined}
                             className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
                         />
                     </div>
@@ -130,7 +137,7 @@ export function ControlUsageTab({
                 </p>
                 {periodLabel ? (
                     <p className="text-xs font-semibold text-slate-600">
-                        Período: <span className="font-black text-slate-800 capitalize">{periodLabel}</span>
+                        Período: <span className="font-black text-slate-800 tabular-nums">{periodLabel}</span>
                         {selectedAirports.length > 0 ? (
                             <>
                                 {" "}
