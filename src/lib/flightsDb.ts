@@ -3,26 +3,69 @@ import { db } from "./firebase";
 import { forFirebaseDb } from "./forFirebaseDb";
 import type { Flight } from "../types";
 import { coerceFlightFromDb } from "./flightHelpers";
+import { normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
+import type { HitosData } from "../types";
+
+/** Une dos lecturas del mismo `id` (p. ej. programación en `flights/0` y MVT en `flights/{id}`). */
+function mergeFlightRecords(a: Flight, b: Flight): Flight {
+    const mvtA = a.mvtData ? normalizeMvtData(a.mvtData) : undefined;
+    const mvtB = b.mvtData ? normalizeMvtData(b.mvtData) : undefined;
+    const hitosA = a.hitosData ? normalizeHitosData(a.hitosData) : undefined;
+    const hitosB = b.hitosData ? normalizeHitosData(b.hitosData) : undefined;
+    const pickMvt = () => {
+        if (!mvtB) return mvtA;
+        if (!mvtA) return mvtB;
+        return normalizeMvtData({ ...mvtA, ...mvtB });
+    };
+    const pickHitos = () => {
+        if (!hitosB) return hitosA;
+        if (!hitosA) return hitosB;
+        return normalizeHitosData({ ...hitosA, ...hitosB } as HitosData);
+    };
+    return coerceFlightFromDb({
+        ...a,
+        ...b,
+        mvtData: pickMvt(),
+        hitosData: pickHitos(),
+        hitosCrewData: b.hitosCrewData ?? a.hitosCrewData,
+        cancelled: b.cancelled ?? a.cancelled,
+        cancellationReason: b.cancellationReason ?? a.cancellationReason,
+        dailyReportObs: b.dailyReportObs ?? a.dailyReportObs,
+    });
+}
 
 /** Convierte snapshot de `flights` (array legacy o mapa por id) a lista de vuelos. */
 export function parseFlightsSnapshot(data: unknown): Flight[] {
     if (data == null) return [];
+    const rawEntries: { key: string; raw: Record<string, unknown> }[] = [];
+
     if (Array.isArray(data)) {
-        return (data.filter(Boolean) as Flight[]).map(coerceFlightFromDb);
-    }
-    if (typeof data === "object") {
-        const out: Flight[] = [];
-        for (const [key, raw] of Object.entries(data as Record<string, unknown>)) {
-            if (raw == null || typeof raw !== "object") continue;
-            const f = coerceFlightFromDb(raw as Flight);
-            if (!String(f.id ?? "").trim()) {
-                f.id = key;
+        data.forEach((raw, index) => {
+            if (raw != null && typeof raw === "object") {
+                rawEntries.push({ key: String(index), raw: raw as Record<string, unknown> });
             }
-            out.push(f);
+        });
+    } else if (typeof data === "object") {
+        for (const [key, raw] of Object.entries(data as Record<string, unknown>)) {
+            if (raw != null && typeof raw === "object") {
+                rawEntries.push({ key, raw: raw as Record<string, unknown> });
+            }
         }
-        return out;
+    } else {
+        return [];
     }
-    return [];
+
+    const byId = new Map<string, Flight>();
+    for (const { key, raw } of rawEntries) {
+        const f = coerceFlightFromDb(raw as unknown as Flight);
+        if (!String(f.id ?? "").trim()) {
+            f.id = key;
+        }
+        const id = String(f.id).trim();
+        const prev = byId.get(id);
+        byId.set(id, prev ? mergeFlightRecords(prev, f) : f);
+    }
+    return [...byId.values()];
 }
 
 export function isLegacyFlightsArray(data: unknown): boolean {
@@ -33,12 +76,19 @@ export function flightDbRef(flightId: string) {
     return ref(db, `flights/${flightId}`);
 }
 
-/** Guarda o reemplaza un vuelo en `flights/{id}` sin tocar el resto. */
+/** Guarda un vuelo en `flights/{id}` fusionando con lo ya en servidor (no borra MVT/Hitos). */
 export async function saveFlight(flight: Flight): Promise<void> {
     const f = coerceFlightFromDb(flight);
     const id = String(f.id ?? "").trim();
     if (!id) throw new Error("Vuelo sin id");
-    await set(flightDbRef(id), forFirebaseDb(f));
+    const snap = await get(flightDbRef(id));
+    const existing = snap.val();
+    if (existing != null && typeof existing === "object") {
+        const merged = mergeFlightRecords(coerceFlightFromDb(existing as Flight), f);
+        await set(flightDbRef(id), forFirebaseDb(merged));
+    } else {
+        await set(flightDbRef(id), forFirebaseDb(f));
+    }
 }
 
 /** Actualiza campos de un vuelo (merge en Firebase). */

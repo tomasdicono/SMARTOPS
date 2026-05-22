@@ -1,4 +1,5 @@
 import type { Flight } from "../types";
+import { coerceFlightFromDb } from "./flightHelpers";
 import { flightDateToIso } from "./controlHelpers";
 import { flightNumberKey } from "./gestionesTableParse";
 
@@ -34,6 +35,58 @@ export interface RemoveDuplicateFlightsResult {
  * Elimina vuelos repetidos (misma fecha + vuelo + DEP + ARR).
  * En cada grupo conserva el registro con más datos operativos (MVT / Hitos).
  */
+/** Actualiza programación sobre un vuelo existente sin borrar MVT / Hitos. */
+export function mergeScheduleIntoExistingFlight(existing: Flight, incoming: Flight): Flight {
+    return coerceFlightFromDb({
+        ...existing,
+        date: incoming.date,
+        route: incoming.route,
+        flt: incoming.flt,
+        reg: incoming.reg,
+        dep: incoming.dep,
+        arr: incoming.arr,
+        std: incoming.std,
+        sta: incoming.sta,
+        pax: incoming.pax,
+        etd: incoming.etd,
+    });
+}
+
+/**
+ * Al importar programación: reutiliza el `id` y datos operativos si ya existe
+ * el mismo vuelo (fecha + número + DEP + ARR), en lugar de crear otro UUID.
+ */
+export function flightsToSaveOnImport(existingFlights: Flight[], incomingFlights: Flight[]): Flight[] {
+    const existingByKey = new Map<string, Flight>();
+    for (const f of existingFlights) {
+        existingByKey.set(duplicateFlightGroupKey(f), f);
+    }
+    return incomingFlights.map((raw) => {
+        const inc = coerceFlightFromDb(raw);
+        const ex = existingByKey.get(duplicateFlightGroupKey(inc));
+        return ex ? mergeScheduleIntoExistingFlight(ex, inc) : inc;
+    });
+}
+
+/** Claves operativas con más de un registro en la fecha ISO dada. */
+export function duplicateKeysForIso(flights: Flight[], selectedIso: string): Set<string> {
+    const counts = new Map<string, number>();
+    for (const f of flights) {
+        if (!selectedIso || flightDateToIso(f) !== selectedIso) continue;
+        const k = duplicateFlightGroupKey(f);
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    const dup = new Set<string>();
+    for (const [k, c] of counts) {
+        if (c > 1) dup.add(k);
+    }
+    return dup;
+}
+
+export function countDuplicateGroupsForIso(flights: Flight[], selectedIso: string): number {
+    return duplicateKeysForIso(flights, selectedIso).size;
+}
+
 export function removeDuplicateFlights(flights: Flight[]): RemoveDuplicateFlightsResult {
     const byKey = new Map<string, Flight[]>();
     for (const f of flights) {

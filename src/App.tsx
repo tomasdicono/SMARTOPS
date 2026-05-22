@@ -91,7 +91,12 @@ import {
     type ParseGestionesResult,
 } from "./lib/gestionesTableParse";
 import { coerceDiferido, getDiferidoTextForReg, normalizeRegDiferido } from "./lib/diferidosHelpers";
-import { removeDuplicateFlights } from "./lib/duplicateFlights";
+import {
+  removeDuplicateFlights,
+  flightsToSaveOnImport,
+  duplicateFlightGroupKey,
+  duplicateKeysForIso,
+} from "./lib/duplicateFlights";
 import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 
 function App() {
@@ -246,11 +251,11 @@ function App() {
 
       setSelectedFlight((prev) => {
         if (!prev) return null;
-        return validFlights.find((f) => f.id === prev.id) || prev;
+        return validFlights.find((f) => f.id === prev.id) ?? null;
       });
       setRouteModalFlight((prev) => {
         if (!prev) return null;
-        return validFlights.find((f) => f.id === prev.id) || prev;
+        return validFlights.find((f) => f.id === prev.id) ?? null;
       });
     });
 
@@ -354,8 +359,9 @@ function App() {
 
   const handleLoadFlights = async (newFlights: Flight[]) => {
     const normalized = newFlights.map(coerceFlightFromDb);
+    const toSave = flightsToSaveOnImport(flights, normalized);
     try {
-      await saveFlightsBatch(normalized);
+      await saveFlightsBatch(toSave);
       setShowParser(false);
     } catch {
       alert("No se pudo cargar la programación. Revisá la conexión e intentá de nuevo.");
@@ -388,6 +394,13 @@ function App() {
 
   const handleManualFlightAdd = async (flight: Flight) => {
     const normalized = coerceFlightFromDb(flight);
+    const dup = flights.find((f) => duplicateFlightGroupKey(f) === duplicateFlightGroupKey(normalized));
+    if (dup) {
+      alert(
+        `Ya existe ${getAirlinePrefix(dup.flt)}${dup.flt} (${dup.dep}→${dup.arr}) en esta fecha. Abrí ese vuelo en el tablero; si ves dos tarjetas, usá «Quitar repetidos».`,
+      );
+      return;
+    }
     try {
       await saveFlight(normalized);
     } catch {
@@ -421,6 +434,9 @@ function App() {
       await updateFlight(id, { mvtData: payload });
     } catch (e) {
       console.error("No se pudo auto-guardar MVT:", e);
+      alert(
+        "No se pudo guardar el MVT en el servidor. Revisá la conexión y recargá la página. El resto del equipo no verá estos datos hasta que se guarden.",
+      );
     }
   };
 
@@ -725,6 +741,12 @@ function App() {
     if (!iso) return filteredFlights;
     return filteredFlights.filter((f) => flightVisibleToLimpiezaBoard(f, flightsForSelectedDate, iso));
   }, [userRole, filteredFlights, flightsForSelectedDate, selectedDate]);
+
+  const duplicateKeysToday = useMemo(
+    () => (selectedDate ? duplicateKeysForIso(flights, selectedDate) : new Set<string>()),
+    [flights, selectedDate],
+  );
+  const duplicateGroupCountToday = duplicateKeysToday.size;
 
   const pernocteRows = useMemo(
     () => (pernocteDateEffective ? computePernocteRows(flights, pernocteDateEffective) : []),
@@ -1154,9 +1176,36 @@ function App() {
             )}
           </div>
         ) : (
+          <>
+            {duplicateGroupCountToday > 0 && !isLimpiezaRole(userRole) ? (
+              <div
+                className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-700 px-4 py-3"
+                role="alert"
+              >
+                <p className="text-sm font-semibold text-rose-950 dark:text-rose-100 leading-snug">
+                  Hay <span className="font-black">{duplicateGroupCountToday}</span> vuelo
+                  {duplicateGroupCountToday !== 1 ? "s" : ""} con tarjetas duplicadas hoy (misma fecha, número y ruta).
+                  El MVT/Hitos puede estar en una tarjeta y el resto del equipo ver otra en rojo.
+                </p>
+                {isAdminOrHccDesk(userRole) ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveDuplicateFlights()}
+                    className="shrink-0 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-black uppercase tracking-wide px-4 py-2.5 shadow-sm transition-colors"
+                  >
+                    Quitar repetidos
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...boardFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
               const isCancelled = !!flight.cancelled;
+              const flightDupKey = duplicateFlightGroupKey(flight);
+              const isDuplicateCard = duplicateKeysToday.has(flightDupKey);
+              const duplicateCardCount = isDuplicateCard
+                ? boardFlights.filter((f) => duplicateFlightGroupKey(f) === flightDupKey).length
+                : 0;
               const hidePaxOnCard = isLimpiezaRole(userRole);
               const showWeatherOnCard = !isLimpiezaRole(userRole);
               const pernocteForDay = selectedDate ? pernocteData[selectedDate] ?? {} : {};
@@ -1327,6 +1376,22 @@ function App() {
                       <BroomIcon className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
                       <p className="text-[11px] sm:text-xs font-bold leading-snug">
                         Tiempo de vuelo mayor a 03:30hs, requiere limpieza al arribo.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {isDuplicateCard && !isCancelled ? (
+                    <div
+                      className="mb-4 rounded-xl border-2 border-rose-500 bg-rose-50 dark:bg-rose-950/50 px-3 py-2.5"
+                      role="alert"
+                    >
+                      <p className="text-[11px] sm:text-xs font-black uppercase tracking-wide text-rose-900 dark:text-rose-100 leading-snug">
+                        Duplicado · {duplicateCardCount} tarjetas
+                      </p>
+                      <p className="text-[10px] font-semibold text-rose-800 dark:text-rose-200 mt-1 leading-snug">
+                        {hasMvt || hasHitos
+                          ? "Esta tarjeta tiene datos; si otra del mismo vuelo está en rojo, usá «Quitar repetidos»."
+                          : "Sin MVT/Hitos acá; pueden estar en la otra tarjeta del mismo vuelo."}
                       </p>
                     </div>
                   ) : null}
@@ -1549,6 +1614,7 @@ function App() {
               );
             })}
           </div>
+          </>
         )}
       </main>
 
