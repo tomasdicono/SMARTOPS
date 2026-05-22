@@ -1,6 +1,6 @@
 import type { Flight, RouteAfectacionEntry } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
-import { getAirlinePrefix } from "./flightHelpers";
+import { getAirlinePrefix, isJesFlightNumber } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
 import { parseTimeToMinutes } from "./mvtTime";
@@ -605,6 +605,7 @@ export interface StatusDiaDaySummary {
     motivosCancelacionDetalle: { text: string; count: number; pax: number }[];
     paxCancelados: number;
     totalVuelosDia: number;
+    /** Vuelos JES (3000–3999) con ATD en MVT, base de OTP 0 / OTP 15. */
     nMvtOtp: number;
     /** Vuelos no cancelados con registro MVT cargado (`mvtData` presente). */
     countVuelosConMvtCargado: number;
@@ -650,7 +651,7 @@ export function computeStatusDiaDaySummary(
 
     const countVuelosConMvtCargado = operational.filter((f) => f.mvtData != null).length;
 
-    const conMvtOtp = operational.filter((f) => hasMvtAtdForOtp(f));
+    const conMvtOtp = operational.filter((f) => isJesFlightNumber(f.flt) && hasMvtAtdForOtp(f));
     const nMvtOtp = conMvtOtp.length;
     let otp0Count = 0;
     let otp15Count = 0;
@@ -760,13 +761,13 @@ export function buildStatusDiaPrensaText(
 
     out.push("⏱️ Puntualidad");
     out.push(
-        `Sobre un total de ${s.countVuelosConMvtCargado} vuelo${s.countVuelosConMvtCargado !== 1 ? "s" : ""} operado${s.countVuelosConMvtCargado !== 1 ? "s" : ""}, el status OTP al momento es el siguiente:`
+        `Sobre un total de ${s.nMvtOtp} vuelo${s.nMvtOtp !== 1 ? "s" : ""} JES (3000–3999) con MVT y salida real cargada, el status OTP al momento es el siguiente:`
     );
     if (s.nMvtOtp > 0 && s.otp0Pct != null && s.otp15Pct != null) {
         out.push(`OTP 0 --> ${pctEsAr(s.otp0Pct)}%`);
         out.push(`OTP 15 --> ${pctEsAr(s.otp15Pct)}%`);
     } else {
-        out.push("Sin datos de OTP: no hay vuelos con MVT y hora de salida real suficiente para calcular el indicador.");
+        out.push("Sin datos de OTP: no hay vuelos JES con MVT y hora de salida real suficiente para calcular el indicador.");
     }
     out.push("");
 

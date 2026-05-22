@@ -639,6 +639,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                     <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 print:gap-1.5">
                         <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/90 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
                             <p className="text-[9px] font-black uppercase text-emerald-900 leading-tight">OTP 0</p>
+                            <p className="text-[8px] font-semibold text-emerald-800/80 leading-tight">solo JES</p>
                             {statusDia.nMvtOtp > 0 && statusDia.otp0Pct != null ? (
                                 <p className="text-xl sm:text-2xl font-black text-emerald-950 tabular-nums leading-tight mt-0.5">
                                     {statusDia.otp0Pct.toFixed(1)}%
@@ -649,6 +650,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         </div>
                         <div className="rounded-lg border border-teal-200/90 bg-teal-50/80 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
                             <p className="text-[9px] font-black uppercase text-teal-900 leading-tight">OTP 15</p>
+                            <p className="text-[8px] font-semibold text-teal-800/80 leading-tight">solo JES</p>
                             {statusDia.nMvtOtp > 0 && statusDia.otp15Pct != null ? (
                                 <p className="text-xl sm:text-2xl font-black text-teal-950 tabular-nums leading-tight mt-0.5">
                                     {statusDia.otp15Pct.toFixed(1)}%
