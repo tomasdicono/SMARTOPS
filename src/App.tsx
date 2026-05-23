@@ -79,7 +79,12 @@ import {
   isLimpiezaPendiente,
 } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
-import { normalizeMvtData, normalizeHitosData } from "./lib/flightDataNormalize";
+import {
+  mergeHitosDataForPersist,
+  mergeMvtDataForPersist,
+  normalizeMvtData,
+  normalizeHitosData,
+} from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
 import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
@@ -422,7 +427,7 @@ function App() {
   const handlePersistMvt = async (id: string, mvtData: Flight["mvtData"]) => {
     const existingFlight = flights.find((x) => x.id === id);
     const prevMvt = normalizeMvtData(existingFlight?.mvtData);
-    const payload = normalizeMvtData(mvtData);
+    const payload = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
     const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
     if (alreadySent) {
       payload.mvtSentAt = prevMvt.mvtSentAt;
@@ -494,9 +499,9 @@ function App() {
 
   /** Auto-guardado de borrador Hitos: no marca “enviado”; preserva hitosSentAt si la carta no cambió. */
   const handlePersistHitos = async (id: string, hitosData: HitosData) => {
-    const prev = flights.find((f) => f.id === id)?.hitosData;
-    const payload = normalizeHitosData(hitosData);
-    if (prev?.hitosSentAt && prev.ganttChartName === payload.ganttChartName) {
+    const prev = normalizeHitosData(flights.find((f) => f.id === id)?.hitosData);
+    const payload = mergeHitosDataForPersist(prev, normalizeHitosData(hitosData));
+    if (prev.hitosSentAt && prev.ganttChartName === payload.ganttChartName) {
       payload.hitosSentAt = prev.hitosSentAt;
     }
     try {

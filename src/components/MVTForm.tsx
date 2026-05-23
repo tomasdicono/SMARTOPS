@@ -21,6 +21,7 @@ interface Props {
 }
 
 function mvtHasOperationalContent(m: NonNullable<Flight["mvtData"]>): boolean {
+    if (m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "") return true;
     const atd = String(m.atd ?? "").replace(/\D/g, "");
     if (atd.length >= 3) return true;
     return ["off", "eta", "paxActual", "totalBags", "fob", "dlyCod1"].some((k) =>
@@ -132,16 +133,22 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
     useEffect(() => {
         const server = normalizeMvtData(flight.mvtData);
         let initial = server;
-        if (!mvtHasOperationalContent(server)) {
+        if (!hasMvtSent(flight) && !mvtHasOperationalContent(server)) {
             const legacy = readLegacyMvtDraft(flight.id);
             if (legacy && mvtHasOperationalContent(legacy)) {
                 initial = legacy;
-                onPersistRef.current?.(legacy);
+                if (canPersist) onPersistRef.current?.(legacy);
             }
         }
         clearMvtDraft(flight.id);
         setData(initial);
-    }, [flight.id]);
+    }, [flight.id, canPersist]);
+
+    /** MVT enviado o solo lectura: reflejar Firebase sin resetear a vacío al abrir la tarjeta. */
+    useEffect(() => {
+        if (canPersist) return;
+        setData(normalizeMvtData(flight.mvtData));
+    }, [flight.mvtData, canPersist, flight.id]);
 
     useDebouncedFlightPersist(data, canPersist ? onPersistMvt : undefined, {
         readOnly: !canPersist,
