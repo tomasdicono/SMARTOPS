@@ -1151,10 +1151,7 @@ function App() {
         ) : mainTab === "pernocte" && isHccDeskRole(userRole) ? (
           <PernocteView
             filterDate={pernocteDateEffective}
-            headerDate={selectedDate}
-            filterFollowsHeader={!pernocteFilterDate}
             onFilterDateChange={setPernocteFilterDate}
-            onFollowHeaderDate={() => setPernocteFilterDate("")}
             rows={pernocteRows}
             pernocteByReg={pernocteData[pernocteDateEffective] ?? {}}
             onPatchRow={handlePernoctePatch}

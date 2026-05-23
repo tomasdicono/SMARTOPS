@@ -6,13 +6,7 @@ import { CalendarDays, Moon } from "lucide-react";
 interface Props {
     /** Fecha ISO activa en el filtro (tabla + datos guardados) */
     filterDate: string;
-    /** Fecha del selector global del header (referencia “tablero”) */
-    headerDate: string;
-    /** true si filterDate sigue al header (filtro local vacío) */
-    filterFollowsHeader: boolean;
     onFilterDateChange: (iso: string) => void;
-    /** Vuelve a usar la fecha del tablero */
-    onFollowHeaderDate: () => void;
     rows: PernocteTableRow[];
     pernocteByReg: Record<string, PernocteRowState>;
     onPatchRow: (reg: string, patch: Partial<PernocteRowState>) => void;
@@ -30,10 +24,7 @@ function avionListoLabel(limpieza: boolean, precarga: boolean): { variant: Avion
 
 export function PernocteView({
     filterDate,
-    headerDate,
-    filterFollowsHeader,
     onFilterDateChange,
-    onFollowHeaderDate,
     rows,
     pernocteByReg,
     onPatchRow,
@@ -77,15 +68,6 @@ export function PernocteView({
                         onChange={(e) => onFilterDateChange(e.target.value)}
                         className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 [color-scheme:light] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                     />
-                    {!filterFollowsHeader && headerDate ? (
-                        <button
-                            type="button"
-                            onClick={onFollowHeaderDate}
-                            className="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline underline-offset-2"
-                        >
-                            Usar fecha del tablero ({headerDate})
-                        </button>
-                    ) : null}
                 </div>
             </div>
 
