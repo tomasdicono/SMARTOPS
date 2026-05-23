@@ -1,6 +1,10 @@
 import type { Flight, HitosData, UserRole } from "../types";
 import { parseHHmmToMinutes } from "./controlHelpers";
+import { isFlightIncompleteAndLate } from "./dateHelpers";
 import { normalizeHitosCrewData, normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
+
+/** Tono visual de la tarjeta en el tablero (HCC/AJS filtros). */
+export type FlightCardTone = "green" | "yellow" | "red" | "grey";
 
 const DAY_MINUTES = 24 * 60;
 /** Bloque estrictamente mayor a 3:30 h → aviso de limpieza de cabina */
@@ -98,6 +102,17 @@ export function isMvtCompleteForCard(f: Flight): boolean {
 export function isHitosCompleteForCard(f: Flight): boolean {
     const t = f.hitosData?.hitosSentAt;
     return t != null && String(t).trim() !== "";
+}
+
+/** Misma lógica de color que el tablero de vuelos (sin caso Limpieza pendiente). */
+export function getFlightCardTone(f: Flight): FlightCardTone {
+    if (f.cancelled) return "grey";
+    const hasMvt = isMvtCompleteForCard(f);
+    const hasHitos = isHitosCompleteForCard(f);
+    if (hasMvt && hasHitos) return "green";
+    if (hasMvt || hasHitos) return "yellow";
+    if (isFlightIncompleteAndLate(f)) return "red";
+    return "grey";
 }
 
 /** Roles que pueden descargar el informe HTML de resumen de hitos (operacionales y tripulación). */

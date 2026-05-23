@@ -28,12 +28,15 @@ import {
   getAirlinePrefix,
   coerceFlightFromDb,
   getHitosDepartureTime,
+  getFlightCardTone,
   isMvtCompleteForCard,
   isHitosCompleteForCard,
   canDownloadHitosSummaryRole,
   hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
+  type FlightCardTone,
 } from "./lib/flightHelpers";
+import { FlightCardToneFilters } from "./components/FlightCardToneFilters";
 import {
   applyFleetFromFirebase,
   FLEET_DATA,
@@ -127,6 +130,8 @@ function App() {
   const [loadToolsMenuOpen, setLoadToolsMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  /** HCC/AJS: filtro por color de tarjeta (vacío = mostrar todas). */
+  const [cardToneFilters, setCardToneFilters] = useState<Set<FlightCardTone>>(() => new Set());
   /** pernocte[YYYY-MM-DD][matrícula] */
   const [pernocteData, setPernocteData] = useState<Record<string, Record<string, PernocteRowState>>>({});
   /** Fecha vista en Pernocte (vacío = misma que el selector del header) */
@@ -739,13 +744,26 @@ function App() {
     );
   });
 
+  const toggleCardToneFilter = (tone: FlightCardTone) => {
+    setCardToneFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(tone)) next.delete(tone);
+      else next.add(tone);
+      return next;
+    });
+  };
+
   /** Rol Limpieza: solo vuelos con bloque largo (&gt;3:30) o último JES del día (pernocte). */
   const boardFlights = useMemo(() => {
-    if (!isLimpiezaRole(userRole)) return filteredFlights;
+    let list = filteredFlights;
+    if (isHccDeskRole(userRole) && cardToneFilters.size > 0) {
+      list = list.filter((f) => cardToneFilters.has(getFlightCardTone(f)));
+    }
+    if (!isLimpiezaRole(userRole)) return list;
     const iso = selectedDate?.trim();
-    if (!iso) return filteredFlights;
-    return filteredFlights.filter((f) => flightVisibleToLimpiezaBoard(f, flightsForSelectedDate, iso));
-  }, [userRole, filteredFlights, flightsForSelectedDate, selectedDate]);
+    if (!iso) return list;
+    return list.filter((f) => flightVisibleToLimpiezaBoard(f, flightsForSelectedDate, iso));
+  }, [userRole, filteredFlights, flightsForSelectedDate, selectedDate, cardToneFilters]);
 
   const duplicateKeysToday = useMemo(
     () => (selectedDate ? duplicateKeysForIso(flights, selectedDate) : new Set<string>()),
@@ -1150,6 +1168,11 @@ function App() {
           />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
+            {mainTab === "tablero" && isHccDeskRole(userRole) && flightsForSelectedDate.length > 0 ? (
+              <div className="w-full max-w-3xl mb-8 text-left self-stretch">
+                <FlightCardToneFilters active={cardToneFilters} onToggle={toggleCardToneFilter} />
+              </div>
+            ) : null}
             <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-6">
               <PlaneTakeoff className="w-16 h-16 text-primary/60" />
             </div>
@@ -1158,6 +1181,8 @@ function App() {
                 ? "No hay vuelos cargados en el sistema."
                 : filteredFlights.length === 0 && searchQuery.trim()
                   ? "No hay vuelos que coincidan con la búsqueda."
+                  : isHccDeskRole(userRole) && cardToneFilters.size > 0 && filteredFlights.length > 0
+                    ? "Ningún vuelo coincide con los filtros de color seleccionados."
                   : flightsForSelectedDate.length === 0
                     ? "Para esa fecha no hay vuelos cargados."
                     : isLimpiezaRole(userRole) && filteredFlights.length > 0
@@ -1202,6 +1227,9 @@ function App() {
                   </button>
                 ) : null}
               </div>
+            ) : null}
+            {isHccDeskRole(userRole) ? (
+              <FlightCardToneFilters active={cardToneFilters} onToggle={toggleCardToneFilter} />
             ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...boardFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
