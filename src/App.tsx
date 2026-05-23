@@ -460,9 +460,11 @@ function App() {
       return;
     }
 
+    const mergedFromForm = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
+
     let payload: NonNullable<Flight["mvtData"]>;
     if (alreadySent && canEditMvtDelayAfterSent(userRole)) {
-      payload = normalizeMvtData(mvtData);
+      payload = mergedFromForm;
       payload.mvtSentAt = prevMvt.mvtSentAt;
       payload.mvtEditedByHccAt = new Date().toISOString();
       const sendGate = evaluateMvtSendGate({
@@ -476,7 +478,7 @@ function App() {
         return;
       }
     } else {
-      payload = normalizeMvtData(mvtData);
+      payload = mergedFromForm;
       const sendGate = evaluateMvtSendGate({
         mvt: payload,
         std: existingFlight?.std ?? "",

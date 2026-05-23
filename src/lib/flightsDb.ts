@@ -3,9 +3,12 @@ import { db } from "./firebase";
 import { forFirebaseDb } from "./forFirebaseDb";
 import type { Flight } from "../types";
 import { coerceFlightFromDb } from "./flightHelpers";
-import { normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
-import type { HitosData } from "../types";
-
+import {
+    mergeHitosDataUnion,
+    mergeMvtDataUnion,
+    normalizeHitosData,
+    normalizeMvtData,
+} from "./flightDataNormalize";
 /** Une dos lecturas del mismo `id` (p. ej. programación en `flights/0` y MVT en `flights/{id}`). */
 function mergeFlightRecords(a: Flight, b: Flight): Flight {
     const mvtA = a.mvtData ? normalizeMvtData(a.mvtData) : undefined;
@@ -15,12 +18,12 @@ function mergeFlightRecords(a: Flight, b: Flight): Flight {
     const pickMvt = () => {
         if (!mvtB) return mvtA;
         if (!mvtA) return mvtB;
-        return normalizeMvtData({ ...mvtA, ...mvtB });
+        return mergeMvtDataUnion(mvtA, mvtB);
     };
     const pickHitos = () => {
         if (!hitosB) return hitosA;
         if (!hitosA) return hitosB;
-        return normalizeHitosData({ ...hitosA, ...hitosB } as HitosData);
+        return mergeHitosDataUnion(hitosA, hitosB);
     };
     return coerceFlightFromDb({
         ...a,

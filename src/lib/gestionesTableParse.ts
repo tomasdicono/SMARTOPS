@@ -1,6 +1,6 @@
 import type { Flight } from "../types";
 import { flightDateToIso } from "./controlHelpers";
-import { normalizeMvtData } from "./flightDataNormalize";
+import { mergeMvtDataForPersist, normalizeMvtData } from "./flightDataNormalize";
 
 /** Columnas reconocidas en la primera fila del pegado */
 export type GestionesColumn =
@@ -412,9 +412,11 @@ export function applyGestionesRowToFlight(
 
     const eta = row.raw.eta?.trim();
     if (eta) {
-        const mvt = normalizeMvtData(next.mvtData);
-        mvt.eta = normalizeTimeToken(eta);
-        next.mvtData = mvt;
+        const prev = normalizeMvtData(next.mvtData);
+        next.mvtData = mergeMvtDataForPersist(prev, {
+            ...prev,
+            eta: normalizeTimeToken(eta),
+        });
     }
 
     const motivoFila = row.raw.motivo?.trim();

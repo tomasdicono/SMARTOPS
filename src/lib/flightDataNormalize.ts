@@ -106,6 +106,14 @@ export function mergeMvtDataForPersist(
     return out;
 }
 
+/** Une dos lecturas de `mvtData` sin que strings vacíos de una pisen valores de la otra. */
+export function mergeMvtDataUnion(
+    a: NonNullable<Flight["mvtData"]>,
+    b: NonNullable<Flight["mvtData"]>,
+): NonNullable<Flight["mvtData"]> {
+    return mergeMvtDataForPersist(mergeMvtDataForPersist(a, b), a);
+}
+
 /** Mismo criterio que merge MVT para borradores de Hitos. */
 export function mergeHitosDataForPersist(prev: HitosData, incoming: HitosData): HitosData {
     const p = normalizeHitosData(prev);
@@ -126,6 +134,11 @@ export function mergeHitosDataForPersist(prev: HitosData, incoming: HitosData): 
     if (inc.hitosSentAt?.trim()) out.hitosSentAt = inc.hitosSentAt;
     else if (p.hitosSentAt?.trim()) out.hitosSentAt = p.hitosSentAt;
     return out;
+}
+
+/** Une dos lecturas de hitos sin perder entradas ya cargadas. */
+export function mergeHitosDataUnion(a: HitosData, b: HitosData): HitosData {
+    return mergeHitosDataForPersist(mergeHitosDataForPersist(a, b), a);
 }
 
 /** Actualiza solo campos de demora sobre un MVT ya enviado (corrección HCC). */
