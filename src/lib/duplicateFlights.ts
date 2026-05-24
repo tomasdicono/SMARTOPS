@@ -48,7 +48,7 @@ export function mergeScheduleIntoExistingFlight(existing: Flight, incoming: Flig
         std: incoming.std,
         sta: incoming.sta,
         pax: incoming.pax,
-        etd: incoming.etd,
+        etd: incoming.etd?.trim() ? incoming.etd : existing.etd,
     });
 }
 
