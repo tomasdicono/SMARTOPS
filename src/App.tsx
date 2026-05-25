@@ -96,6 +96,7 @@ import { forFirebaseDb } from "./lib/forFirebaseDb";
 import {
     findFlightForGestiones,
     applyGestionesRowToFlight,
+    gestionesRowHasRouteChange,
     type ParseGestionesResult,
 } from "./lib/gestionesTableParse";
 import { coerceDiferido, getDiferidoTextForReg, normalizeRegDiferido } from "./lib/diferidosHelpers";
@@ -651,12 +652,16 @@ function App() {
   ) => {
     const updates: Promise<void>[] = [];
     const seen = new Set<string>();
+    const byName = currentUser?.name?.trim() || currentUser?.email || "—";
     let next = [...flights];
     for (const row of parsed.rows) {
       const f = findFlightForGestiones(next, row);
       if (!f || seen.has(f.id)) continue;
       const i = next.findIndex((x) => x.id === f.id);
       if (i === -1) continue;
+      const before = next[i];
+      const depAntes = normalizeAirportCode(before.dep);
+      const arrAntes = normalizeAirportCode(before.arr);
       const patched = applyGestionesRowToFlight(next[i], row, {
         syncStdSta: opts.syncStdSta,
         defaultRescheduleReason: opts.defaultRescheduleReason,
@@ -664,11 +669,37 @@ function App() {
       next[i] = patched;
       seen.add(f.id);
       updates.push(saveFlight(patched));
+
+      if (gestionesRowHasRouteChange(row)) {
+        const dateKey = flightDateToIso(before);
+        const depDespues = normalizeAirportCode(patched.dep);
+        const arrDespues = normalizeAirportCode(patched.arr);
+        if (dateKey && (depAntes !== depDespues || arrAntes !== arrDespues)) {
+          updates.push(
+            set(push(ref(db, `routeAfectaciones/${dateKey}`)), {
+              flightId: f.id,
+              flt: String(before.flt ?? ""),
+              reg: String(patched.reg ?? before.reg ?? ""),
+              depAntes,
+              arrAntes,
+              depDespues,
+              arrDespues,
+              at: new Date().toISOString(),
+              by: byName,
+            })
+          );
+        }
+      }
     }
     try {
       await Promise.all(updates);
     } catch (e) {
-      throw new Error(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        msg.includes("permission") || msg.includes("PERMISSION_DENIED")
+          ? "Sin permiso para guardar en Firebase. Revisá las reglas de la base (flights y routeAfectaciones)."
+          : msg
+      );
     }
   };
 

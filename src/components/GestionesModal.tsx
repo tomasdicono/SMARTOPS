@@ -104,9 +104,10 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
 
                 <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
                     <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold leading-relaxed">
-                        Pegá la tabla tal como sale del mensaje (fechas, vuelos, matrículas ORIGINAL/CAMBIO, horarios STD/STA/ETD/ETA).
-                        Se reconoce una fila de encabezados o el orden fijo de 10 columnas; también un bloque con una etiqueta por línea
-                        (FECHA, VUELO, …) y debajo los valores en el mismo orden.
+                        Pegá la tabla tal como sale del mensaje: matrícula (TAIL / CAMBIO), horarios ETD/ETA, y cambio de ruta con columnas{" "}
+                        <span className="font-mono text-slate-700 dark:text-slate-200">NEW ARR</span> o{" "}
+                        <span className="font-mono text-slate-700 dark:text-slate-200">NEW DEP</span>.
+                        Se reconoce encabezados en fila o una etiqueta por línea (FECHA, VUELO, …) y debajo los valores en el mismo orden.
                     </p>
 
                     <label className="flex items-start gap-3 cursor-pointer">
@@ -202,6 +203,9 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
                                                     {p.previewFlight ? (
                                                         <span className="break-words">
                                                             {p.row.raw.cambio ? `Reg → ${p.previewFlight.reg}` : ""}
+                                                            {(p.row.raw.newDep || p.row.raw.newArr) && p.flight
+                                                                ? ` · Ruta ${p.flight.dep}-${p.flight.arr} → ${p.previewFlight.dep}-${p.previewFlight.arr}`
+                                                                : ""}
                                                             {p.row.raw.etd ? ` · ETD ${p.previewFlight.etd}` : ""}
                                                             {p.row.raw.eta ? ` · ETA MVT ${p.previewFlight.mvtData?.eta}` : ""}
                                                             {syncStdSta && p.row.raw.std ? ` · STD ${p.previewFlight.std}` : ""}
