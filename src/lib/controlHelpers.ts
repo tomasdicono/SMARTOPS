@@ -432,6 +432,65 @@ export function computeAverageGpuUsageMinutes(flights: Flight[]): {
     return { avgMinutes: sum / mins.length, countWithGpu: mins.length };
 }
 
+function hitosEntryHhmm(entries: Record<string, string>, milestoneName: string): string | null {
+    const want = milestoneName.trim().toLowerCase();
+    for (const [k, v] of Object.entries(entries)) {
+        if (k.trim().toLowerCase() !== want) continue;
+        const digits = String(v ?? "").replace(/\D/g, "");
+        if (digits.length < 3) return null;
+        return digits.padStart(4, "0").slice(-4);
+    }
+    return null;
+}
+
+/**
+ * Duración de embarque (min): Fin embarque − Inicio embarque (hitos operacionales o crew).
+ * Mismas reglas de cruce de medianoche que GPU.
+ */
+export function boardingDurationMinutesFromFlight(f: Flight): number | null {
+    const h = normalizeHitosData(f.hitosData);
+    let start =
+        hitosEntryHhmm(h.entries, "Inicio Embarque") ?? hitosEntryHhmm(h.entries, "Inicio embarque");
+    let end = hitosEntryHhmm(h.entries, "Fin embarque");
+    const crew = f.hitosCrewData ?? {};
+    if (!start) {
+        start =
+            hitosEntryHhmm(crew, "Inicio embarque") ?? hitosEntryHhmm(crew, "Inicio Embarque");
+    }
+    if (!end) {
+        end = hitosEntryHhmm(crew, "Fin embarque");
+    }
+    if (!start || !end) return null;
+    const startM = parseHHmmToMinutes(start);
+    const endM = parseHHmmToMinutes(end);
+    let diff = endM - startM;
+    if (diff === 0) return null;
+    if (diff < 0) diff += 24 * 60;
+    return diff > 0 ? diff : null;
+}
+
+/** Promedio de duración de embarque en el conjunto filtrado (solo vuelos con inicio y fin válidos). */
+export function computeAverageBoardingMinutes(
+    flights: Flight[],
+    pea?: "manga" | "remota",
+): {
+    avgMinutes: number | null;
+    countWithBoarding: number;
+} {
+    const mins: number[] = [];
+    for (const f of flights) {
+        if (pea) {
+            const p = normalizeHitosData(f.hitosData).peaPosition;
+            if (p !== pea) continue;
+        }
+        const d = boardingDurationMinutesFromFlight(f);
+        if (d != null) mins.push(d);
+    }
+    if (mins.length === 0) return { avgMinutes: null, countWithBoarding: 0 };
+    const sum = mins.reduce((a, b) => a + b, 0);
+    return { avgMinutes: sum / mins.length, countWithBoarding: mins.length };
+}
+
 /** Cantidad de vuelos con PEA manga / remota en hitos (lista ya filtrada por el llamador). */
 export function computePeaCounts(flights: Flight[]): { manga: number; remota: number } {
     let manga = 0;

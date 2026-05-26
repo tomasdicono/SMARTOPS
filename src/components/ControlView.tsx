@@ -22,6 +22,7 @@ import {
     flightMatchesStatsAtdTimeFilter,
     isStatsAtdTimeFilterActive,
     computeAverageGpuUsageMinutes,
+    computeAverageBoardingMinutes,
     computePeaCounts,
     hasMvtSent,
     flightMatchesStatsAirports,
@@ -240,6 +241,15 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
     const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(statsFlights), [statsFlights]);
+    const avgBoarding = useMemo(() => computeAverageBoardingMinutes(statsFlights), [statsFlights]);
+    const avgBoardingManga = useMemo(
+        () => computeAverageBoardingMinutes(statsFlights, "manga"),
+        [statsFlights],
+    );
+    const avgBoardingRemota = useMemo(
+        () => computeAverageBoardingMinutes(statsFlights, "remota"),
+        [statsFlights],
+    );
     const statsFlightsMvtSent = useMemo(() => statsFlights.filter(hasMvtSent), [statsFlights]);
     const statsMvtSentTotal = statsFlightsMvtSent.length;
     const peaCounts = useMemo(() => computePeaCounts(statsFlightsMvtSent), [statsFlightsMvtSent]);
@@ -1041,6 +1051,63 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 {avgGpuUsage.countWithGpu > 0
                                     ? `${avgGpuUsage.countWithGpu} vuelo${avgGpuUsage.countWithGpu !== 1 ? "s" : ""} con inicio y fin GPU (excl. «no se utilizó GPU»)`
                                     : "Sin vuelos con GPU informada en el filtro"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-cyan-50/50 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-cyan-700" aria-hidden />
+                                Promedio embarque
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                Fin embarque − Inicio embarque (hitos operacionales o crew)
+                            </p>
+                            <p className="text-3xl font-black text-cyan-950 mt-2 tabular-nums">
+                                {avgBoarding.avgMinutes != null
+                                    ? formatMinutesToHHMM(Math.round(avgBoarding.avgMinutes))
+                                    : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {avgBoarding.countWithBoarding > 0
+                                    ? `${avgBoarding.countWithBoarding} vuelo${avgBoarding.countWithBoarding !== 1 ? "s" : ""} con inicio y fin de embarque en el filtro`
+                                    : "Sin vuelos con ambos hitos de embarque en el filtro"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-violet-50/60 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Building2 className="w-3.5 h-3.5 text-violet-600" aria-hidden />
+                                Promedio embarque manga
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                Fin embarque − Inicio embarque · PEA Manga
+                            </p>
+                            <p className="text-3xl font-black text-violet-950 mt-2 tabular-nums">
+                                {avgBoardingManga.avgMinutes != null
+                                    ? formatMinutesToHHMM(Math.round(avgBoardingManga.avgMinutes))
+                                    : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {avgBoardingManga.countWithBoarding > 0
+                                    ? `${avgBoardingManga.countWithBoarding} vuelo${avgBoardingManga.countWithBoarding !== 1 ? "s" : ""} manga con ambos hitos de embarque`
+                                    : "Sin vuelos manga con inicio y fin de embarque en el filtro"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-sky-50/60 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-sky-600" aria-hidden />
+                                Promedio embarque remota
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                Fin embarque − Inicio embarque · PEA Remota
+                            </p>
+                            <p className="text-3xl font-black text-sky-950 mt-2 tabular-nums">
+                                {avgBoardingRemota.avgMinutes != null
+                                    ? formatMinutesToHHMM(Math.round(avgBoardingRemota.avgMinutes))
+                                    : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {avgBoardingRemota.countWithBoarding > 0
+                                    ? `${avgBoardingRemota.countWithBoarding} vuelo${avgBoardingRemota.countWithBoarding !== 1 ? "s" : ""} remota con ambos hitos de embarque`
+                                    : "Sin vuelos remota con inicio y fin de embarque en el filtro"}
                             </p>
                         </div>
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-violet-50/50 to-white">
