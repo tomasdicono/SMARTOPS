@@ -84,6 +84,12 @@ import { RouteChangeModal } from "./components/RouteChangeModal";
 import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
 import { coerceRouteAfectacion, normalizeAirportCode } from "./lib/routeAfectaciones";
+import {
+  coerceDailyReportOtp,
+  emptyDailyReportOtp,
+  saveDailyReportOtp,
+  type DailyReportOtp,
+} from "./lib/dailyReportOtp";
 import { forFirebaseDb } from "./lib/forFirebaseDb";
 import {
     findFlightForGestiones,
@@ -113,6 +119,7 @@ function App() {
   const [openFlightActionsMenuId, setOpenFlightActionsMenuId] = useState<string | null>(null);
   const [routeModalFlight, setRouteModalFlight] = useState<Flight | null>(null);
   const [routeAfectaciones, setRouteAfectaciones] = useState<RouteAfectacionEntry[]>([]);
+  const [dailyReportOtp, setDailyReportOtp] = useState<DailyReportOtp>(emptyDailyReportOtp);
   /** Matrícula → texto (Firebase: diferidos/{matrícula}) */
   const [diferidosMap, setDiferidosMap] = useState<Record<string, DiferidoEntry>>({});
   const [showParser, setShowParser] = useState(false);
@@ -280,6 +287,18 @@ function App() {
       }
       list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
       setRouteAfectaciones(list);
+    });
+    return () => unsub();
+  }, [selectedDate, currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || !selectedDate) {
+      setDailyReportOtp(emptyDailyReportOtp());
+      return;
+    }
+    const otpRef = ref(db, `dailyReportOtp/${selectedDate}`);
+    const unsub = onValue(otpRef, (snapshot) => {
+      setDailyReportOtp(coerceDailyReportOtp(snapshot.val()));
     });
     return () => unsub();
   }, [selectedDate, currentUser]);
@@ -533,6 +552,16 @@ function App() {
       await updateFlight(id, { dailyReportObs: text });
     } catch (e) {
       console.error("No se pudo guardar observación del reporte:", e);
+    }
+  };
+
+  const handleSaveDailyReportOtp = async (otp: DailyReportOtp) => {
+    if (!selectedDate) return;
+    try {
+      await saveDailyReportOtp(selectedDate, otp);
+    } catch (e) {
+      console.error("No se pudo guardar OTP del reporte diario:", e);
+      alert("No se pudo guardar OTP 0 / OTP 15. Revisá la conexión.");
     }
   };
 
@@ -1124,6 +1153,9 @@ function App() {
             canEditObs={isHccDeskRole(userRole)}
             reportUserName={currentUser?.name ?? ""}
             routeAfectaciones={routeAfectaciones}
+            dailyReportOtp={dailyReportOtp}
+            onSaveDailyReportOtp={handleSaveDailyReportOtp}
+            canEditOtp={isHccDeskRole(userRole)}
           />
         ) : mainTab === "pernocte" && isHccDeskRole(userRole) ? (
           <PernocteView

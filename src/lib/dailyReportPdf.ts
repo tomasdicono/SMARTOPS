@@ -3,6 +3,8 @@ import autoTable from "jspdf-autotable";
 import type { Flight } from "../types";
 import { getAirlinePrefix } from "./flightHelpers";
 import type { StatusDiaDaySummary } from "./controlHelpers";
+import type { DailyReportOtp } from "./dailyReportOtp";
+import { formatOtpPercentForReport } from "./dailyReportOtp";
 import { formatDelayCodeDisplay } from "./delayCodes";
 import { totalDelayMinutes, formatDelayCell } from "./dailyReportHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
@@ -41,22 +43,26 @@ async function fetchLogoAsDataUrl(): Promise<string | null> {
 export interface DailyReportPdfOptions {
     /** Nombre del usuario que genera el PDF (columna derecha). */
     responsibleName: string;
-    /** Mismo criterio que Control → Status día; se imprime al final del PDF. */
+    /** Indicadores de status día (ocupación, reprogramaciones, etc.). OTP va en `manualOtp`. */
     statusDia: StatusDiaDaySummary;
+    /** OTP0 y OTP15 ingresados a mano en Reporte diario. */
+    manualOtp: DailyReportOtp;
 }
 
-function buildStatusDiaPdfRows(s: StatusDiaDaySummary): string[][] {
+function buildStatusDiaPdfRows(s: StatusDiaDaySummary, manualOtp: DailyReportOtp): string[][] {
+    const otp0Display = formatOtpPercentForReport(manualOtp.otp0) ?? "—";
+    const otp15Display = formatOtpPercentForReport(manualOtp.otp15) ?? "—";
     const rows: string[][] = [
         ["Vuelos programados", String(s.totalVuelosDia)],
         ["Vuelos JES con MVT (base OTP)", s.nMvtOtp > 0 ? String(s.nMvtOtp) : "—"],
-        ["OTP 0 (solo JES)", s.nMvtOtp > 0 && s.otp0Pct != null ? `${s.otp0Pct.toFixed(1)}%` : "—"],
-        ["OTP 15 (solo JES)", s.nMvtOtp > 0 && s.otp15Pct != null ? `${s.otp15Pct.toFixed(1)}%` : "—"],
+        ["OTP0", otp0Display],
+        ["OTP15", otp15Display],
         [
-            "Factor ocupación programado (PAX programación)",
+            "Factor de ocupación programado",
             s.factorOcupacionProgramadoPct != null ? `${s.factorOcupacionProgramadoPct.toFixed(1)}%` : "—",
         ],
         [
-            "Factor ocupación real (PAX MVT · solo MVT enviados)",
+            "Factor de ocupación ejecutado",
             s.factorOcupacionRealPct != null ? `${s.factorOcupacionRealPct.toFixed(1)}%` : "—",
         ],
         ["Vuelos reprogramados", String(s.countVuelosReprogramados)],
@@ -83,7 +89,7 @@ export async function downloadDailyReportPdf(
     dateLabel: string,
     options: DailyReportPdfOptions,
 ): Promise<void> {
-    const { responsibleName, statusDia } = options;
+    const { responsibleName, statusDia, manualOtp } = options;
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
 
@@ -219,7 +225,7 @@ export async function downloadDailyReportPdf(
     autoTable(doc, {
         startY: yAfterMain + 4,
         head: [["Indicador", "Valor"]],
-        body: buildStatusDiaPdfRows(statusDia),
+        body: buildStatusDiaPdfRows(statusDia, manualOtp),
         theme: "striped",
         tableWidth: "auto",
         styles: {

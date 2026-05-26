@@ -27,6 +27,10 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "dailyReportOtp": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "limpiezaChecklist": {
       ".read": "auth != null",
       ".write": "auth != null"

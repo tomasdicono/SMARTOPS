@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import type { Flight, RouteAfectacionEntry } from "../types";
 import { getAirlinePrefix, getHitosDepartureTime } from "../lib/flightHelpers";
 import { flightDateToIso, computeStatusDiaDaySummary } from "../lib/controlHelpers";
@@ -7,6 +7,11 @@ import {
     totalDelayMinutes,
     formatDelayCell,
 } from "../lib/dailyReportHelpers";
+import {
+    type DailyReportOtp,
+    isDailyReportOtpComplete,
+    formatOtpPercentForReport,
+} from "../lib/dailyReportOtp";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { downloadDailyReportPdf } from "../lib/dailyReportPdf";
 import { FileDown, CalendarDays } from "lucide-react";
@@ -22,6 +27,9 @@ interface Props {
     reportUserName: string;
     /** Misma fuente que Control → Status día (Firebase `routeAfectaciones/{fecha}`). */
     routeAfectaciones?: RouteAfectacionEntry[];
+    dailyReportOtp: DailyReportOtp;
+    onSaveDailyReportOtp: (otp: DailyReportOtp) => void;
+    canEditOtp: boolean;
 }
 
 export function DailyReportView({
@@ -32,6 +40,9 @@ export function DailyReportView({
     canEditObs,
     reportUserName,
     routeAfectaciones = [],
+    dailyReportOtp,
+    onSaveDailyReportOtp,
+    canEditOtp,
 }: Props) {
     const rows = useMemo(() => filterDelayedFlightsForDate(flights, selectedDate), [flights, selectedDate]);
 
@@ -48,11 +59,22 @@ export function DailyReportView({
         [dayFlights, routeAfectaciones.length]
     );
 
+    const [otpDraft, setOtpDraft] = useState<DailyReportOtp>(dailyReportOtp);
+    const otpTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+    const otpComplete = isDailyReportOtpComplete(otpDraft);
+    const canDownloadPdf = rows.length > 0 && otpComplete;
+
+    useEffect(() => {
+        setOtpDraft(dailyReportOtp);
+    }, [dailyReportOtp, selectedDate]);
+
     const obsTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
     useEffect(() => {
         return () => {
             Object.values(obsTimers.current).forEach(clearTimeout);
+            Object.values(otpTimers.current).forEach(clearTimeout);
         };
     }, []);
 
@@ -68,36 +90,109 @@ export function DailyReportView({
         }, 600);
     };
 
+    const scheduleOtpSave = (next: DailyReportOtp) => {
+        if (otpTimers.current.all) clearTimeout(otpTimers.current.all);
+        otpTimers.current.all = setTimeout(() => {
+            onSaveDailyReportOtp(next);
+            delete otpTimers.current.all;
+        }, 500);
+    };
+
+    const handleOtpChange = (field: keyof DailyReportOtp, value: string) => {
+        const next = { ...otpDraft, [field]: value };
+        setOtpDraft(next);
+        if (canEditOtp) scheduleOtpSave(next);
+    };
+
+    const downloadTitle = !otpComplete
+        ? "Completá OTP0 y OTP15 para descargar el informe"
+        : rows.length === 0
+          ? "No hay vuelos con demoras cargadas para esta fecha"
+          : undefined;
+
     return (
         <div className="space-y-6 animate-in fade-in duration-200">
             <div className="flex flex-wrap items-end justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
-                <div>
-                    <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">Fecha del reporte</label>
-                    <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 bg-slate-50">
-                        <CalendarDays className="w-4 h-4 text-cyan-600 shrink-0" />
+                <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">
+                            Fecha del reporte
+                        </label>
+                        <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 bg-slate-50">
+                            <CalendarDays className="w-4 h-4 text-cyan-600 shrink-0" />
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => onDateChange(e.target.value)}
+                                className="bg-transparent text-sm font-bold text-slate-900 focus:outline-none [color-scheme:light]"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">OTP0</label>
                         <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => onDateChange(e.target.value)}
-                            className="bg-transparent text-sm font-bold text-slate-900 focus:outline-none [color-scheme:light]"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Ej: 92.5"
+                            value={otpDraft.otp0}
+                            disabled={!canEditOtp}
+                            onChange={(e) => handleOtpChange("otp0", e.target.value)}
+                            className="w-[min(100%,7rem)] border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 disabled:opacity-60 [color-scheme:light]"
+                            aria-describedby="otp-hint"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">OTP15</label>
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Ej: 88.0"
+                            value={otpDraft.otp15}
+                            disabled={!canEditOtp}
+                            onChange={(e) => handleOtpChange("otp15", e.target.value)}
+                            className="w-[min(100%,7rem)] border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 disabled:opacity-60 [color-scheme:light]"
+                            aria-describedby="otp-hint"
                         />
                     </div>
                 </div>
                 <button
                     type="button"
-                    disabled={rows.length === 0}
-                    onClick={() =>
+                    disabled={!canDownloadPdf}
+                    title={downloadTitle}
+                    onClick={() => {
+                        if (otpTimers.current.all) {
+                            clearTimeout(otpTimers.current.all);
+                            delete otpTimers.current.all;
+                        }
+                        onSaveDailyReportOtp(otpDraft);
                         void downloadDailyReportPdf(rows, selectedDate, {
                             responsibleName: reportUserName,
-                            statusDia: statusDia,
-                        })
-                    }
+                            statusDia,
+                            manualOtp: otpDraft,
+                        });
+                    }}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-wide bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none text-white shadow-md transition-colors"
                 >
                     <FileDown className="w-4 h-4 shrink-0" />
                     Descargar PDF
                 </button>
             </div>
+
+            <p id="otp-hint" className="text-[11px] text-slate-500 -mt-3 px-1 leading-snug">
+                OTP0 y OTP15 son para el PDF del reporte diario (ingreso manual). En Control → Status día sigue el
+                cálculo automático del sistema.
+                {otpComplete ? (
+                    <>
+                        {" "}
+                        Valores listos:{" "}
+                        <span className="font-bold text-slate-700 tabular-nums">
+                            {formatOtpPercentForReport(otpDraft.otp0)} · {formatOtpPercentForReport(otpDraft.otp15)}
+                        </span>
+                    </>
+                ) : (
+                    <span className="text-amber-800 font-semibold"> Completá ambos para habilitar la descarga.</span>
+                )}
+            </p>
 
             {rows.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 py-16 text-center text-slate-600 font-semibold">
