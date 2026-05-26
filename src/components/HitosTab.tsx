@@ -19,10 +19,17 @@ interface Props {
 export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
     const [errorMsg, setErrorMsg] = useState("");
     const [data, setData] = useState<HitosData>(() => normalizeHitosData(flight.hitosData));
+    const hitosSent =
+        flight.hitosData?.hitosSentAt != null && String(flight.hitosData.hitosSentAt).trim() !== "";
 
     useEffect(() => {
         setData(normalizeHitosData(flight.hitosData));
     }, [flight.id]);
+
+    useEffect(() => {
+        if (!hitosSent && !readOnly) return;
+        setData(normalizeHitosData(flight.hitosData));
+    }, [flight.hitosData, hitosSent, readOnly, flight.id]);
 
     useDebouncedFlightPersist(data, readOnly ? undefined : onPersistHitos, {
         readOnly: !!readOnly,

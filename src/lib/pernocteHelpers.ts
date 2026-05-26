@@ -1,5 +1,5 @@
 import type { Flight } from "../types";
-import { flightDateToIso } from "./controlHelpers";
+import { addDaysIso, flightDateToIso } from "./controlHelpers";
 import { flightNeedsCleaningWarning, getHitosDepartureTime, isJesFlightNumber } from "./flightHelpers";
 import type { PernocteRowState } from "../types";
 
@@ -8,16 +8,22 @@ export interface PernocteTableRow {
     reg: string;
     /** Último aeropuerto de llegada: `arr` del último JES (por hora de salida) de esa matrícula en la fecha */
     ato: string;
+    /** Primer JES del día siguiente con esa matrícula (si ya está cargada la programación). */
+    salidaFlt: string;
+    salidaArr: string;
 }
 
 /**
  * Todas las matrículas asignadas a vuelos JES (3000–3999) del día, sin repetir.
  * ATO = aeropuerto de llegada del último sector JES de cada cola (orden por STD/ETD).
  */
-export function computePernocteRows(flights: Flight[], selectedIso: string): PernocteTableRow[] {
-    const dayFlights = flights.filter(
-        (f) => !f.cancelled && flightDateToIso(f) === selectedIso && isJesFlightNumber(f.flt)
+function jesFlightsOnIso(flights: Flight[], iso: string): Flight[] {
+    return flights.filter(
+        (f) => !f.cancelled && flightDateToIso(f) === iso && isJesFlightNumber(f.flt),
     );
+}
+
+function firstDepartureByReg(dayFlights: Flight[]): Map<string, Flight> {
     const byReg = new Map<string, Flight[]>();
     for (const f of dayFlights) {
         const r = String(f.reg ?? "").trim();
@@ -25,12 +31,38 @@ export function computePernocteRows(flights: Flight[], selectedIso: string): Per
         if (!byReg.has(r)) byReg.set(r, []);
         byReg.get(r)!.push(f);
     }
+    const out = new Map<string, Flight>();
+    for (const [reg, list] of byReg) {
+        const sorted = [...list].sort((a, b) =>
+            getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b)),
+        );
+        out.set(reg, sorted[0]);
+    }
+    return out;
+}
+
+export function computePernocteRows(flights: Flight[], selectedIso: string): PernocteTableRow[] {
+    const dayFlights = jesFlightsOnIso(flights, selectedIso);
+    const byReg = new Map<string, Flight[]>();
+    for (const f of dayFlights) {
+        const r = String(f.reg ?? "").trim();
+        if (!r) continue;
+        if (!byReg.has(r)) byReg.set(r, []);
+        byReg.get(r)!.push(f);
+    }
+
+    const nextIso = addDaysIso(selectedIso, 1);
+    const salidaByReg = firstDepartureByReg(jesFlightsOnIso(flights, nextIso));
+
     const rows: PernocteTableRow[] = [];
     for (const [reg, list] of byReg) {
         const sorted = [...list].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b)));
         const last = sorted[sorted.length - 1];
         const ato = String(last.arr ?? "").trim() || "—";
-        rows.push({ reg, ato });
+        const salida = salidaByReg.get(reg);
+        const salidaFlt = salida ? String(salida.flt ?? "").trim() : "";
+        const salidaArr = salida ? String(salida.arr ?? "").trim() : "";
+        rows.push({ reg, ato, salidaFlt, salidaArr });
     }
     return rows.sort((a, b) => a.reg.localeCompare(b.reg));
 }

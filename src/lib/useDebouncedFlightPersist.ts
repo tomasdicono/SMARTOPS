@@ -9,25 +9,34 @@ export function useDebouncedFlightPersist<T>(
     persist: ((payload: T) => void) | undefined,
     opts: { readOnly: boolean; flightId: string }
 ): void {
-    const skipNext = useRef(true);
     const dataRef = useRef(data);
-    dataRef.current = data;
     const persistRef = useRef(persist);
-    persistRef.current = persist;
 
     useEffect(() => {
-        skipNext.current = true;
+        dataRef.current = data;
+        persistRef.current = persist;
+    });
+
+    const lastPersistedJson = useRef("");
+
+    // Inicializar o cambiar de vuelo
+    useEffect(() => {
+        lastPersistedJson.current = JSON.stringify(dataRef.current);
     }, [opts.flightId]);
 
     useEffect(() => {
         if (opts.readOnly || !persistRef.current) return;
-        if (skipNext.current) {
-            skipNext.current = false;
+
+        const currentJson = JSON.stringify(data);
+        if (currentJson === lastPersistedJson.current) {
             return;
         }
+
         const t = window.setTimeout(() => {
             persistRef.current?.(dataRef.current);
+            lastPersistedJson.current = currentJson;
         }, 500);
+
         return () => clearTimeout(t);
     }, [data, opts.readOnly, opts.flightId]);
 
@@ -35,7 +44,11 @@ export function useDebouncedFlightPersist<T>(
         if (opts.readOnly) return;
 
         const flush = () => {
-            persistRef.current?.(dataRef.current);
+            const currentJson = JSON.stringify(dataRef.current);
+            if (currentJson !== lastPersistedJson.current) {
+                persistRef.current?.(dataRef.current);
+                lastPersistedJson.current = currentJson;
+            }
         };
 
         window.addEventListener("pagehide", flush);
@@ -44,6 +57,7 @@ export function useDebouncedFlightPersist<T>(
         };
         document.addEventListener("visibilitychange", onVis);
         return () => {
+            flush();
             window.removeEventListener("pagehide", flush);
             document.removeEventListener("visibilitychange", onVis);
         };

@@ -21,6 +21,7 @@ interface Props {
 }
 
 function mvtHasOperationalContent(m: NonNullable<Flight["mvtData"]>): boolean {
+    if (m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "") return true;
     const atd = String(m.atd ?? "").replace(/\D/g, "");
     if (atd.length >= 3) return true;
     return ["off", "eta", "paxActual", "totalBags", "fob", "dlyCod1"].some((k) =>
@@ -122,26 +123,36 @@ const TextInput = ({
 
 export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onPersistMvt }: Props) {
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
+    const [isDirty, setIsDirty] = useState(false);
     const mvtSent = hasMvtSent(flight);
     const fullEditAfterSent = Boolean(canEditFullMvtAfterSent && mvtSent);
     const fieldDisabled = (_isDelayField: boolean) => Boolean(readOnly);
     const canPersist = !readOnly && (!mvtSent || fullEditAfterSent);
     const onPersistRef = useRef(onPersistMvt);
-    onPersistRef.current = onPersistMvt;
+    useEffect(() => {
+        onPersistRef.current = onPersistMvt;
+    });
 
     useEffect(() => {
+        setIsDirty(false);
         const server = normalizeMvtData(flight.mvtData);
         let initial = server;
-        if (!mvtHasOperationalContent(server)) {
+        if (!hasMvtSent(flight) && !mvtHasOperationalContent(server)) {
             const legacy = readLegacyMvtDraft(flight.id);
             if (legacy && mvtHasOperationalContent(legacy)) {
                 initial = legacy;
-                onPersistRef.current?.(legacy);
+                if (canPersist) onPersistRef.current?.(legacy);
             }
         }
         clearMvtDraft(flight.id);
         setData(initial);
-    }, [flight.id]);
+    }, [flight.id, canPersist]);
+
+    /** MVT enviado, solo lectura, o formulario no modificado aún: reflejar Firebase sin resetear a vacío al abrir la tarjeta. */
+    useEffect(() => {
+        if (canPersist && isDirty) return;
+        setData(normalizeMvtData(flight.mvtData));
+    }, [flight.mvtData, canPersist, isDirty, flight.id]);
 
     useDebouncedFlightPersist(data, canPersist ? onPersistMvt : undefined, {
         readOnly: !canPersist,
@@ -149,6 +160,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
     });
 
     const handleChange = (field: keyof typeof data, value: string) => {
+        setIsDirty(true);
         setData((prev) => ({ ...prev, [field]: value }));
     };
 
@@ -201,6 +213,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
     const maxPaxHint = useMemo(() => getMvtMaxPaxLabel(flight.reg), [flight.reg]);
 
     const handleAddSSEE = () => {
+        setIsDirty(true);
         setData((prev) => ({
             ...prev,
             ssee: [...(prev.ssee ?? []), { id: Date.now().toString(), type: "", qty: "" }],
@@ -208,6 +221,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
     };
 
     const handleUpdateSSEE = (id: string, field: "type" | "qty", value: string) => {
+        setIsDirty(true);
         setData((prev) => ({
             ...prev,
             ssee: (prev.ssee ?? []).map((s) => (s.id === id ? { ...s, [field]: value } : s)),
@@ -215,6 +229,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
     };
 
     const handleRemoveSSEE = (id: string) => {
+        setIsDirty(true);
         setData((prev) => ({
             ...prev,
             ssee: (prev.ssee ?? []).filter((s) => s.id !== id),

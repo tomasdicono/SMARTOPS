@@ -28,12 +28,15 @@ import {
   getAirlinePrefix,
   coerceFlightFromDb,
   getHitosDepartureTime,
+  getFlightCardTone,
   isMvtCompleteForCard,
   isHitosCompleteForCard,
   canDownloadHitosSummaryRole,
   hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
+  type FlightCardTone,
 } from "./lib/flightHelpers";
+import { FlightCardToneFilters } from "./components/FlightCardToneFilters";
 import {
   applyFleetFromFirebase,
   FLEET_DATA,
@@ -79,7 +82,12 @@ import {
   isLimpiezaPendiente,
 } from "./lib/pernocteHelpers";
 import { GanttCalculatorView } from "./components/GanttCalculatorView";
-import { normalizeMvtData, normalizeHitosData } from "./lib/flightDataNormalize";
+import {
+  mergeHitosDataForPersist,
+  mergeMvtDataForPersist,
+  normalizeMvtData,
+  normalizeHitosData,
+} from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
 import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
@@ -94,6 +102,7 @@ import { forFirebaseDb } from "./lib/forFirebaseDb";
 import {
     findFlightForGestiones,
     applyGestionesRowToFlight,
+    gestionesRowHasRouteChange,
     type ParseGestionesResult,
 } from "./lib/gestionesTableParse";
 import { coerceDiferido, getDiferidoTextForReg, normalizeRegDiferido } from "./lib/diferidosHelpers";
@@ -129,6 +138,8 @@ function App() {
   const [loadToolsMenuOpen, setLoadToolsMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  /** HCC/AJS: filtro por color de tarjeta (vacío = mostrar todas). */
+  const [cardToneFilters, setCardToneFilters] = useState<Set<FlightCardTone>>(() => new Set());
   /** pernocte[YYYY-MM-DD][matrícula] */
   const [pernocteData, setPernocteData] = useState<Record<string, Record<string, PernocteRowState>>>({});
   /** Fecha vista en Pernocte (vacío = misma que el selector del header) */
@@ -441,7 +452,7 @@ function App() {
   const handlePersistMvt = async (id: string, mvtData: Flight["mvtData"]) => {
     const existingFlight = flights.find((x) => x.id === id);
     const prevMvt = normalizeMvtData(existingFlight?.mvtData);
-    const payload = normalizeMvtData(mvtData);
+    const payload = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
     const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
     if (alreadySent) {
       payload.mvtSentAt = prevMvt.mvtSentAt;
@@ -469,9 +480,11 @@ function App() {
       return;
     }
 
+    const mergedFromForm = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
+
     let payload: NonNullable<Flight["mvtData"]>;
     if (alreadySent && canEditMvtDelayAfterSent(userRole)) {
-      payload = normalizeMvtData(mvtData);
+      payload = mergedFromForm;
       payload.mvtSentAt = prevMvt.mvtSentAt;
       payload.mvtEditedByHccAt = new Date().toISOString();
       const sendGate = evaluateMvtSendGate({
@@ -485,7 +498,7 @@ function App() {
         return;
       }
     } else {
-      payload = normalizeMvtData(mvtData);
+      payload = mergedFromForm;
       const sendGate = evaluateMvtSendGate({
         mvt: payload,
         std: existingFlight?.std ?? "",
@@ -513,9 +526,9 @@ function App() {
 
   /** Auto-guardado de borrador Hitos: no marca “enviado”; preserva hitosSentAt si la carta no cambió. */
   const handlePersistHitos = async (id: string, hitosData: HitosData) => {
-    const prev = flights.find((f) => f.id === id)?.hitosData;
-    const payload = normalizeHitosData(hitosData);
-    if (prev?.hitosSentAt && prev.ganttChartName === payload.ganttChartName) {
+    const prev = normalizeHitosData(flights.find((f) => f.id === id)?.hitosData);
+    const payload = mergeHitosDataForPersist(prev, normalizeHitosData(hitosData));
+    if (prev.hitosSentAt && prev.ganttChartName === payload.ganttChartName) {
       payload.hitosSentAt = prev.hitosSentAt;
     }
     try {
@@ -668,12 +681,16 @@ function App() {
   ) => {
     const updates: Promise<void>[] = [];
     const seen = new Set<string>();
+    const byName = currentUser?.name?.trim() || currentUser?.email || "—";
     let next = [...flights];
     for (const row of parsed.rows) {
       const f = findFlightForGestiones(next, row);
       if (!f || seen.has(f.id)) continue;
       const i = next.findIndex((x) => x.id === f.id);
       if (i === -1) continue;
+      const before = next[i];
+      const depAntes = normalizeAirportCode(before.dep);
+      const arrAntes = normalizeAirportCode(before.arr);
       const patched = applyGestionesRowToFlight(next[i], row, {
         syncStdSta: opts.syncStdSta,
         defaultRescheduleReason: opts.defaultRescheduleReason,
@@ -681,11 +698,37 @@ function App() {
       next[i] = patched;
       seen.add(f.id);
       updates.push(saveFlight(patched));
+
+      if (gestionesRowHasRouteChange(row)) {
+        const dateKey = flightDateToIso(before);
+        const depDespues = normalizeAirportCode(patched.dep);
+        const arrDespues = normalizeAirportCode(patched.arr);
+        if (dateKey && (depAntes !== depDespues || arrAntes !== arrDespues)) {
+          updates.push(
+            set(push(ref(db, `routeAfectaciones/${dateKey}`)), {
+              flightId: f.id,
+              flt: String(before.flt ?? ""),
+              reg: String(patched.reg ?? before.reg ?? ""),
+              depAntes,
+              arrAntes,
+              depDespues,
+              arrDespues,
+              at: new Date().toISOString(),
+              by: byName,
+            })
+          );
+        }
+      }
     }
     try {
       await Promise.all(updates);
     } catch (e) {
-      throw new Error(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        msg.includes("permission") || msg.includes("PERMISSION_DENIED")
+          ? "Sin permiso para guardar en Firebase. Revisá las reglas de la base (flights y routeAfectaciones)."
+          : msg
+      );
     }
   };
 
@@ -763,13 +806,26 @@ function App() {
     );
   });
 
+  const toggleCardToneFilter = (tone: FlightCardTone) => {
+    setCardToneFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(tone)) next.delete(tone);
+      else next.add(tone);
+      return next;
+    });
+  };
+
   /** Rol Limpieza: solo vuelos con bloque largo (&gt;3:30) o último JES del día (pernocte). */
   const boardFlights = useMemo(() => {
-    if (!isLimpiezaRole(userRole)) return filteredFlights;
+    let list = filteredFlights;
+    if (isHccDeskRole(userRole) && cardToneFilters.size > 0) {
+      list = list.filter((f) => cardToneFilters.has(getFlightCardTone(f)));
+    }
+    if (!isLimpiezaRole(userRole)) return list;
     const iso = selectedDate?.trim();
-    if (!iso) return filteredFlights;
-    return filteredFlights.filter((f) => flightVisibleToLimpiezaBoard(f, flightsForSelectedDate, iso));
-  }, [userRole, filteredFlights, flightsForSelectedDate, selectedDate]);
+    if (!iso) return list;
+    return list.filter((f) => flightVisibleToLimpiezaBoard(f, flightsForSelectedDate, iso));
+  }, [userRole, filteredFlights, flightsForSelectedDate, selectedDate, cardToneFilters]);
 
   const duplicateKeysToday = useMemo(
     () => (selectedDate ? duplicateKeysForIso(flights, selectedDate) : new Set<string>()),
@@ -1160,10 +1216,7 @@ function App() {
         ) : mainTab === "pernocte" && isHccDeskRole(userRole) ? (
           <PernocteView
             filterDate={pernocteDateEffective}
-            headerDate={selectedDate}
-            filterFollowsHeader={!pernocteFilterDate}
             onFilterDateChange={setPernocteFilterDate}
-            onFollowHeaderDate={() => setPernocteFilterDate("")}
             rows={pernocteRows}
             pernocteByReg={pernocteData[pernocteDateEffective] ?? {}}
             onPatchRow={handlePernoctePatch}
@@ -1177,6 +1230,11 @@ function App() {
           />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
+            {mainTab === "tablero" && isHccDeskRole(userRole) && flightsForSelectedDate.length > 0 ? (
+              <div className="w-full max-w-3xl mb-8 text-left self-stretch">
+                <FlightCardToneFilters active={cardToneFilters} onToggle={toggleCardToneFilter} />
+              </div>
+            ) : null}
             <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-6">
               <PlaneTakeoff className="w-16 h-16 text-primary/60" />
             </div>
@@ -1185,6 +1243,8 @@ function App() {
                 ? "No hay vuelos cargados en el sistema."
                 : filteredFlights.length === 0 && searchQuery.trim()
                   ? "No hay vuelos que coincidan con la búsqueda."
+                  : isHccDeskRole(userRole) && cardToneFilters.size > 0 && filteredFlights.length > 0
+                    ? "Ningún vuelo coincide con los filtros de color seleccionados."
                   : flightsForSelectedDate.length === 0
                     ? "Para esa fecha no hay vuelos cargados."
                     : isLimpiezaRole(userRole) && filteredFlights.length > 0
@@ -1229,6 +1289,9 @@ function App() {
                   </button>
                 ) : null}
               </div>
+            ) : null}
+            {isHccDeskRole(userRole) ? (
+              <FlightCardToneFilters active={cardToneFilters} onToggle={toggleCardToneFilter} />
             ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...boardFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {

@@ -1,6 +1,7 @@
 import type { Flight } from "../types";
 import { flightDateToIso } from "./controlHelpers";
-import { normalizeMvtData } from "./flightDataNormalize";
+import { mergeMvtDataForPersist, normalizeMvtData } from "./flightDataNormalize";
+import { normalizeAirportCode } from "./routeAfectaciones";
 
 /** Columnas reconocidas en la primera fila del pegado */
 export type GestionesColumn =
@@ -15,7 +16,9 @@ export type GestionesColumn =
     | "etd"
     | "eta"
     | "motivo"
-    | "cancelado";
+    | "cancelado"
+    | "newDep"
+    | "newArr";
 
 export interface GestionesDataRow {
     /** Índice 1-based en el pegado (solo filas de datos) */
@@ -43,6 +46,11 @@ const HEADER_ALIASES: Record<string, GestionesColumn> = {
     NUEVA: "cambio",
     MATRICULA: "cambio",
     MATRÍCULA: "cambio",
+    /** Pegados de programación / reprogramación (sin par ORIGINAL–CAMBIO) */
+    TAIL: "cambio",
+    REG: "cambio",
+    AC: "cambio",
+    MAT: "cambio",
     STD: "std",
     STA: "sta",
     ETD: "etd",
@@ -52,6 +60,10 @@ const HEADER_ALIASES: Record<string, GestionesColumn> = {
     CANCEL: "cancelado",
     CANCELADO: "cancelado",
     ANULADO: "cancelado",
+    NEWARR: "newArr",
+    NEWDEP: "newDep",
+    "NEW.ARR": "newArr",
+    "NEW.DEP": "newDep",
 };
 
 /** Orden por defecto si el pegado no trae fila de encabezados (10 columnas). */
@@ -68,6 +80,31 @@ const DEFAULT_COLUMN_ORDER: GestionesColumn[] = [
     "eta",
 ];
 
+/** Tablas de reprogramación con TAIL (sin ORIGINAL): 9 columnas. */
+const DEFAULT_COLUMN_ORDER_TAIL: GestionesColumn[] = [
+    "fecha",
+    "vuelo",
+    "dep",
+    "arr",
+    "cambio",
+    "std",
+    "sta",
+    "etd",
+    "eta",
+];
+
+/** TAIL + ETD/ETA + NEW ARR (sin STD/STA): 8 columnas. */
+const DEFAULT_COLUMN_ORDER_TAIL_ROUTE: GestionesColumn[] = [
+    "fecha",
+    "vuelo",
+    "dep",
+    "arr",
+    "cambio",
+    "etd",
+    "eta",
+    "newArr",
+];
+
 function normalizeHeaderCell(s: string): string {
     return s
         .trim()
@@ -77,12 +114,32 @@ function normalizeHeaderCell(s: string): string {
         .replace(/[^A-Z0-9._]/g, "");
 }
 
+/** Une celdas “NEW” + “ARR”/“DEP” cuando el pegado horizontal separó el encabezado. */
+function mergeMultiWordRouteHeaders(cells: string[]): string[] {
+    const out: string[] = [];
+    for (let i = 0; i < cells.length; i++) {
+        const cur = cells[i].trim();
+        const curU = normalizeHeaderCell(cur);
+        const nextU = normalizeHeaderCell(cells[i + 1] ?? "");
+        if (curU === "NEW" && (nextU === "ARR" || nextU === "DEP")) {
+            out.push(`${cur} ${cells[i + 1].trim()}`);
+            i++;
+        } else {
+            out.push(cur);
+        }
+    }
+    return out;
+}
+
 function mapHeaderToColumn(cell: string): GestionesColumn | null {
     const key = normalizeHeaderCell(cell);
     if (!key) return null;
     if (HEADER_ALIASES[key]) return HEADER_ALIASES[key];
     if (key.includes("FECHA")) return "fecha";
     if (key.includes("VUELO") || key === "FLT") return "vuelo";
+    if (key === "TAIL" || key === "REG" || key.includes("MATRIC") || key.includes("TAIL")) return "cambio";
+    if (key === "NEWARR" || (key.startsWith("NEW") && key.includes("ARR"))) return "newArr";
+    if (key === "NEWDEP" || (key.startsWith("NEW") && key.includes("DEP"))) return "newDep";
     if (key.includes("CANCEL") || key.includes("ANULA")) return "cancelado";
     if (key.includes("MOTIV")) return "motivo";
     return null;
@@ -118,6 +175,7 @@ export function normalizeTimeToken(s: string): string {
     const t = String(s ?? "")
         .trim()
         .replace(/\bLT\b/gi, "")
+        .replace(/\+\d+$/i, "")
         .replace(/\s+/g, "")
         .replace(/Z$/i, "");
     const m = t.match(/^(\d{1,2}):(\d{2})$/);
@@ -158,7 +216,7 @@ export function flightNumberKey(flt: string): string {
 function isProbablyHeaderLine(cells: string[]): boolean {
     if (cells.length < 2) return false;
     let hits = 0;
-    for (const c of cells) {
+    for (const c of mergeMultiWordRouteHeaders(cells)) {
         const col = mapHeaderToColumn(c);
         if (col) hits++;
     }
@@ -296,7 +354,7 @@ export function parseGestionesTable(text: string): ParseGestionesResult {
         if (cells.length < 3) continue;
         if (isProbablyHeaderLine(cells)) {
             headerIdx = j;
-            byIndex = cells.map((c) => mapHeaderToColumn(c));
+            byIndex = mergeMultiWordRouteHeaders(cells).map((c) => mapHeaderToColumn(c));
             break;
         }
     }
@@ -310,11 +368,21 @@ export function parseGestionesTable(text: string): ParseGestionesResult {
     } else {
         const first = splitTableLineLoose(L[0]);
         if (first.length >= 8) {
+            const order =
+                first.length === 8
+                    ? DEFAULT_COLUMN_ORDER_TAIL_ROUTE
+                    : first.length === 9
+                      ? DEFAULT_COLUMN_ORDER_TAIL
+                      : DEFAULT_COLUMN_ORDER;
             warnings.push(
-                "No se detectó fila de encabezados; se asume orden: FECHA, VUELO, DEP, ARR, ORIGINAL, CAMBIO, STD, STA, ETD, ETA."
+                first.length === 8
+                    ? "No se detectó fila de encabezados; se asume orden: FECHA, VUELO, DEP, ARR, TAIL, ETD, ETA, NEW ARR."
+                    : first.length === 9
+                      ? "No se detectó fila de encabezados; se asume orden: FECHA, VUELO, DEP, ARR, TAIL, STD, STA, ETD, ETA."
+                      : "No se detectó fila de encabezados; se asume orden: FECHA, VUELO, DEP, ARR, ORIGINAL, CAMBIO, STD, STA, ETD, ETA."
             );
-            byIndex = first.map((_, i) => DEFAULT_COLUMN_ORDER[i] ?? null);
-            columns = DEFAULT_COLUMN_ORDER.slice(0, first.length);
+            byIndex = first.map((_, i) => order[i] ?? null);
+            columns = order.slice(0, first.length);
             dataStart = 0;
         } else {
             return { columns: [], rows: [], warnings: ["No se pudo interpretar la tabla. Pegá con tabuladores o usá el formato con encabezados FECHA / VUELO / …"] };
@@ -412,9 +480,23 @@ export function applyGestionesRowToFlight(
 
     const eta = row.raw.eta?.trim();
     if (eta) {
-        const mvt = normalizeMvtData(next.mvtData);
-        mvt.eta = normalizeTimeToken(eta);
-        next.mvtData = mvt;
+        const prev = normalizeMvtData(next.mvtData);
+        next.mvtData = mergeMvtDataForPersist(prev, {
+            ...prev,
+            eta: normalizeTimeToken(eta),
+        });
+    }
+
+    const newDep = row.raw.newDep?.trim();
+    const newArr = row.raw.newArr?.trim();
+    if (newDep) {
+        next.dep = normalizeAirportCode(newDep);
+    }
+    if (newArr) {
+        next.arr = normalizeAirportCode(newArr);
+    }
+    if (newDep || newArr) {
+        next.route = `${normalizeAirportCode(next.dep)}-${normalizeAirportCode(next.arr)}`;
     }
 
     const motivoFila = row.raw.motivo?.trim();
@@ -424,4 +506,8 @@ export function applyGestionesRowToFlight(
     }
 
     return next;
+}
+
+export function gestionesRowHasRouteChange(row: GestionesDataRow): boolean {
+    return !!(row.raw.newDep?.trim() || row.raw.newArr?.trim());
 }

@@ -62,6 +62,85 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
     return out;
 }
 
+function pickNonEmptyString(incoming: string | undefined, prev: string | undefined): string {
+    const inc = (incoming ?? "").trim();
+    if (inc) return incoming ?? "";
+    return prev ?? "";
+}
+
+/**
+ * Auto-guardado: no reemplazar en Firebase un campo ya cargado por un string vacío del formulario
+ * (p. ej. al abrir el modal antes de que llegue el snapshot completo).
+ */
+export function mergeMvtDataForPersist(
+    prev: NonNullable<Flight["mvtData"]>,
+    incoming: NonNullable<Flight["mvtData"]>,
+): NonNullable<Flight["mvtData"]> {
+    const p = normalizeMvtData(prev);
+    const inc = normalizeMvtData(incoming);
+    const out: NonNullable<Flight["mvtData"]> = {
+        atd: pickNonEmptyString(inc.atd, p.atd),
+        off: pickNonEmptyString(inc.off, p.off),
+        eta: pickNonEmptyString(inc.eta, p.eta),
+        dlyCod1: pickNonEmptyString(inc.dlyCod1, p.dlyCod1),
+        dlyTime1: pickNonEmptyString(inc.dlyTime1, p.dlyTime1),
+        dlyCod2: pickNonEmptyString(inc.dlyCod2, p.dlyCod2),
+        dlyTime2: pickNonEmptyString(inc.dlyTime2, p.dlyTime2),
+        observaciones: pickNonEmptyString(inc.observaciones, p.observaciones),
+        paxActual: pickNonEmptyString(inc.paxActual, p.paxActual),
+        inf: pickNonEmptyString(inc.inf, p.inf),
+        totalBags: pickNonEmptyString(inc.totalBags, p.totalBags),
+        totalCarga: pickNonEmptyString(inc.totalCarga, p.totalCarga),
+        load: pickNonEmptyString(inc.load, p.load),
+        fob: pickNonEmptyString(inc.fob, p.fob),
+        ssee: inc.ssee?.length ? inc.ssee : p.ssee ?? [],
+        infoSup: pickNonEmptyString(inc.infoSup, p.infoSup),
+        supervisor: pickNonEmptyString(inc.supervisor, p.supervisor),
+    };
+    const bays = inc.loadBays ?? p.loadBays;
+    if (bays) out.loadBays = bays;
+    if (inc.mvtSentAt?.trim()) out.mvtSentAt = inc.mvtSentAt;
+    else if (p.mvtSentAt?.trim()) out.mvtSentAt = p.mvtSentAt;
+    if (inc.mvtEditedByHccAt?.trim()) out.mvtEditedByHccAt = inc.mvtEditedByHccAt;
+    else if (p.mvtEditedByHccAt?.trim()) out.mvtEditedByHccAt = p.mvtEditedByHccAt;
+    return out;
+}
+
+/** Une dos lecturas de `mvtData` sin que strings vacíos de una pisen valores de la otra. */
+export function mergeMvtDataUnion(
+    a: NonNullable<Flight["mvtData"]>,
+    b: NonNullable<Flight["mvtData"]>,
+): NonNullable<Flight["mvtData"]> {
+    return mergeMvtDataForPersist(mergeMvtDataForPersist(a, b), a);
+}
+
+/** Mismo criterio que merge MVT para borradores de Hitos. */
+export function mergeHitosDataForPersist(prev: HitosData, incoming: HitosData): HitosData {
+    const p = normalizeHitosData(prev);
+    const inc = normalizeHitosData(incoming);
+    const entries: Record<string, string> = { ...p.entries };
+    for (const [k, v] of Object.entries(inc.entries)) {
+        if (String(v).trim()) entries[k] = v;
+    }
+    const out: HitosData = {
+        ganttChartName: inc.ganttChartName.trim() ? inc.ganttChartName : p.ganttChartName,
+        ata: pickNonEmptyString(inc.ata, p.ata),
+        entries,
+        gpuStart: pickNonEmptyString(inc.gpuStart, p.gpuStart),
+        gpuEnd: pickNonEmptyString(inc.gpuEnd, p.gpuEnd),
+        gpuNotUsed: inc.gpuNotUsed || p.gpuNotUsed,
+        peaPosition: inc.peaPosition || p.peaPosition,
+    };
+    if (inc.hitosSentAt?.trim()) out.hitosSentAt = inc.hitosSentAt;
+    else if (p.hitosSentAt?.trim()) out.hitosSentAt = p.hitosSentAt;
+    return out;
+}
+
+/** Une dos lecturas de hitos sin perder entradas ya cargadas. */
+export function mergeHitosDataUnion(a: HitosData, b: HitosData): HitosData {
+    return mergeHitosDataForPersist(mergeHitosDataForPersist(a, b), a);
+}
+
 /** Actualiza solo campos de demora sobre un MVT ya enviado (corrección HCC). */
 export function applyMvtDelayPatch(
     existing: NonNullable<Flight["mvtData"]>,

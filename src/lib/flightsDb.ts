@@ -3,9 +3,13 @@ import { db } from "./firebase";
 import { forFirebaseDb } from "./forFirebaseDb";
 import type { Flight } from "../types";
 import { coerceFlightFromDb } from "./flightHelpers";
-import { normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
-import type { HitosData } from "../types";
-
+import {
+    mergeHitosDataUnion,
+    mergeMvtDataUnion,
+    normalizeHitosData,
+    normalizeMvtData,
+} from "./flightDataNormalize";
+import { buildFlightRtdbUpdate } from "./flightRtdbPatch";
 /** Une dos lecturas del mismo `id` (p. ej. programación en `flights/0` y MVT en `flights/{id}`). */
 function mergeFlightRecords(a: Flight, b: Flight): Flight {
     const mvtA = a.mvtData ? normalizeMvtData(a.mvtData) : undefined;
@@ -15,12 +19,12 @@ function mergeFlightRecords(a: Flight, b: Flight): Flight {
     const pickMvt = () => {
         if (!mvtB) return mvtA;
         if (!mvtA) return mvtB;
-        return normalizeMvtData({ ...mvtA, ...mvtB });
+        return mergeMvtDataUnion(mvtA, mvtB);
     };
     const pickHitos = () => {
         if (!hitosB) return hitosA;
         if (!hitosA) return hitosB;
-        return normalizeHitosData({ ...hitosA, ...hitosB } as HitosData);
+        return mergeHitosDataUnion(hitosA, hitosB);
     };
     return coerceFlightFromDb({
         ...a,
@@ -91,11 +95,24 @@ export async function saveFlight(flight: Flight): Promise<void> {
     }
 }
 
-/** Actualiza campos de un vuelo (merge en Firebase). */
+/**
+ * Actualiza campos de un vuelo sin pisar MVT/Hitos no incluidos en el patch.
+ * Lee el nodo actual, fusiona objetos anidados y escribe con rutas `mvtData/campo`, etc.
+ */
 export async function updateFlight(flightId: string, patch: Partial<Flight>): Promise<void> {
     const id = String(flightId ?? "").trim();
     if (!id) throw new Error("Vuelo sin id");
-    await update(flightDbRef(id), forFirebaseDb(patch));
+
+    const snap = await get(flightDbRef(id));
+    const existing =
+        snap.val() != null && typeof snap.val() === "object"
+            ? coerceFlightFromDb(snap.val() as Flight)
+            : null;
+
+    const updates = buildFlightRtdbUpdate(patch, existing);
+    if (Object.keys(updates).length === 0) return;
+
+    await update(flightDbRef(id), updates);
 }
 
 export async function saveFlightsBatch(flights: Flight[]): Promise<void> {
