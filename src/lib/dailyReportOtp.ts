@@ -44,3 +44,15 @@ export async function saveDailyReportOtp(dateIso: string, otp: DailyReportOtp): 
         otp15: String(otp.otp15 ?? "").trim(),
     });
 }
+
+/** Mensaje legible según el error de Firebase al persistir OTP. */
+export function dailyReportOtpSaveErrorMessage(err: unknown): string {
+    const code = (err as { code?: string })?.code;
+    if (code === "PERMISSION_DENIED") {
+        return "Sin permiso en Firebase para guardar OTP (ruta dailyReportOtp). El administrador debe desplegar las reglas: npm run firebase:deploy-rules";
+    }
+    if (code === "NETWORK_ERROR" || code === "UNAVAILABLE") {
+        return "Sin conexión con el servidor. Los valores sirven para el PDF en esta pantalla, pero no se guardaron para otros usuarios.";
+    }
+    return "No se pudo guardar OTP 0 / OTP 15. Revisá la conexión.";
+}

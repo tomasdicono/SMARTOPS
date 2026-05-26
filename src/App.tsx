@@ -96,6 +96,7 @@ import {
   coerceDailyReportOtp,
   emptyDailyReportOtp,
   saveDailyReportOtp,
+  dailyReportOtpSaveErrorMessage,
   type DailyReportOtp,
 } from "./lib/dailyReportOtp";
 import { forFirebaseDb } from "./lib/forFirebaseDb";
@@ -568,13 +569,20 @@ function App() {
     }
   };
 
-  const handleSaveDailyReportOtp = async (otp: DailyReportOtp) => {
-    if (!selectedDate) return;
+  const handleSaveDailyReportOtp = async (
+    otp: DailyReportOtp,
+    opts?: { notifyOnError?: boolean }
+  ): Promise<boolean> => {
+    if (!selectedDate) return false;
     try {
       await saveDailyReportOtp(selectedDate, otp);
+      return true;
     } catch (e) {
       console.error("No se pudo guardar OTP del reporte diario:", e);
-      alert("No se pudo guardar OTP 0 / OTP 15. Revisá la conexión.");
+      if (opts?.notifyOnError) {
+        alert(dailyReportOtpSaveErrorMessage(e));
+      }
+      return false;
     }
   };
 

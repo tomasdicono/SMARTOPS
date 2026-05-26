@@ -28,7 +28,10 @@ interface Props {
     /** Misma fuente que Control → Status día (Firebase `routeAfectaciones/{fecha}`). */
     routeAfectaciones?: RouteAfectacionEntry[];
     dailyReportOtp: DailyReportOtp;
-    onSaveDailyReportOtp: (otp: DailyReportOtp) => void;
+    onSaveDailyReportOtp: (
+        otp: DailyReportOtp,
+        opts?: { notifyOnError?: boolean }
+    ) => Promise<boolean>;
     canEditOtp: boolean;
 }
 
@@ -60,6 +63,7 @@ export function DailyReportView({
     );
 
     const [otpDraft, setOtpDraft] = useState<DailyReportOtp>(dailyReportOtp);
+    const [otpSaveFailed, setOtpSaveFailed] = useState(false);
     const otpTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
     const otpComplete = isDailyReportOtpComplete(otpDraft);
@@ -67,6 +71,7 @@ export function DailyReportView({
 
     useEffect(() => {
         setOtpDraft(dailyReportOtp);
+        setOtpSaveFailed(false);
     }, [dailyReportOtp, selectedDate]);
 
     const obsTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -91,11 +96,25 @@ export function DailyReportView({
     };
 
     const scheduleOtpSave = (next: DailyReportOtp) => {
+        if (!canEditOtp || !isDailyReportOtpComplete(next)) return;
         if (otpTimers.current.all) clearTimeout(otpTimers.current.all);
         otpTimers.current.all = setTimeout(() => {
-            onSaveDailyReportOtp(next);
+            void onSaveDailyReportOtp(next, { notifyOnError: false }).then((ok) => {
+                setOtpSaveFailed(!ok);
+            });
             delete otpTimers.current.all;
         }, 500);
+    };
+
+    const flushOtpSave = async (notifyOnError: boolean) => {
+        if (otpTimers.current.all) {
+            clearTimeout(otpTimers.current.all);
+            delete otpTimers.current.all;
+        }
+        if (!canEditOtp || !isDailyReportOtpComplete(otpDraft)) return false;
+        const ok = await onSaveDailyReportOtp(otpDraft, { notifyOnError });
+        setOtpSaveFailed(!ok);
+        return ok;
     };
 
     const handleOtpChange = (field: keyof DailyReportOtp, value: string) => {
@@ -137,6 +156,7 @@ export function DailyReportView({
                             value={otpDraft.otp0}
                             disabled={!canEditOtp}
                             onChange={(e) => handleOtpChange("otp0", e.target.value)}
+                            onBlur={() => void flushOtpSave(false)}
                             className="w-[min(100%,7rem)] border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 disabled:opacity-60 [color-scheme:light]"
                             aria-describedby="otp-hint"
                         />
@@ -150,6 +170,7 @@ export function DailyReportView({
                             value={otpDraft.otp15}
                             disabled={!canEditOtp}
                             onChange={(e) => handleOtpChange("otp15", e.target.value)}
+                            onBlur={() => void flushOtpSave(false)}
                             className="w-[min(100%,7rem)] border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 disabled:opacity-60 [color-scheme:light]"
                             aria-describedby="otp-hint"
                         />
@@ -159,12 +180,8 @@ export function DailyReportView({
                     type="button"
                     disabled={!canDownloadPdf}
                     title={downloadTitle}
-                    onClick={() => {
-                        if (otpTimers.current.all) {
-                            clearTimeout(otpTimers.current.all);
-                            delete otpTimers.current.all;
-                        }
-                        onSaveDailyReportOtp(otpDraft);
+                    onClick={async () => {
+                        await flushOtpSave(true);
                         void downloadDailyReportPdf(rows, selectedDate, {
                             responsibleName: reportUserName,
                             statusDia,
@@ -192,6 +209,12 @@ export function DailyReportView({
                 ) : (
                     <span className="text-amber-800 font-semibold"> Completá ambos para habilitar la descarga.</span>
                 )}
+                {otpSaveFailed ? (
+                    <span className="text-red-700 font-semibold">
+                        {" "}
+                        No se guardó en el servidor (revisá conexión o reglas Firebase).
+                    </span>
+                ) : null}
             </p>
 
             {rows.length === 0 ? (

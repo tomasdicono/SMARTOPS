@@ -79,14 +79,10 @@ export function mergeMvtDataForPersist(
     const p = normalizeMvtData(prev);
     const inc = normalizeMvtData(incoming);
     const out: NonNullable<Flight["mvtData"]> = {
+        ...p,
         atd: pickNonEmptyString(inc.atd, p.atd),
         off: pickNonEmptyString(inc.off, p.off),
         eta: pickNonEmptyString(inc.eta, p.eta),
-        dlyCod1: pickNonEmptyString(inc.dlyCod1, p.dlyCod1),
-        dlyTime1: pickNonEmptyString(inc.dlyTime1, p.dlyTime1),
-        dlyCod2: pickNonEmptyString(inc.dlyCod2, p.dlyCod2),
-        dlyTime2: pickNonEmptyString(inc.dlyTime2, p.dlyTime2),
-        observaciones: pickNonEmptyString(inc.observaciones, p.observaciones),
         paxActual: pickNonEmptyString(inc.paxActual, p.paxActual),
         inf: pickNonEmptyString(inc.inf, p.inf),
         totalBags: pickNonEmptyString(inc.totalBags, p.totalBags),
@@ -103,7 +99,8 @@ export function mergeMvtDataForPersist(
     else if (p.mvtSentAt?.trim()) out.mvtSentAt = p.mvtSentAt;
     if (inc.mvtEditedByHccAt?.trim()) out.mvtEditedByHccAt = inc.mvtEditedByHccAt;
     else if (p.mvtEditedByHccAt?.trim()) out.mvtEditedByHccAt = p.mvtEditedByHccAt;
-    return out;
+    /** Demoras: siempre tomar el formulario (permite dejar un solo código / borrar DLY 2). */
+    return applyMvtDelayPatch(out, inc);
 }
 
 /** Une dos lecturas de `mvtData` sin que strings vacíos de una pisen valores de la otra. */
