@@ -6,6 +6,8 @@ import {
     filterDelayedFlightsForDate,
     totalDelayMinutes,
     formatDelayCell,
+    delayTimeCellClassName,
+    buildDailyReportCopyText,
 } from "../lib/dailyReportHelpers";
 import {
     type DailyReportOtp,
@@ -14,7 +16,7 @@ import {
 } from "../lib/dailyReportOtp";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { downloadDailyReportPdf } from "../lib/dailyReportPdf";
-import { FileDown, CalendarDays } from "lucide-react";
+import { FileDown, CalendarDays, Copy, Check } from "lucide-react";
 
 interface Props {
     flights: Flight[];
@@ -75,6 +77,8 @@ export function DailyReportView({
     }, [dailyReportOtp, selectedDate]);
 
     const obsTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    const obsRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+    const [copiedFlightId, setCopiedFlightId] = useState<string | null>(null);
 
     useEffect(() => {
         return () => {
@@ -121,6 +125,19 @@ export function DailyReportView({
         const next = { ...otpDraft, [field]: value };
         setOtpDraft(next);
         if (canEditOtp) scheduleOtpSave(next);
+    };
+
+    const handleCopyFlight = async (f: Flight) => {
+        const obs =
+            obsRefs.current[f.id]?.value ?? f.dailyReportObs ?? "";
+        const text = buildDailyReportCopyText(f, obs);
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedFlightId(f.id);
+            setTimeout(() => setCopiedFlightId(null), 2000);
+        } catch {
+            /* ignore */
+        }
     };
 
     const downloadTitle = !otpComplete
@@ -259,25 +276,49 @@ export function DailyReportView({
                                         <td className="px-2 py-2 font-bold">{f.dep}</td>
                                         <td className="px-2 py-2 font-bold">{f.arr}</td>
                                         <td className="px-2 py-2 font-mono">{f.reg}</td>
-                                        <td className="px-2 py-2 font-mono tabular-nums">{formatDelayCell(m.dlyTime1)}</td>
+                                        <td className={delayTimeCellClassName(m.dlyTime1)}>
+                                            {formatDelayCell(m.dlyTime1)}
+                                        </td>
                                         <td className="px-2 py-2 font-bold text-slate-800">{m.dlyCod1 || "—"}</td>
-                                        <td className="px-2 py-2 font-mono tabular-nums">{formatDelayCell(m.dlyTime2)}</td>
+                                        <td className={delayTimeCellClassName(m.dlyTime2)}>
+                                            {formatDelayCell(m.dlyTime2)}
+                                        </td>
                                         <td className="px-2 py-2 font-bold text-slate-800">{m.dlyCod2 || "—"}</td>
-                                        <td className="px-2 py-2 max-w-[280px]">
-                                            {canEditObs ? (
-                                                <textarea
-                                                    key={f.id}
-                                                    defaultValue={f.dailyReportObs || ""}
-                                                    rows={2}
-                                                    placeholder="Observaciones…"
-                                                    onChange={(e) => scheduleObs(f.id, e.target.value)}
-                                                    className="w-full min-w-[180px] px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 resize-y"
-                                                />
-                                            ) : (
-                                                <span className="text-xs text-slate-600 whitespace-pre-wrap block">
-                                                    {f.dailyReportObs?.trim() ? f.dailyReportObs : "—"}
-                                                </span>
-                                            )}
+                                        <td className="px-2 py-2 max-w-[320px]">
+                                            <div className="flex gap-2 items-start">
+                                                <div className="flex-1 min-w-0">
+                                                    {canEditObs ? (
+                                                        <textarea
+                                                            key={f.id}
+                                                            ref={(el) => {
+                                                                obsRefs.current[f.id] = el;
+                                                            }}
+                                                            defaultValue={f.dailyReportObs || ""}
+                                                            rows={2}
+                                                            placeholder="Observaciones…"
+                                                            onChange={(e) => scheduleObs(f.id, e.target.value)}
+                                                            className="w-full min-w-[160px] px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 resize-y"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-xs text-slate-600 whitespace-pre-wrap block">
+                                                            {f.dailyReportObs?.trim() ? f.dailyReportObs : "—"}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    title="Copiar resumen del vuelo"
+                                                    aria-label="Copiar resumen del vuelo"
+                                                    onClick={() => void handleCopyFlight(f)}
+                                                    className="print:hidden shrink-0 p-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-cyan-50 hover:border-cyan-300 text-slate-600 hover:text-cyan-800 transition-colors"
+                                                >
+                                                    {copiedFlightId === f.id ? (
+                                                        <Check className="w-4 h-4 text-emerald-600" aria-hidden />
+                                                    ) : (
+                                                        <Copy className="w-4 h-4" aria-hidden />
+                                                    )}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
