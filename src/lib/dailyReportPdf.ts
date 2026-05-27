@@ -6,7 +6,11 @@ import type { StatusDiaDaySummary } from "./controlHelpers";
 import type { DailyReportOtp } from "./dailyReportOtp";
 import { formatOtpPercentForReport } from "./dailyReportOtp";
 import { formatDelayCodeDisplay } from "./delayCodes";
-import { totalDelayMinutes, formatDelayCell } from "./dailyReportHelpers";
+import {
+    totalDelayMinutes,
+    formatDelayCell,
+    isDelayTimeAtLeast15Minutes,
+} from "./dailyReportHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 
 /** Altura del bloque de encabezado (logo + título + meta). Estilo jetsmart.com: claro, navy + acento rojo. */
@@ -20,7 +24,13 @@ const JS = {
     muted: [82, 100, 118] as const,
     rowAlt: [244, 247, 251] as const,
     border: [226, 232, 240] as const,
+    /** Mismo criterio que Reporte diario en pantalla (DLY TIME ≥ 15 min). */
+    delayCellBg: [254, 226, 226] as const,
+    delayCellText: [153, 27, 27] as const,
 };
+
+/** Columnas «Min» (DLY TIME 1 y 2) en la tabla principal del informe. */
+const PDF_DLY_TIME_COL_INDEXES = [7, 9] as const;
 
 async function fetchLogoAsDataUrl(): Promise<string | null> {
     try {
@@ -205,6 +215,20 @@ export async function downloadDailyReportPdf(
             11: { cellWidth: "auto" },
         },
         margin: { left: 10, right: 10 },
+        didParseCell: (data) => {
+            if (data.section !== "body") return;
+            if (data.column.index !== PDF_DLY_TIME_COL_INDEXES[0] && data.column.index !== PDF_DLY_TIME_COL_INDEXES[1]) {
+                return;
+            }
+            const f = rows[data.row.index];
+            const m = f?.mvtData;
+            if (!m) return;
+            const raw = data.column.index === 7 ? m.dlyTime1 : m.dlyTime2;
+            if (!isDelayTimeAtLeast15Minutes(raw)) return;
+            data.cell.styles.fillColor = [...JS.delayCellBg];
+            data.cell.styles.textColor = [...JS.delayCellText];
+            data.cell.styles.fontStyle = "bold";
+        },
     });
 
     const pageH = doc.internal.pageSize.getHeight();
