@@ -702,6 +702,8 @@ export interface StatusDiaDaySummary {
     nMvtOtp: number;
     /** Vuelos no cancelados con registro MVT cargado (`mvtData` presente). */
     countVuelosConMvtCargado: number;
+    /** Vuelos operados: no cancelados con MVT enviado (`mvtSentAt`). */
+    countVuelosOperados: number;
     otp0Pct: number | null;
     otp15Pct: number | null;
     countAfectacionesRuta: number;
@@ -743,6 +745,7 @@ export function computeStatusDiaDaySummary(
     const paxCancelados = cancelled.reduce((s, f) => s + getScheduledPax(f), 0);
 
     const countVuelosConMvtCargado = operational.filter((f) => f.mvtData != null).length;
+    const countVuelosOperados = operational.filter(hasMvtSent).length;
 
     const conMvtOtp = operational.filter((f) => isJesFlightNumber(f.flt) && hasMvtAtdForOtp(f));
     const nMvtOtp = conMvtOtp.length;
@@ -787,6 +790,7 @@ export function computeStatusDiaDaySummary(
         totalVuelosDia: dayFlights.length,
         nMvtOtp,
         countVuelosConMvtCargado,
+        countVuelosOperados,
         otp0Pct,
         otp15Pct,
         countAfectacionesRuta: routeAfectacionesCount,
@@ -848,7 +852,7 @@ export function buildStatusDiaPrensaText(
     out.push(`Status operativo — ${fecha}`);
     out.push("");
     out.push(
-        `El día cuenta con ${s.totalVuelosDia} vuelo${s.totalVuelosDia !== 1 ? "s" : ""} cargados en itinerario.`
+        `El día cuenta con ${s.totalVuelosDia} vuelo${s.totalVuelosDia !== 1 ? "s" : ""} cargados en itinerario (${s.countVuelosOperados} operado${s.countVuelosOperados !== 1 ? "s" : ""} con MVT enviado).`
     );
     out.push("");
 

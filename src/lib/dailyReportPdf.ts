@@ -54,6 +54,7 @@ function buildStatusDiaPdfRows(s: StatusDiaDaySummary, manualOtp: DailyReportOtp
     const otp15Display = formatOtpPercentForReport(manualOtp.otp15) ?? "—";
     const rows: string[][] = [
         ["Vuelos programados", String(s.totalVuelosDia)],
+        ["Vuelos operados (MVT enviado)", String(s.countVuelosOperados)],
         ["Vuelos JES con MVT (base OTP)", s.nMvtOtp > 0 ? String(s.nMvtOtp) : "—"],
         ["OTP0", otp0Display],
         ["OTP15", otp15Display],

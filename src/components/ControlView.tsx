@@ -607,7 +607,9 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         <p className="text-xs sm:text-sm text-slate-700 leading-snug">
                             <span className="font-black uppercase text-slate-900">Status día</span>
                             <span className="tabular-nums font-semibold mx-1">· {selectedDate}</span>
-                            <span className="text-slate-500">· {statusDia.totalVuelosDia} vuelos</span>
+                            <span className="text-slate-500">
+                                · {statusDia.totalVuelosDia} vuelos · {statusDia.countVuelosOperados} operados
+                            </span>
                         </p>
                         <ControlAirportMultiSelect
                             options={obvkAirportOptions}
@@ -637,7 +639,14 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         Los datos que se muestran a continuación provienen de la data extraída de los mensajes operacionales.
                     </p>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 print:gap-1.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 print:gap-1.5">
+                        <div className="rounded-lg border border-sky-200/90 bg-sky-50/80 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-sky-900 leading-tight">Operados</p>
+                            <p className="text-[8px] font-semibold text-sky-800/80 leading-tight">MVT enviado</p>
+                            <p className="text-xl sm:text-2xl font-black text-sky-950 tabular-nums leading-tight mt-0.5">
+                                {statusDia.countVuelosOperados}
+                            </p>
+                        </div>
                         <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/90 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
                             <p className="text-[9px] font-black uppercase text-emerald-900 leading-tight">OTP 0</p>
                             <p className="text-[8px] font-semibold text-emerald-800/80 leading-tight">solo JES</p>
