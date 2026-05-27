@@ -469,26 +469,60 @@ export function boardingDurationMinutesFromFlight(f: Flight): number | null {
     return diff > 0 ? diff : null;
 }
 
+export type BoardingStatsFilter = "manga" | "remota" | "A320" | "A321";
+
+export interface BoardingFlightDurationRow {
+    flight: Flight;
+    durationMinutes: number;
+}
+
+export interface BoardingCategoryStats {
+    avgMinutes: number | null;
+    countWithBoarding: number;
+    /** Vuelos con duración de embarque estrictamente mayor al promedio de la categoría */
+    aboveAverage: BoardingFlightDurationRow[];
+}
+
+function flightMatchesBoardingStatsFilter(f: Flight, filter?: BoardingStatsFilter): boolean {
+    if (!filter) return true;
+    if (filter === "manga" || filter === "remota") {
+        return normalizeHitosData(f.hitosData).peaPosition === filter;
+    }
+    const ac = getAircraftInfo(f.reg);
+    if (!ac) return false;
+    if (filter === "A321") return isA321Model(ac.model);
+    return isA320Family(ac.model);
+}
+
+/** Estadísticas de embarque por categoría (promedio + vuelos por encima del promedio). */
+export function computeBoardingCategoryStats(
+    flights: Flight[],
+    filter?: BoardingStatsFilter,
+): BoardingCategoryStats {
+    const rows: BoardingFlightDurationRow[] = [];
+    for (const f of flights) {
+        if (!flightMatchesBoardingStatsFilter(f, filter)) continue;
+        const d = boardingDurationMinutesFromFlight(f);
+        if (d != null) rows.push({ flight: f, durationMinutes: d });
+    }
+    if (rows.length === 0) return { avgMinutes: null, countWithBoarding: 0, aboveAverage: [] };
+    const avgMinutes = rows.reduce((s, r) => s + r.durationMinutes, 0) / rows.length;
+    const aboveAverage = rows
+        .filter((r) => r.durationMinutes > avgMinutes)
+        .sort((a, b) => b.durationMinutes - a.durationMinutes);
+    return { avgMinutes, countWithBoarding: rows.length, aboveAverage };
+}
+
 /** Promedio de duración de embarque en el conjunto filtrado (solo vuelos con inicio y fin válidos). */
 export function computeAverageBoardingMinutes(
     flights: Flight[],
-    pea?: "manga" | "remota",
+    filter?: BoardingStatsFilter,
 ): {
     avgMinutes: number | null;
     countWithBoarding: number;
 } {
-    const mins: number[] = [];
-    for (const f of flights) {
-        if (pea) {
-            const p = normalizeHitosData(f.hitosData).peaPosition;
-            if (p !== pea) continue;
-        }
-        const d = boardingDurationMinutesFromFlight(f);
-        if (d != null) mins.push(d);
-    }
-    if (mins.length === 0) return { avgMinutes: null, countWithBoarding: 0 };
-    const sum = mins.reduce((a, b) => a + b, 0);
-    return { avgMinutes: sum / mins.length, countWithBoarding: mins.length };
+    const { avgMinutes, countWithBoarding } = computeBoardingCategoryStats(flights, filter);
+    return { avgMinutes, countWithBoarding };
 }
 
 /** Cantidad de vuelos con PEA manga / remota en hitos (lista ya filtrada por el llamador). */
