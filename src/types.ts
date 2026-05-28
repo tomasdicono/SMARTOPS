@@ -29,9 +29,9 @@ export function isScRole(role: UserRole): boolean {
     return role === "SC";
 }
 
-/** Tras enviar el MVT, solo HCC puede editar y guardar cualquier campo del formulario. */
+/** Tras enviar MVT u hitos, HCC y AJS pueden editar y guardar cualquier campo. */
 export function canEditMvtDelayAfterSent(role: UserRole): boolean {
-    return role === "HCC";
+    return role === "HCC" || role === "AJS";
 }
 
 export interface User {

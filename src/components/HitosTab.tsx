@@ -6,33 +6,37 @@ import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { getHitosDepartureTime } from "../lib/flightHelpers";
 import { HITO_MILESTONE_HINTS } from "../lib/hitosReference";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
-import { Save, AlertCircle, Clock, Zap } from "lucide-react";
+import { Save, AlertCircle, Clock, Zap, Lock } from "lucide-react";
 
 interface Props {
     flight: Flight;
     readOnly?: boolean;
+    /** HCC / AJS: permitir correcciones aunque hitosSentAt ya esté cargado */
+    canEditAfterSent?: boolean;
     onSave: (hitosData: HitosData) => void;
     /** Guardado automático en Firebase (sin validar) para no perder progreso al refrescar */
     onPersistHitos?: (hitosData: HitosData) => void;
 }
 
-export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
+export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersistHitos }: Props) {
     const [errorMsg, setErrorMsg] = useState("");
     const [data, setData] = useState<HitosData>(() => normalizeHitosData(flight.hitosData));
     const hitosSent =
         flight.hitosData?.hitosSentAt != null && String(flight.hitosData.hitosSentAt).trim() !== "";
+    const lockedAfterSend = hitosSent && !canEditAfterSent;
+    const canPersist = !readOnly && (!hitosSent || !!canEditAfterSent);
 
     useEffect(() => {
         setData(normalizeHitosData(flight.hitosData));
     }, [flight.id]);
 
     useEffect(() => {
-        if (!hitosSent && !readOnly) return;
+        if (!readOnly && !lockedAfterSend) return;
         setData(normalizeHitosData(flight.hitosData));
-    }, [flight.hitosData, hitosSent, readOnly, flight.id]);
+    }, [flight.hitosData, readOnly, lockedAfterSend, flight.id]);
 
-    useDebouncedFlightPersist(data, readOnly ? undefined : onPersistHitos, {
-        readOnly: !!readOnly,
+    useDebouncedFlightPersist(data, canPersist ? onPersistHitos : undefined, {
+        readOnly: !canPersist,
         flightId: flight.id,
     });
 
@@ -122,6 +126,18 @@ export function HitosTab({ flight, readOnly, onSave, onPersistHitos }: Props) {
 
     return (
         <fieldset disabled={readOnly} className="flex flex-col h-full bg-slate-50/50 p-6 overflow-y-auto custom-scrollbar border-none m-0">
+            {hitosSent ? (
+                <div
+                    className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm mb-4 ${canEditAfterSent ? "border-cyan-200 bg-cyan-50 text-cyan-950" : "border-slate-200 bg-slate-100 text-slate-800"}`}
+                >
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+                    <p className="font-semibold leading-snug">
+                        {canEditAfterSent
+                            ? "Hitos enviados. Podés corregir cualquier dato y guardar con «Guardar Hitos»."
+                            : "Hitos enviados. El formulario no puede editarse."}
+                    </p>
+                </div>
+            ) : null}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
                 <div className="space-y-4 mb-6 pb-6 border-b border-slate-100">
                     <div>

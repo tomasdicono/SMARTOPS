@@ -529,7 +529,7 @@ function App() {
   const handlePersistHitos = async (id: string, hitosData: HitosData) => {
     const prev = normalizeHitosData(flights.find((f) => f.id === id)?.hitosData);
     const payload = mergeHitosDataForPersist(prev, normalizeHitosData(hitosData));
-    if (prev.hitosSentAt && prev.ganttChartName === payload.ganttChartName) {
+    if (prev.hitosSentAt) {
       payload.hitosSentAt = prev.hitosSentAt;
     }
     try {

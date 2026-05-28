@@ -74,8 +74,13 @@ export function FlightModal({
             userRole === "AJS");
     const isReadOnlyView = !!flight.cancelled;
     const mvtSent = hasMvtSent(flight);
-    const canEditMvtAfterSent = mvtSent && canEditMvtDelayAfterSent(userRole) && !isReadOnlyView;
+    const canEditOperationalAfterSent =
+        canEditMvtDelayAfterSent(userRole) && !isReadOnlyView;
+    const canEditMvtAfterSent = mvtSent && canEditOperationalAfterSent;
     const mvtFormReadOnly = isReadOnlyView || (mvtSent && !canEditMvtAfterSent);
+    const hitosSent =
+        flight.hitosData?.hitosSentAt != null && String(flight.hitosData.hitosSentAt).trim() !== "";
+    const canEditHitosAfterSent = hitosSent && canEditOperationalAfterSent;
     const canDownloadHitosSummary =
         canDownloadHitosSummaryRole(userRole) &&
         !isReadOnlyView &&
@@ -253,6 +258,7 @@ export function FlightModal({
                                 key={flight.id}
                                 flight={flight}
                                 readOnly={isReadOnlyView}
+                                canEditAfterSent={canEditHitosAfterSent}
                                 onPersistHitos={onPersistHitos}
                                 onSave={(data) => {
                                     onSaveHitos(data);
