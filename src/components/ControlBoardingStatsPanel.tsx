@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import type { Flight } from "../types";
 import { getAirlinePrefix } from "../lib/flightHelpers";
+import { getAircraftInfo } from "../lib/fleetData";
 import {
     computeBoardingCategoryStats,
+    getPax,
     type BoardingStatsFilter,
     type BoardingCategoryStats,
 } from "../lib/controlHelpers";
@@ -15,6 +17,14 @@ function formatPeaLabel(pea: PeaPosition | undefined): string {
     if (pea === "manga") return "Manga";
     if (pea === "remota") return "Remota";
     return "—";
+}
+
+function formatOccupancyPct(flight: Flight): string {
+    const ac = getAircraftInfo(flight.reg);
+    const cap = ac?.capacity ?? 0;
+    if (cap <= 0) return "—";
+    const pax = getPax(flight);
+    return `${((pax / cap) * 100).toFixed(1)}%`;
 }
 
 interface Props {
@@ -88,6 +98,7 @@ function BoardingAboveAverageList({
                         <th className="px-3 py-2">Ruta</th>
                         <th className="px-3 py-2 text-right">Embarque</th>
                         <th className="px-3 py-2 text-center">PEA</th>
+                        <th className="px-3 py-2 text-right">Ocupación</th>
                         <th className="px-3 py-2 text-right">vs promedio</th>
                     </tr>
                 </thead>
@@ -112,6 +123,9 @@ function BoardingAboveAverageList({
                                 </td>
                                 <td className="px-3 py-2 text-center font-semibold text-slate-800 whitespace-nowrap">
                                     {pea}
+                                </td>
+                                <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-800 whitespace-nowrap">
+                                    {formatOccupancyPct(flight)}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-900 font-bold">
                                     +{formatMinutesToHHMM(Math.round(over))}
