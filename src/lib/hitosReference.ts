@@ -72,15 +72,44 @@ export function demoraOperacional(valMins: number, targetMins: number): string {
     return "A tiempo";
 }
 
-/** Carta y ATA para objetivos de hitos crew (prioriza selección en pestaña Crew). */
+/**
+ * Carta y referencia para objetivos crew (mismo criterio que resumen / pestaña Crew).
+ * Si tripulación no eligió carta propia, usa hitos operacionales completos.
+ */
 export function hitosDataForCrewTargets(flight: Flight): HitosData | null {
     const op = normalizeHitosData(flight.hitosData);
     const raw = flight.hitosCrewData ?? {};
-    const gantt =
-        String(raw[CREW_STORAGE_KEYS.gantt] ?? "").trim() || String(op.ganttChartName ?? "").trim();
-    const ata = String(raw[CREW_STORAGE_KEYS.ata] ?? "").trim() || String(op.ata ?? "").trim();
-    if (!gantt) return null;
-    return normalizeHitosData({ ganttChartName: gantt, ata, entries: {} });
+    const crewOwnChart = String(raw[CREW_STORAGE_KEYS.gantt] ?? "").trim();
+    if (crewOwnChart) {
+        return normalizeHitosData({
+            ganttChartName: crewOwnChart,
+            ata: String(raw[CREW_STORAGE_KEYS.ata] ?? "").trim() || op.ata,
+            entries: {},
+        });
+    }
+    if (String(op.ganttChartName ?? "").trim()) return op;
+    return null;
+}
+
+/** Hora real de un hito crew: primero pestaña Crew, luego hitos operacionales (misma clave en carta). */
+export function crewMilestoneRealMins(flight: Flight, crewLabel: string): number | null {
+    const crew = flight.hitosCrewData ?? {};
+    const want = crewLabel.trim().toLowerCase();
+    for (const [k, v] of Object.entries(crew)) {
+        if (k === CREW_STORAGE_KEYS.gantt || k === CREW_STORAGE_KEYS.ata) continue;
+        if (k.trim().toLowerCase() !== want) continue;
+        const digits = String(v ?? "").replace(/\D/g, "");
+        if (digits.length < 3) continue;
+        return parseToMins(digits.padStart(4, "0").slice(-4));
+    }
+    const op = normalizeHitosData(flight.hitosData);
+    for (const [k, v] of Object.entries(op.entries)) {
+        if (k.trim().toLowerCase() !== want) continue;
+        const digits = String(v ?? "").replace(/\D/g, "");
+        if (digits.length < 3) continue;
+        return parseToMins(digits.padStart(4, "0").slice(-4));
+    }
+    return null;
 }
 
 /**

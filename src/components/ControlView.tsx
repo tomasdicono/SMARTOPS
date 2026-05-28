@@ -1100,7 +1100,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             <p className="text-xs text-slate-600 mt-1">
                                 {llegadaCrewCompliance.evaluatedCount > 0
                                     ? `${llegadaCrewCompliance.onTimeCount} de ${llegadaCrewCompliance.evaluatedCount} vuelo${llegadaCrewCompliance.evaluatedCount !== 1 ? "s" : ""} a tiempo`
-                                    : "Sin vuelos con Llegada crew y carta en el filtro"}
+                                    : "Sin vuelos con Llegada crew cargada y carta Gantt en el filtro"}
                             </p>
                         </div>
                         <ControlBoardingStatsPanel flights={statsFlights} />

@@ -2,8 +2,9 @@ import type { Flight, RouteAfectacionEntry } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
 import { getAirlinePrefix, isJesFlightNumber } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
-import { normalizeHitosData, normalizeHitosCrewData } from "./flightDataNormalize";
+import { normalizeHitosData } from "./flightDataNormalize";
 import {
+    crewMilestoneRealMins,
     getCrewTargetInfo,
     hitosDataForCrewTargets,
     isMilestoneOnTime,
@@ -576,19 +577,17 @@ export function computeInicioEmbarqueCompliance(flights: Flight[]): MilestoneCom
     };
 }
 
-/** % «a tiempo» de Llegada crew (hitos crew + objetivo según carta). */
+/** % «a tiempo» de Llegada crew (hora en Crew u operacionales + objetivo según carta). */
 export function computeLlegadaCrewCompliance(flights: Flight[]): MilestoneComplianceStats {
     const crewLabel = "Llegada crew";
     let onTimeCount = 0;
     let evaluatedCount = 0;
     for (const f of flights) {
-        const crew = normalizeHitosCrewData(f.hitosCrewData);
-        const raw = String(crew[crewLabel] ?? "").replace(/\D/g, "");
-        if (raw.length < 3) continue;
+        const valMins = crewMilestoneRealMins(f, crewLabel);
+        if (valMins == null) continue;
         const hitosForTarget = hitosDataForCrewTargets(f);
         const targetInfo = hitosForTarget ? getCrewTargetInfo(f, hitosForTarget, crewLabel) : null;
         if (!targetInfo) continue;
-        const valMins = hitosParseToMins(raw.padStart(4, "0").slice(-4));
         evaluatedCount += 1;
         if (isMilestoneOnTime(valMins, targetInfo.targetMins)) onTimeCount += 1;
     }
