@@ -1,6 +1,7 @@
 import type { Flight, HitosData } from "../types";
 import { GANTT_CHARTS } from "./hitosData";
 import { getHitosDepartureTime } from "./flightHelpers";
+import { normalizeHitosData } from "./flightDataNormalize";
 
 /**
  * Etiqueta en pestaña Crew → nombre exacto del hito en la carta Gantt (mismo offset T−).
@@ -57,12 +58,29 @@ export function refMinutesForHitos(flight: Flight, data: HitosData, chart: (type
     return refMinutes;
 }
 
+/** Misma regla que HitosTab / HitosCrewTab: retraso si real > objetivo y la diferencia &lt; 10 h. */
+export function isMilestoneOnTime(valMins: number, targetMins: number): boolean {
+    if (valMins > targetMins && valMins - targetMins < 600) return false;
+    return true;
+}
+
 /** Misma regla que HitosTab para Retraso vs A tiempo */
 export function demoraOperacional(valMins: number, targetMins: number): string {
     if (valMins > targetMins && valMins - targetMins < 600) {
         return `+${valMins - targetMins} min`;
     }
     return "A tiempo";
+}
+
+/** Carta y ATA para objetivos de hitos crew (prioriza selección en pestaña Crew). */
+export function hitosDataForCrewTargets(flight: Flight): HitosData | null {
+    const op = normalizeHitosData(flight.hitosData);
+    const raw = flight.hitosCrewData ?? {};
+    const gantt =
+        String(raw[CREW_STORAGE_KEYS.gantt] ?? "").trim() || String(op.ganttChartName ?? "").trim();
+    const ata = String(raw[CREW_STORAGE_KEYS.ata] ?? "").trim() || String(op.ata ?? "").trim();
+    if (!gantt) return null;
+    return normalizeHitosData({ ganttChartName: gantt, ata, entries: {} });
 }
 
 /**

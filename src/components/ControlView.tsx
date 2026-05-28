@@ -22,6 +22,8 @@ import {
     flightMatchesStatsAtdTimeFilter,
     isStatsAtdTimeFilterActive,
     computeAverageGpuUsageMinutes,
+    computeInicioEmbarqueCompliance,
+    computeLlegadaCrewCompliance,
     computePeaCounts,
     hasMvtSent,
     flightMatchesStatsAirports,
@@ -55,6 +57,8 @@ import {
     MapPin,
     Flame,
     Gauge,
+    UserCheck,
+    CircleCheck,
 } from "lucide-react";
 
 interface Props {
@@ -241,6 +245,14 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
     const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(statsFlights), [statsFlights]);
+    const inicioEmbarqueCompliance = useMemo(
+        () => computeInicioEmbarqueCompliance(statsFlights),
+        [statsFlights],
+    );
+    const llegadaCrewCompliance = useMemo(
+        () => computeLlegadaCrewCompliance(statsFlights),
+        [statsFlights],
+    );
     const statsFlightsMvtSent = useMemo(() => statsFlights.filter(hasMvtSent), [statsFlights]);
     const statsMvtSentTotal = statsFlightsMvtSent.length;
     const peaCounts = useMemo(() => computePeaCounts(statsFlightsMvtSent), [statsFlightsMvtSent]);
@@ -1051,6 +1063,44 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 {avgGpuUsage.countWithGpu > 0
                                     ? `${avgGpuUsage.countWithGpu} vuelo${avgGpuUsage.countWithGpu !== 1 ? "s" : ""} con inicio y fin GPU (excl. «no se utilizó GPU»)`
                                     : "Sin vuelos con GPU informada en el filtro"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-emerald-50/60 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <CircleCheck className="w-3.5 h-3.5 text-emerald-700" aria-hidden />
+                                Cumplimiento inicio embarque
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                % a tiempo · hito Inicio Embarque vs carta Gantt
+                            </p>
+                            <p className="text-3xl font-black text-emerald-950 mt-2 tabular-nums">
+                                {inicioEmbarqueCompliance.onTimePct != null
+                                    ? `${inicioEmbarqueCompliance.onTimePct.toFixed(1)}%`
+                                    : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {inicioEmbarqueCompliance.evaluatedCount > 0
+                                    ? `${inicioEmbarqueCompliance.onTimeCount} de ${inicioEmbarqueCompliance.evaluatedCount} vuelo${inicioEmbarqueCompliance.evaluatedCount !== 1 ? "s" : ""} a tiempo`
+                                    : "Sin vuelos con hito y carta en el filtro"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-indigo-50/60 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <UserCheck className="w-3.5 h-3.5 text-indigo-700" aria-hidden />
+                                Cumplimiento llegada crew
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                % a tiempo · hito Llegada crew vs carta
+                            </p>
+                            <p className="text-3xl font-black text-indigo-950 mt-2 tabular-nums">
+                                {llegadaCrewCompliance.onTimePct != null
+                                    ? `${llegadaCrewCompliance.onTimePct.toFixed(1)}%`
+                                    : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {llegadaCrewCompliance.evaluatedCount > 0
+                                    ? `${llegadaCrewCompliance.onTimeCount} de ${llegadaCrewCompliance.evaluatedCount} vuelo${llegadaCrewCompliance.evaluatedCount !== 1 ? "s" : ""} a tiempo`
+                                    : "Sin vuelos con Llegada crew y carta en el filtro"}
                             </p>
                         </div>
                         <ControlBoardingStatsPanel flights={statsFlights} />

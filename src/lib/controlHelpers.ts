@@ -2,7 +2,15 @@ import type { Flight, RouteAfectacionEntry } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
 import { getAirlinePrefix, isJesFlightNumber } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
-import { normalizeHitosData } from "./flightDataNormalize";
+import { normalizeHitosData, normalizeHitosCrewData } from "./flightDataNormalize";
+import {
+    getCrewTargetInfo,
+    hitosDataForCrewTargets,
+    isMilestoneOnTime,
+    parseToMins as hitosParseToMins,
+    refMinutesForHitos,
+} from "./hitosReference";
+import { GANTT_CHARTS } from "./hitosData";
 import { parseTimeToMinutes } from "./mvtTime";
 import { getFuelSupplier, type FuelSupplier } from "./fuelSupplier";
 
@@ -523,6 +531,72 @@ export function computeAverageBoardingMinutes(
 } {
     const { avgMinutes, countWithBoarding } = computeBoardingCategoryStats(flights, filter);
     return { avgMinutes, countWithBoarding };
+}
+
+export interface MilestoneComplianceStats {
+    /** % de vuelos «a tiempo» sobre los evaluables en el filtro */
+    onTimePct: number | null;
+    onTimeCount: number;
+    evaluatedCount: number;
+}
+
+function operationalMilestoneRealMins(
+    entries: Record<string, string>,
+    names: string[],
+): number | null {
+    for (const name of names) {
+        const raw = hitosEntryHhmm(entries, name);
+        if (raw) return hitosParseToMins(raw);
+    }
+    return null;
+}
+
+/** % «a tiempo» del hito operacional Inicio Embarque (carta Gantt + hora real en hitos). */
+export function computeInicioEmbarqueCompliance(flights: Flight[]): MilestoneComplianceStats {
+    const names = ["Inicio Embarque", "Inicio embarque"];
+    let onTimeCount = 0;
+    let evaluatedCount = 0;
+    for (const f of flights) {
+        const h = normalizeHitosData(f.hitosData);
+        if (!h.ganttChartName) continue;
+        const chart = GANTT_CHARTS.find((c) => c.name === h.ganttChartName);
+        if (!chart) continue;
+        const def = chart.milestones.find((m) => names.some((n) => m.name.toLowerCase() === n.toLowerCase()));
+        if (!def || def.offsetMinutes === null) continue;
+        const valMins = operationalMilestoneRealMins(h.entries, names);
+        if (valMins == null) continue;
+        const targetMins = refMinutesForHitos(f, h, chart) - def.offsetMinutes;
+        evaluatedCount += 1;
+        if (isMilestoneOnTime(valMins, targetMins)) onTimeCount += 1;
+    }
+    return {
+        onTimePct: evaluatedCount > 0 ? (onTimeCount / evaluatedCount) * 100 : null,
+        onTimeCount,
+        evaluatedCount,
+    };
+}
+
+/** % «a tiempo» de Llegada crew (hitos crew + objetivo según carta). */
+export function computeLlegadaCrewCompliance(flights: Flight[]): MilestoneComplianceStats {
+    const crewLabel = "Llegada crew";
+    let onTimeCount = 0;
+    let evaluatedCount = 0;
+    for (const f of flights) {
+        const crew = normalizeHitosCrewData(f.hitosCrewData);
+        const raw = String(crew[crewLabel] ?? "").replace(/\D/g, "");
+        if (raw.length < 3) continue;
+        const hitosForTarget = hitosDataForCrewTargets(f);
+        const targetInfo = hitosForTarget ? getCrewTargetInfo(f, hitosForTarget, crewLabel) : null;
+        if (!targetInfo) continue;
+        const valMins = hitosParseToMins(raw.padStart(4, "0").slice(-4));
+        evaluatedCount += 1;
+        if (isMilestoneOnTime(valMins, targetInfo.targetMins)) onTimeCount += 1;
+    }
+    return {
+        onTimePct: evaluatedCount > 0 ? (onTimeCount / evaluatedCount) * 100 : null,
+        onTimeCount,
+        evaluatedCount,
+    };
 }
 
 /** Cantidad de vuelos con PEA manga / remota en hitos (lista ya filtrada por el llamador). */
