@@ -6,8 +6,16 @@ import {
     type BoardingStatsFilter,
     type BoardingCategoryStats,
 } from "../lib/controlHelpers";
+import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { formatMinutesToHHMM } from "../lib/mvtTime";
+import type { PeaPosition } from "../types";
 import { Building2, ChevronDown, Clock, MapPin, Plane } from "lucide-react";
+
+function formatPeaLabel(pea: PeaPosition | undefined): string {
+    if (pea === "manga") return "Manga";
+    if (pea === "remota") return "Remota";
+    return "—";
+}
 
 interface Props {
     flights: Flight[];
@@ -79,12 +87,14 @@ function BoardingAboveAverageList({
                         <th className="px-3 py-2">Fecha</th>
                         <th className="px-3 py-2">Ruta</th>
                         <th className="px-3 py-2 text-right">Embarque</th>
+                        <th className="px-3 py-2 text-center">PEA</th>
                         <th className="px-3 py-2 text-right">vs promedio</th>
                     </tr>
                 </thead>
                 <tbody>
                     {stats.aboveAverage.map(({ flight, durationMinutes }) => {
                         const over = durationMinutes - (stats.avgMinutes ?? 0);
+                        const pea = formatPeaLabel(normalizeHitosData(flight.hitosData).peaPosition);
                         return (
                             <tr key={flight.id} className="border-t border-slate-100 bg-amber-50/40">
                                 <td className="px-3 py-2 font-bold whitespace-nowrap">
@@ -99,6 +109,9 @@ function BoardingAboveAverageList({
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono tabular-nums font-semibold">
                                     {formatMinutesToHHMM(Math.round(durationMinutes))}
+                                </td>
+                                <td className="px-3 py-2 text-center font-semibold text-slate-800 whitespace-nowrap">
+                                    {pea}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-900 font-bold">
                                     +{formatMinutesToHHMM(Math.round(over))}
