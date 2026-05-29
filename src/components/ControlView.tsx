@@ -6,7 +6,6 @@ import {
     flightDateToIso,
     getPax,
     getBags,
-    getTotalCargaKg,
     getMvtPaxOnly,
     getScheduledPax,
     filterFlightsForStats,
@@ -34,12 +33,13 @@ import { ControlFuelTab } from "./ControlFuelTab";
 import { ControlUsageTab } from "./ControlUsageTab";
 import { ControlAirportMultiSelect } from "./ControlAirportMultiSelect";
 import { ControlBoardingStatsPanel } from "./ControlBoardingStatsPanel";
+import { ControlBagsStatsCard } from "./ControlBagsStatsCard";
+import { ControlCargaStatsCard } from "./ControlCargaStatsCard";
+import { ControlPaxStatsCard } from "./ControlPaxStatsCard";
 import {
     BarChart3,
     GanttChartSquare,
     Plane,
-    Luggage,
-    Users,
     Percent,
     AlertTriangle,
     ChevronLeft,
@@ -50,7 +50,6 @@ import {
     ListOrdered,
     BarChartHorizontal,
     Route,
-    Weight,
     FileText,
     Zap,
     Building2,
@@ -241,7 +240,6 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
     const mix321 = useMemo(() => computeFleetMixShare(statsFlights, "A321"), [statsFlights]);
 
     const totalBags = useMemo(() => statsFlights.reduce((s, f) => s + getBags(f), 0), [statsFlights]);
-    const totalCargaKg = useMemo(() => statsFlights.reduce((s, f) => s + getTotalCargaKg(f), 0), [statsFlights]);
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
     const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(statsFlights), [statsFlights]);
@@ -1014,29 +1012,9 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 {mix321.countOfType} de {mix321.totalFlights} vuelo{mix321.totalFlights !== 1 ? "s" : ""} con A321
                             </p>
                         </div>
-                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-cyan-50/50 to-white">
-                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
-                                <Luggage className="w-3.5 h-3.5" /> Bags despachadas
-                            </p>
-                            <p className="text-3xl font-black text-cyan-800 mt-2">{totalBags}</p>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-amber-50/60 to-white">
-                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
-                                <Weight className="w-3.5 h-3.5" /> Total carga (kg)
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                                Suma de TOTAL CARGA (MVT) en el filtro
-                            </p>
-                            <p className="text-3xl font-black text-amber-950 mt-2 tabular-nums">
-                                {totalCargaKg.toLocaleString("es-AR")}
-                            </p>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-slate-50 to-white">
-                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
-                                <Users className="w-3.5 h-3.5" /> Pasajeros transportados
-                            </p>
-                            <p className="text-3xl font-black text-slate-900 mt-2">{totalPax}</p>
-                        </div>
+                        <ControlBagsStatsCard flights={statsFlights} selectedAirports={controlAirports} />
+                        <ControlCargaStatsCard flights={statsFlights} selectedAirports={controlAirports} />
+                        <ControlPaxStatsCard flights={statsFlights} selectedAirports={controlAirports} />
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-emerald-50/50 to-white sm:col-span-2 lg:col-span-1">
                             <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
                                 <Percent className="w-3.5 h-3.5" /> Bags / Pax

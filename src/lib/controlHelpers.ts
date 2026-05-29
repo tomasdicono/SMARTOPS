@@ -58,10 +58,105 @@ export function getBags(f: Flight): number {
     return parseInt(f.mvtData?.totalBags || "0", 10) || 0;
 }
 
+export interface AvgFlightMetricGroupRow {
+    label: string;
+    avgValue: number;
+    totalValue: number;
+    flightCount: number;
+}
+
+function routeGroupKey(f: Flight): string {
+    const dep = String(f.dep ?? "").trim().toUpperCase();
+    const arr = String(f.arr ?? "").trim().toUpperCase();
+    return `${dep}-${arr}`;
+}
+
+/** Aeropuerto «destino» respecto al filtro seleccionado (el extremo que no está en la selección). */
+function destinationGroupKey(f: Flight, selectedAirports: string[]): string | null {
+    const set = new Set(resolveStatsAirportList(selectedAirports));
+    const dep = String(f.dep ?? "").trim().toUpperCase();
+    const arr = String(f.arr ?? "").trim().toUpperCase();
+    const depSelected = set.has(dep);
+    const arrSelected = set.has(arr);
+    if (depSelected && !arrSelected) return arr;
+    if (arrSelected && !depSelected) return dep;
+    if (depSelected && arrSelected) return arr;
+    return null;
+}
+
+/**
+ * Top grupos por promedio de una métrica por vuelo (MVT).
+ * - Sin aeropuertos seleccionados → agrupa por ruta DEP-ARR.
+ * - Con aeropuerto(s) seleccionado(s) → agrupa por destino (extremo opuesto al filtro).
+ */
+export function computeTopAvgFlightMetricGroups(
+    flights: Flight[],
+    selectedAirports: string[],
+    getValue: (f: Flight) => number,
+    limit = 5,
+): { mode: "routes" | "destinations"; rows: AvgFlightMetricGroupRow[] } {
+    const mode = resolveStatsAirportList(selectedAirports).length === 0 ? "routes" : "destinations";
+    const map = new Map<string, { totalValue: number; count: number }>();
+
+    for (const f of flights) {
+        const key = mode === "routes" ? routeGroupKey(f) : destinationGroupKey(f, selectedAirports);
+        if (!key) continue;
+        const value = getValue(f);
+        const prev = map.get(key) ?? { totalValue: 0, count: 0 };
+        prev.totalValue += value;
+        prev.count += 1;
+        map.set(key, prev);
+    }
+
+    const rows = [...map.entries()]
+        .map(([label, { totalValue, count }]) => ({
+            label,
+            avgValue: totalValue / count,
+            totalValue,
+            flightCount: count,
+        }))
+        .sort(
+            (a, b) =>
+                b.avgValue - a.avgValue ||
+                b.flightCount - a.flightCount ||
+                a.label.localeCompare(b.label),
+        )
+        .slice(0, limit);
+
+    return { mode, rows };
+}
+
+/** Top grupos por promedio de bags (TOTAL BAGS MVT). */
+export function computeTopAvgBagsGroups(
+    flights: Flight[],
+    selectedAirports: string[],
+    limit = 5,
+): { mode: "routes" | "destinations"; rows: AvgFlightMetricGroupRow[] } {
+    return computeTopAvgFlightMetricGroups(flights, selectedAirports, getBags, limit);
+}
+
 /** TOTAL CARGA (KG) del MVT, 0 si no hay dato. */
 export function getTotalCargaKg(f: Flight): number {
     const raw = String(f.mvtData?.totalCarga ?? "").replace(/\D/g, "");
     return parseInt(raw || "0", 10) || 0;
+}
+
+/** Top grupos por promedio de carga (TOTAL CARGA KG MVT). */
+export function computeTopAvgCargaGroups(
+    flights: Flight[],
+    selectedAirports: string[],
+    limit = 5,
+): { mode: "routes" | "destinations"; rows: AvgFlightMetricGroupRow[] } {
+    return computeTopAvgFlightMetricGroups(flights, selectedAirports, getTotalCargaKg, limit);
+}
+
+/** Top grupos por promedio de pasajeros (PAX actual MVT). */
+export function computeTopAvgPaxGroups(
+    flights: Flight[],
+    selectedAirports: string[],
+    limit = 5,
+): { mode: "routes" | "destinations"; rows: AvgFlightMetricGroupRow[] } {
+    return computeTopAvgFlightMetricGroups(flights, selectedAirports, getMvtPaxOnly, limit);
 }
 
 /** FOB (kg) del MVT; null si no hay valor numérico útil. */
