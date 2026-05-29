@@ -6,10 +6,11 @@ import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 import {
     parseToMins,
     formatMins,
-    refMinutesForHitos,
     demoraOperacional,
     getCrewTargetInfo,
     CREW_STORAGE_KEYS,
+    getMilestoneTargetMinutes,
+    isActiveMilestone,
 } from "./hitosReference";
 
 /** PEA y duración total GPU para el resumen descargable (hitos operacionales). */
@@ -144,15 +145,14 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
                 fallbackNote: "Carta no encontrada en definiciones; solo valores registrados.",
             };
         } else {
-            const refM = refMinutesForHitos(flight, h, chart);
             const rows: HitosSummaryRow[] = [];
-            for (const m of chart.milestones.filter((x) => x.offsetMinutes !== null)) {
-                const targetMins = refM - m.offsetMinutes!;
-                const esperado = formatMins(targetMins);
+            for (const m of chart.milestones.filter((x) => isActiveMilestone(x))) {
+                const targetMins = getMilestoneTargetMinutes(flight, h, chart, m);
+                const esperado = targetMins != null ? formatMins(targetMins) : "—";
                 const val = h.entries[m.name] || "";
                 let real = "—";
                 let demora = "—";
-                if (val.length >= 3) {
+                if (val.length >= 3 && targetMins != null) {
                     const valMins = parseToMins(val.padStart(4, "0"));
                     real = formatMins(valMins);
                     demora = demoraOperacional(valMins, targetMins);

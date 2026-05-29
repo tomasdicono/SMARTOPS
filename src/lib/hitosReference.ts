@@ -1,5 +1,5 @@
 import type { Flight, HitosData } from "../types";
-import { GANTT_CHARTS } from "./hitosData";
+import { GANTT_CHARTS, type GanttChart, type MilestoneDef } from "./hitosData";
 import { getHitosDepartureTime } from "./flightHelpers";
 import { normalizeHitosData } from "./flightDataNormalize";
 
@@ -42,6 +42,56 @@ export function formatMins(mins: number): string {
     const h = Math.floor(x / 60);
     const m = x % 60;
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+
+export function isActiveMilestone(m: MilestoneDef): boolean {
+    return (
+        m.offsetMinutes !== null ||
+        m.ataOffsetMinutes != null ||
+        m.afterDisembarkStartMinutes != null
+    );
+}
+
+function ataMinutesFromHitos(data: HitosData): number | null {
+    const digits = String(data.ata ?? "").replace(/\D/g, "");
+    if (digits.length < 3) return null;
+    return parseToMins(digits.padStart(4, "0").slice(-4));
+}
+
+/** Hora objetivo de un hito (T− desde salida o ATA+offset según carta). */
+export function getMilestoneTargetMinutes(
+    flight: Flight,
+    data: HitosData,
+    chart: GanttChart,
+    m: MilestoneDef,
+): number | null {
+    if (m.ataOffsetMinutes != null) {
+        const ataMins = ataMinutesFromHitos(data);
+        if (ataMins == null) return null;
+        return ataMins + m.ataOffsetMinutes;
+    }
+    if (m.afterDisembarkStartMinutes != null) {
+        const ataMins = ataMinutesFromHitos(data);
+        if (ataMins == null) return null;
+        return ataMins + 2 + m.afterDisembarkStartMinutes;
+    }
+    if (m.offsetMinutes != null) {
+        return refMinutesForHitos(flight, data, chart) - m.offsetMinutes;
+    }
+    return null;
+}
+
+export function getMilestoneLimitLabel(m: MilestoneDef): string {
+    if (m.ataOffsetMinutes != null) {
+        return `Esperado: ATA+${m.ataOffsetMinutes} min`;
+    }
+    if (m.afterDisembarkStartMinutes != null) {
+        return `Esperado: Inicio desembarque+${m.afterDisembarkStartMinutes} min`;
+    }
+    if (m.offsetMinutes != null) {
+        return `Límite: T-${m.offsetMinutes}m`;
+    }
+    return "";
 }
 
 export function refMinutesForHitos(flight: Flight, data: HitosData, chart: (typeof GANTT_CHARTS)[number]): number {

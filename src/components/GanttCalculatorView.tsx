@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Flight, HitosData } from "../types";
 import { GANTT_CHARTS } from "../lib/hitosData";
-import { refMinutesForHitos, formatMins } from "../lib/hitosReference";
+import { formatMins, getMilestoneTargetMinutes, isActiveMilestone } from "../lib/hitosReference";
 import { ArrowLeft, Calculator } from "lucide-react";
 
 interface Props {
@@ -46,12 +46,14 @@ export function GanttCalculatorView({ onBack }: Props) {
             pax: "0",
         };
 
-        const refM = refMinutesForHitos(fakeFlight, hitosData, chart);
         return chart.milestones
-            .filter((m) => m.offsetMinutes !== null)
+            .filter((m) => isActiveMilestone(m))
             .map((m) => ({
                 name: m.name,
-                esperado: formatMins(refM - m.offsetMinutes!),
+                esperado: (() => {
+                    const targetMins = getMilestoneTargetMinutes(fakeFlight, hitosData, chart, m);
+                    return targetMins != null ? formatMins(targetMins) : "—";
+                })(),
             }));
     }, [chart, stdDigits, ataDigits, is1stWave]);
 

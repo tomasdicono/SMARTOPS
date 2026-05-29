@@ -1,6 +1,10 @@
 export interface MilestoneDef {
     name: string;
     offsetMinutes: number | null; // Minutes BEFORE reference time
+    /** Minutos después del ATA (solo cartas no 1ST WAVE). */
+    ataOffsetMinutes?: number;
+    /** Minutos después del inicio de desembarque (solo Fin de desembarque). */
+    afterDisembarkStartMinutes?: number;
 }
 
 export interface GanttChart {
@@ -33,6 +37,32 @@ const rawData: any[][] = [
     ["A321 - INT SIN CAMBIO DE CREW", 0.034722222222222224, "N/A", 0.03333333333333333, 0.03680555555555556, 0.024305555555555556, 0.013888888888888888, 0.013888888888888888, 0.003472222222222222, 0.003472222222222222]
 ];
 
+function withDisembarkMilestones(chart: GanttChart): GanttChart {
+    if (chart.name.includes("1ST WAVE")) return chart;
+
+    const bodegaIdx = chart.milestones.findIndex((m) => m.name === "Apertura puerta bodega");
+    if (bodegaIdx < 0) return chart;
+
+    const is321 = chart.name.includes("A321");
+    const disembark: MilestoneDef[] = [
+        { name: "Inicio de desembarque", offsetMinutes: null, ataOffsetMinutes: 2 },
+        {
+            name: "Fin de desembarque",
+            offsetMinutes: null,
+            afterDisembarkStartMinutes: is321 ? 13 : 10,
+        },
+    ];
+
+    return {
+        ...chart,
+        milestones: [
+            ...chart.milestones.slice(0, bodegaIdx + 1),
+            ...disembark,
+            ...chart.milestones.slice(bodegaIdx + 1),
+        ],
+    };
+}
+
 export const GANTT_CHARTS: GanttChart[] = rawData.map(row => {
     const name = row[0];
     const tatMinutes = Math.round(row[1] * 24 * 60);
@@ -47,4 +77,4 @@ export const GANTT_CHARTS: GanttChart[] = rawData.map(row => {
     });
 
     return { name, tatMinutes, milestones };
-});
+}).map(withDisembarkMilestones);

@@ -4,7 +4,7 @@ import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { getHitosDepartureTime } from "../lib/flightHelpers";
-import { HITO_MILESTONE_HINTS } from "../lib/hitosReference";
+import { HITO_MILESTONE_HINTS, getMilestoneLimitLabel, getMilestoneTargetMinutes, isActiveMilestone } from "../lib/hitosReference";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 import { Save, AlertCircle, Clock, Zap, Lock } from "lucide-react";
 
@@ -106,7 +106,7 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
             return;
         }
 
-        const requiredMs = selectedChart.milestones.filter(m => m.offsetMinutes !== null && m.name !== "Inicio búsqueda de equipaje");
+        const requiredMs = selectedChart.milestones.filter(m => isActiveMilestone(m) && m.name !== "Inicio búsqueda de equipaje");
         for (const m of requiredMs) {
             const val = data.entries[m.name];
             if (!val || val.trim() === "") {
@@ -284,16 +284,16 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                     </h3>
 
                     <div className="space-y-4 flex-1">
-                        {selectedChart.milestones.filter(m => m.offsetMinutes !== null).map((m, idx) => {
-                            const target = formatMins(refMinutes - m.offsetMinutes!);
+                        {selectedChart.milestones.filter(m => isActiveMilestone(m)).map((m, idx) => {
+                            const targetMins = getMilestoneTargetMinutes(flight, data, selectedChart, m);
+                            const target = targetMins != null ? formatMins(targetMins) : "—";
                             const val = data.entries[m.name] || "";
 
                             let statusColor = "bg-slate-100 text-slate-400";
                             let statusText = "Pendiente";
 
-                            if (val.length >= 3) {
+                            if (val.length >= 3 && targetMins != null) {
                                 const valMins = parseToMins(val.padStart(4, "0"));
-                                const targetMins = refMinutes - m.offsetMinutes!;
                                 if (valMins > targetMins && valMins - targetMins < 600) {
                                     statusColor = "bg-red-50 text-red-600 border-red-200";
                                     statusText = "Retraso";
@@ -312,7 +312,7 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                                                 {HITO_MILESTONE_HINTS[m.name]}
                                             </p>
                                         ) : null}
-                                        <div className="text-xs text-muted-foreground mt-0.5 font-bold">Límite: T-{m.offsetMinutes}m</div>
+                                        <div className="text-xs text-muted-foreground mt-0.5 font-bold">{getMilestoneLimitLabel(m)}</div>
                                     </div>
 
                                     <div className="flex flex-wrap justify-start sm:justify-end items-center gap-3 sm:gap-4 w-full sm:w-auto mt-3 sm:mt-0">

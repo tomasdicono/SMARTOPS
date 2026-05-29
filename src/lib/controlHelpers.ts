@@ -12,7 +12,7 @@ import {
     refMinutesForHitos,
 } from "./hitosReference";
 import { GANTT_CHARTS } from "./hitosData";
-import { parseTimeToMinutes } from "./mvtTime";
+import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 import { getFuelSupplier, type FuelSupplier } from "./fuelSupplier";
 
 /** Convierte fecha de vuelo (DD-MM-YYYY o YYYY-MM-DD) a ISO YYYY-MM-DD */
@@ -718,6 +718,16 @@ export function isAffectedByDelayOrReprogramming(f: Flight): boolean {
     return !!f.etd?.trim();
 }
 
+/** Minutos de desplazamiento ETD − STD (programación). Solo vuelos con ETD cargada. */
+export function rescheduleShiftMinutes(f: Flight): number | null {
+    const etd = f.etd?.trim();
+    if (!etd) return null;
+    const stdM = parseTimeToMinutes(f.std);
+    let etdM = parseTimeToMinutes(etd);
+    if (etdM < stdM) etdM += DAY_MIN;
+    return etdM - stdM;
+}
+
 /** Códigos de demora en MVT (dlyCod1 / dlyCod2); porcentajes sobre el total de códigos registrados en el día. */
 export interface DelayCodeShare {
     code: string;
@@ -765,6 +775,8 @@ export function rankStringsByFrequency(items: (string | undefined | null)[]): { 
 export interface StatusDiaDaySummary {
     paxAfectadosReprogramacion: number;
     countVuelosReprogramados: number;
+    /** Promedio ETD − STD (min) en vuelos reprogramados del día. */
+    avgReprogramacionMinutes: number | null;
     motivosReprogramacion: { text: string; count: number }[];
     demoraCodigos: DelayCodeShare[];
     countCancelados: number;
@@ -795,6 +807,13 @@ export function computeStatusDiaDaySummary(
     const conEtd = operational.filter((f) => f.etd?.trim());
     const paxAfectadosReprogramacion = conEtd.reduce((s, f) => s + getScheduledPax(f), 0);
     const countVuelosReprogramados = conEtd.length;
+    const reprogramShifts = conEtd
+        .map(rescheduleShiftMinutes)
+        .filter((m): m is number => m != null);
+    const avgReprogramacionMinutes =
+        reprogramShifts.length > 0
+            ? reprogramShifts.reduce((a, b) => a + b, 0) / reprogramShifts.length
+            : null;
     const motivosReprogramacion = rankStringsByFrequency(conEtd.map((f) => f.rescheduleReason));
     const demoraCodigos = rankDelayCodesByShare(operational);
 
@@ -855,6 +874,7 @@ export function computeStatusDiaDaySummary(
     return {
         paxAfectadosReprogramacion,
         countVuelosReprogramados,
+        avgReprogramacionMinutes,
         motivosReprogramacion,
         demoraCodigos,
         countCancelados: cancelled.length,
@@ -925,19 +945,19 @@ export function buildStatusDiaPrensaText(
     out.push(`Status operativo — ${fecha}`);
     out.push("");
     out.push(
-        `El día cuenta con ${s.totalVuelosDia} vuelo${s.totalVuelosDia !== 1 ? "s" : ""} cargados en itinerario (${s.countVuelosOperados} operado${s.countVuelosOperados !== 1 ? "s" : ""} con MVT enviado).`
+        `El día cuenta con ${s.totalVuelosDia} vuelo${s.totalVuelosDia !== 1 ? "s" : ""} programado${s.totalVuelosDia !== 1 ? "s" : ""} por itinerario.`
     );
     out.push("");
 
     out.push("⏱️ Puntualidad");
     out.push(
-        `Sobre un total de ${s.nMvtOtp} vuelo${s.nMvtOtp !== 1 ? "s" : ""} JES (3000–3999) con MVT y salida real cargada, el status OTP al momento es el siguiente:`
+        `Sobre un total de ${s.nMvtOtp} vuelo${s.nMvtOtp !== 1 ? "s" : ""} operado${s.nMvtOtp !== 1 ? "s" : ""}, el status OTP al momento es el siguiente:`
     );
     if (s.nMvtOtp > 0 && s.otp0Pct != null && s.otp15Pct != null) {
         out.push(`OTP 0 --> ${pctEsAr(s.otp0Pct)}%`);
         out.push(`OTP 15 --> ${pctEsAr(s.otp15Pct)}%`);
     } else {
-        out.push("Sin datos de OTP: no hay vuelos JES con MVT y hora de salida real suficiente para calcular el indicador.");
+        out.push("Sin datos de OTP: no hay vuelos operados con hora de salida real suficiente para calcular el indicador.");
     }
     out.push("");
 
@@ -962,6 +982,11 @@ export function buildStatusDiaPrensaText(
             `Hay ${s.countVuelosReprogramados} vuelo${s.countVuelosReprogramados !== 1 ? "s" : ""} con nueva hora de salida ETD. ` +
                 `La afectación por las reprogramaciones alcanza a ${s.paxAfectadosReprogramacion} pasajero${s.paxAfectadosReprogramacion !== 1 ? "s" : ""}.`
         );
+        if (s.avgReprogramacionMinutes != null) {
+            out.push(
+                `Promedio de reprogramaciones: ${formatMinutesToHHMM(Math.round(s.avgReprogramacionMinutes))}.`
+            );
+        }
     }
     out.push("");
 
@@ -983,9 +1008,7 @@ export function buildStatusDiaPrensaText(
     } else {
         out.push("Los más frecuentes del día son:");
         for (const row of s.demoraCodigos.slice(0, 8)) {
-            out.push(
-                `  • ${formatDelayCodeDisplay(row.code)}: ${pctEsAr(row.pct)}% del total de códigos, ${row.count} registro${row.count !== 1 ? "s" : ""}.`
-            );
+            out.push(`  • ${formatDelayCodeDisplay(row.code)}: ${pctEsAr(row.pct)}%`);
         }
     }
     out.push("");
