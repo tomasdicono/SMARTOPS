@@ -29,6 +29,7 @@ import {
 } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
+import { buildStatsReportData, downloadStatsReport } from "../lib/statsReport";
 import { ControlFuelTab } from "./ControlFuelTab";
 import { ControlGpuTab } from "./ControlGpuTab";
 import { ControlUsageTab } from "./ControlUsageTab";
@@ -52,6 +53,7 @@ import {
     BarChartHorizontal,
     Route,
     FileText,
+    FileBarChart2,
     Zap,
     Building2,
     MapPin,
@@ -266,6 +268,27 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         () => cancelledStatsFlights.reduce((s, f) => s + getScheduledPax(f), 0),
         [cancelledStatsFlights]
     );
+
+    const handleGenerateStatsReport = () => {
+        if (statsFlights.length === 0) {
+            alert(
+                statsDateAirportMatchCount === 0
+                    ? "No hay vuelos para el período y aeropuertos seleccionados."
+                    : "No hay vuelos operativos que cumplan el filtro de ATD para generar el informe.",
+            );
+            return;
+        }
+        const airportLabel =
+            controlAirports.length > 0 ? controlAirports.join(", ") : "Todos (salida o llegada)";
+        downloadStatsReport(
+            buildStatsReportData({
+                flights: statsFlights,
+                periodLabel: statsRangeLabel,
+                airportLabel,
+                atdTimeLabel: statsAtdTimeLabel,
+            }),
+        );
+    };
 
     const statusDia = useMemo(
         () => computeStatusDiaDaySummary(dayFlightsAirportFiltered, routeAfectaciones.length),
@@ -976,6 +999,14 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 Quitar ATD
                             </button>
                         )}
+                        <button
+                            type="button"
+                            onClick={handleGenerateStatsReport}
+                            className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 text-xs font-black uppercase tracking-wide shadow-md transition-colors"
+                        >
+                            <FileBarChart2 className="w-4 h-4 shrink-0" aria-hidden />
+                            Generar Informe
+                        </button>
                     </div>
                     <p className="text-[11px] text-slate-500 -mt-2 max-w-2xl leading-snug">
                         Los datos que se muestran a continuación provienen de la data extraída de los mensajes operacionales.
