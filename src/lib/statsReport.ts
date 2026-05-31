@@ -37,6 +37,8 @@ export interface StatsReportData {
     demoraCodigos: DelayCodeShare[];
     totalPax: number;
     totalBags: number;
+    /** Bags sobre PAX (MVT), mismo criterio que Estadísticas en pantalla */
+    bagsPerPaxPct: number | null;
     inicioEmbarque: MilestoneComplianceStats;
     llegadaCrew: MilestoneComplianceStats;
     fleet320Pct: number | null;
@@ -101,6 +103,10 @@ export function buildStatsReportData(params: {
         return { label, avgMinutes, countWithBoarding };
     });
 
+    const totalPax = operational.reduce((s, f) => s + getMvtPaxOnly(f), 0);
+    const totalBags = operational.reduce((s, f) => s + getBags(f), 0);
+    const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
+
     const now = new Date();
     const generatedAt = now.toLocaleString("es-AR", {
         dateStyle: "medium",
@@ -117,8 +123,9 @@ export function buildStatsReportData(params: {
         otp15Pct: otp.otp15Pct,
         otpBase: otp.nMvtOtp,
         demoraCodigos: rankDelayCodesByShare(operational),
-        totalPax: operational.reduce((s, f) => s + getMvtPaxOnly(f), 0),
-        totalBags: operational.reduce((s, f) => s + getBags(f), 0),
+        totalPax,
+        totalBags,
+        bagsPerPaxPct,
         inicioEmbarque: computeInicioEmbarqueCompliance(operational),
         llegadaCrew: computeLlegadaCrewCompliance(operational),
         fleet320Pct: mix320.sharePct,
@@ -375,6 +382,11 @@ function buildStatsReportHtml(data: StatsReportData): string {
           <div>
             <p class="kpi-label">Bags despachadas</p>
             <p class="kpi-big">${data.totalBags.toLocaleString("es-AR")}</p>
+          </div>
+          <div>
+            <p class="kpi-label">Bags / Pax</p>
+            <p class="kpi-big">${data.bagsPerPaxPct != null ? `${data.bagsPerPaxPct.toFixed(2)}%` : "—"}</p>
+            <p class="sub" style="margin-top:4px">Bags sobre pasajeros (MVT)</p>
           </div>
         </div>
       </section>
