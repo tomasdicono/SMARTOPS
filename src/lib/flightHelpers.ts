@@ -146,6 +146,11 @@ export function getHitosDepartureTime(f: Flight): string {
     return String(f.std ?? "").trim();
 }
 
+/** Orden cronológico del tablero por STD de programación (no ETD ni orden lexicográfico). */
+export function compareFlightsByStd(a: Flight, b: Flight): number {
+    return parseHHmmToMinutes(a.std) - parseHHmmToMinutes(b.std);
+}
+
 /** Fecha de vuelo → "04APR" (dd + mes en inglés), acepta DD-MM-YYYY o YYYY-MM-DD */
 export function formatFlightDateDDMMM(dateStr: string): string {
     if (!dateStr) return "";

@@ -14,7 +14,8 @@ import {
   type DiferidoEntry,
 } from "./types";
 import {
-  formatDelayLine,
+  getMvtDelayDisplayLines,
+  sanitizeMvtDelaysIfOnTime,
   formatMvtSseeSummary,
   formatMinutesToHHMM,
   parseTimeToMinutes,
@@ -27,7 +28,7 @@ import { isFlightIncompleteAndLate } from "./lib/dateHelpers";
 import {
   getAirlinePrefix,
   coerceFlightFromDb,
-  getHitosDepartureTime,
+  compareFlightsByStd,
   getFlightCardTone,
   isMvtCompleteForCard,
   isHitosCompleteForCard,
@@ -469,7 +470,8 @@ function App() {
   const handlePersistMvt = async (id: string, mvtData: Flight["mvtData"]) => {
     const existingFlight = flights.find((x) => x.id === id);
     const prevMvt = normalizeMvtData(existingFlight?.mvtData);
-    const payload = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
+    let payload = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
+    payload = sanitizeMvtDelaysIfOnTime(payload, existingFlight?.std ?? "");
     const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
     if (alreadySent) {
       payload.mvtSentAt = prevMvt.mvtSentAt;
@@ -497,11 +499,12 @@ function App() {
       return;
     }
 
-    const mergedFromForm = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
+    let payload = sanitizeMvtDelaysIfOnTime(
+      mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData)),
+      existingFlight?.std ?? "",
+    );
 
-    let payload: NonNullable<Flight["mvtData"]>;
     if (alreadySent && canEditMvtDelayAfterSent(userRole)) {
-      payload = mergedFromForm;
       payload.mvtSentAt = prevMvt.mvtSentAt;
       payload.mvtEditedByHccAt = new Date().toISOString();
       const sendGate = evaluateMvtSendGate({
@@ -515,7 +518,6 @@ function App() {
         return;
       }
     } else {
-      payload = mergedFromForm;
       const sendGate = evaluateMvtSendGate({
         mvt: payload,
         std: existingFlight?.std ?? "",
@@ -1318,7 +1320,7 @@ function App() {
               <FlightCardToneFilters active={cardToneFilters} onToggle={toggleCardToneFilter} />
             ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...boardFlights].sort((a, b) => getHitosDepartureTime(a).localeCompare(getHitosDepartureTime(b))).map((flight) => {
+            {[...boardFlights].sort(compareFlightsByStd).map((flight) => {
               const isCancelled = !!flight.cancelled;
               const flightDupKey = duplicateFlightGroupKey(flight);
               const isDuplicateCard = duplicateKeysToday.has(flightDupKey);
@@ -1678,11 +1680,7 @@ function App() {
                         <div className="flex flex-col items-stretch text-left w-full pt-1 border-t border-black/5 dark:border-white/5">
                           <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-0.5">Demoras</span>
                           {(() => {
-                            const m = flight.mvtData;
-                            const lines = [
-                              m?.dlyCod1 ? formatDelayLine(m.dlyCod1, m.dlyTime1 || "") : "",
-                              m?.dlyCod2 ? formatDelayLine(m.dlyCod2, m.dlyTime2 || "") : "",
-                            ].filter(Boolean);
+                            const lines = getMvtDelayDisplayLines(flight);
                             if (lines.length === 0) {
                               return (
                                 <span className="text-emerald-600 dark:text-emerald-400 font-bold text-xs">- Ninguna -</span>

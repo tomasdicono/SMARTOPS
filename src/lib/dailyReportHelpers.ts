@@ -1,7 +1,8 @@
 import type { Flight } from "../types";
 import { flightDateToIso } from "./controlHelpers";
-import { getAirlinePrefix } from "./flightHelpers";
-import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
+import { compareFlightsByStd, getAirlinePrefix } from "./flightHelpers";
+import { computeMvtDelayStatus, formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
+import { hasRecordedMvtDelay } from "./controlHelpers";
 
 /** Vuelo con MVT y al menos tiempo de demora cargado (dly time 1 y/o 2). */
 export function flightHasDelayTimesLoaded(f: Flight): boolean {
@@ -18,10 +19,19 @@ export function totalDelayMinutes(f: Flight): number {
     return parseTimeToMinutes(m.dlyTime1) + parseTimeToMinutes(m.dlyTime2);
 }
 
+/** Reporte diario: solo vuelos con demora real (ATD > STD) y datos DLY cargados. */
+export function flightBelongsInDailyDelayReport(f: Flight): boolean {
+    const m = f.mvtData;
+    if (!m) return false;
+    const { isDelayed } = computeMvtDelayStatus(f.std, m.atd, m.dlyTime1, m.dlyTime2);
+    if (!isDelayed) return false;
+    return flightHasDelayTimesLoaded(f) || hasRecordedMvtDelay(f);
+}
+
 export function filterDelayedFlightsForDate(flights: Flight[], isoDate: string): Flight[] {
     return flights
-        .filter((f) => flightDateToIso(f) === isoDate && flightHasDelayTimesLoaded(f))
-        .sort((a, b) => a.std.localeCompare(b.std));
+        .filter((f) => flightDateToIso(f) === isoDate && flightBelongsInDailyDelayReport(f))
+        .sort(compareFlightsByStd);
 }
 
 export function formatDelayCell(timeRaw: string | undefined): string {

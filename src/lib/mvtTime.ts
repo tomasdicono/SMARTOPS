@@ -1,4 +1,6 @@
-import type { SSEE } from "../types";
+import type { Flight, SSEE } from "../types";
+
+type MvtData = NonNullable<Flight["mvtData"]>;
 
 /** Resumen compacto de filas SSEE para tarjetas (p. ej. "WCHS 2 · BLND 1"). */
 export function formatMvtSseeSummary(ssee: SSEE[] | undefined): string {
@@ -46,6 +48,46 @@ export function formatDelayLine(cod: string, timeRaw: string): string {
     if (!c) return "";
     const t = formatMinutesToHHMM(parseTimeToMinutes(timeRaw));
     return `COD ${c} - ${t}`;
+}
+
+export function hasStoredMvtDelayFields(m: MvtData): boolean {
+    return (
+        parseTimeToMinutes(m.dlyTime1) > 0 ||
+        parseTimeToMinutes(m.dlyTime2) > 0 ||
+        String(m.dlyCod1 ?? "").trim() !== "" ||
+        String(m.dlyCod2 ?? "").trim() !== "" ||
+        String(m.observaciones ?? "").trim() !== ""
+    );
+}
+
+export function clearMvtDelayFields(m: MvtData): MvtData {
+    return {
+        ...m,
+        dlyCod1: "",
+        dlyTime1: "",
+        dlyCod2: "",
+        dlyTime2: "",
+        observaciones: "",
+    };
+}
+
+/** Si ATD ≤ STD, borra códigos/tiempos DLY huérfanos (p. ej. ATD corregido tras cargar demora). */
+export function sanitizeMvtDelaysIfOnTime(mvt: MvtData, std: string): MvtData {
+    const status = computeMvtDelayStatus(std, mvt.atd, mvt.dlyTime1, mvt.dlyTime2);
+    if (status.isDelayed || !hasStoredMvtDelayFields(mvt)) return mvt;
+    return clearMvtDelayFields(mvt);
+}
+
+/** Líneas de demora para tarjeta / listados: solo si ATD > STD y hay código cargado. */
+export function getMvtDelayDisplayLines(f: Flight): string[] {
+    const m = f.mvtData;
+    if (!m) return [];
+    const { isDelayed } = computeMvtDelayStatus(f.std, m.atd, m.dlyTime1, m.dlyTime2);
+    if (!isDelayed) return [];
+    return [
+        m.dlyCod1?.trim() ? formatDelayLine(m.dlyCod1, m.dlyTime1 || "") : "",
+        m.dlyCod2?.trim() ? formatDelayLine(m.dlyCod2, m.dlyTime2 || "") : "",
+    ].filter(Boolean);
 }
 
 export interface MvtDelayStatus {

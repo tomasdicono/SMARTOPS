@@ -42,11 +42,18 @@ export const CREW_STORAGE_KEYS = {
     ata: "__crewAta",
 } as const;
 
-/** Igual que HitosTab */
+/** HH:mm o HHmm (3–4 dígitos) → minutos desde medianoche; misma regla que parseHHmmToMinutes. */
 export function parseToMins(time: string): number {
-    if (!time || time.length !== 4) return 0;
-    const h = parseInt(time.slice(0, 2), 10);
-    const m = parseInt(time.slice(2, 4), 10);
+    const raw = String(time ?? "").replace(/\D/g, "");
+    if (!raw) return 0;
+    if (raw.length <= 2) return parseInt(raw, 10) || 0;
+    if (raw.length === 3) {
+        const h = parseInt(raw.slice(0, 1), 10);
+        const m = parseInt(raw.slice(1, 3), 10);
+        return h * 60 + m;
+    }
+    const h = parseInt(raw.slice(0, 2), 10);
+    const m = parseInt(raw.slice(2, 4), 10);
     return h * 60 + m;
 }
 
@@ -113,7 +120,7 @@ export function getMilestoneLimitLabel(m: MilestoneDef): string {
 export function refMinutesForHitos(flight: Flight, data: HitosData, chart: (typeof GANTT_CHARTS)[number]): number {
     const is1stWave = chart.name.includes("1ST WAVE");
     const depRef = getHitosDepartureTime(flight);
-    let refMinutes = parseToMins(depRef.replace(":", ""));
+    let refMinutes = parseToMins(depRef);
     if (!is1stWave && (data.ata ?? "").length >= 3) {
         const ataMins = parseToMins(data.ata.padStart(4, "0"));
         const etdMinutes = ataMins + chart.tatMinutes;

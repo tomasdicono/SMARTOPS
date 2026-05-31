@@ -2,7 +2,12 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import type { Flight } from "../types";
 import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
-import { formatMinutesToHHMM, computeMvtDelayStatus } from "../lib/mvtTime";
+import {
+    formatMinutesToHHMM,
+    computeMvtDelayStatus,
+    hasStoredMvtDelayFields,
+    clearMvtDelayFields,
+} from "../lib/mvtTime";
 import { getMvtMaxPax, getMvtMaxPaxLabel } from "../lib/mvtPaxLimits";
 import { evaluateMvtSendGate } from "../lib/mvtSendGate";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
@@ -159,6 +164,17 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
         flightId: flight.id,
     });
 
+    /** ATD corregido a ≤ STD: limpiar DLY huérfanos y persistir (p. ej. 3832). */
+    useEffect(() => {
+        if (!canPersist) return;
+        setData((prev) => {
+            const status = computeMvtDelayStatus(flight.std, prev.atd, prev.dlyTime1, prev.dlyTime2);
+            if (status.isDelayed || !hasStoredMvtDelayFields(prev)) return prev;
+            setIsDirty(true);
+            return clearMvtDelayFields(prev);
+        });
+    }, [flight.std, flight.id, canPersist, data.atd]);
+
     const handleChange = (field: keyof typeof data, value: string) => {
         setIsDirty(true);
         setData((prev) => ({ ...prev, [field]: value }));
@@ -181,6 +197,8 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
         [flight.std, data.atd, data.dlyTime1, data.dlyTime2],
     );
     const { isDelayed, remDelay } = delayStatus;
+    const showDelaySection =
+        isDelayed || (canPersist && hasStoredMvtDelayFields(data));
     const sendGate = useMemo(
         () =>
             evaluateMvtSendGate({
@@ -287,19 +305,26 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
                 </div>
             </section>
 
-            {isDelayed && (
+            {showDelaySection && (
                 <section className={`bg-red-50 p-5 rounded-xl border ${remDelay <= 0 ? 'border-emerald-500/50' : 'border-red-200'} animate-in fade-in slide-in-from-top-4 duration-300`}>
+                    {!isDelayed ? (
+                        <p className="text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-4">
+                            ATD ≤ STD: no hay demora operativa. Borrá los códigos abajo o guardá para limpiar la tarjeta y el reporte diario.
+                        </p>
+                    ) : null}
                     <div className="flex items-center justify-between mb-4">
                         <h3 className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${remDelay <= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                             <Calculator className="w-4 h-4" />
                             Códigos de Demora
                         </h3>
+                        {isDelayed ? (
                         <span className={`font-bold px-3 py-1 rounded-full text-sm transition-colors ${remDelay <= 0
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-red-100 text-red-600'
                             }`}>
                             A Justificar: {formatMinutesToHHMM(remDelay)}
                         </span>
+                        ) : null}
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <DelayCodeSelect label="DLY COD 1" value={data.dlyCod1} onChange={(v) => handleChange("dlyCod1", v)} disabled={fieldDisabled(true)} />

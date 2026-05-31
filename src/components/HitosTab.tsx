@@ -6,11 +6,13 @@ import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { getHitosDepartureTime } from "../lib/flightHelpers";
 import {
     HITO_MILESTONE_HINTS,
+    formatMins,
     getEmbarqueTimesFromHitosEntries,
     getMilestoneLimitLabel,
     getMilestoneTargetMinutes,
     hitosRevisarWarning,
     isActiveMilestone,
+    parseToMins,
 } from "../lib/hitosReference";
 import {
     hhmmDurationMinutes,
@@ -55,27 +57,12 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
         flightId: flight.id,
     });
 
-    const parseToMins = (time: string): number => {
-        if (!time || time.length !== 4) return 0;
-        const h = parseInt(time.slice(0, 2), 10);
-        const m = parseInt(time.slice(2, 4), 10);
-        return h * 60 + m;
-    };
-
-    const formatMins = (mins: number): string => {
-        while (mins < 0) mins += 24 * 60;
-        while (mins >= 24 * 60) mins -= 24 * 60;
-        const h = Math.floor(mins / 60);
-        const m = mins % 60;
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-    };
-
     const selectedChart = GANTT_CHARTS.find(c => c.name === data.ganttChartName);
     const is1stWave = selectedChart?.name.includes("1ST WAVE") || false;
 
     const hitosRefTime = getHitosDepartureTime(flight);
     const stdProg = String(flight.std ?? "");
-    let refMinutes = parseToMins(hitosRefTime.replace(":", ""));
+    let refMinutes = parseToMins(hitosRefTime);
     let etdFromAtaMinutes: number | null = null;
 
     if (selectedChart && !is1stWave && (data.ata ?? "").length >= 3) {
@@ -323,7 +310,7 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                                 </p>
                             ) : null}
                         </div>
-                        {etdFromAtaMinutes !== null && etdFromAtaMinutes > parseToMins(hitosRefTime.replace(":", "")) && (
+                        {etdFromAtaMinutes !== null && etdFromAtaMinutes > parseToMins(hitosRefTime) && (
                             <div className="flex items-center gap-1.5 text-orange-600 font-bold bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 shrink-0">
                                 <AlertCircle className="w-4 h-4" />
                                 ETD desde ATA+TAT: {formatMins(etdFromAtaMinutes)} LT
