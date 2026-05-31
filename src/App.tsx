@@ -46,7 +46,7 @@ import {
   type FleetModelOption,
 } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2 } from "lucide-react";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
@@ -68,6 +68,7 @@ import { UserManagement } from "./components/UserManagement";
 import { userMustChangePassword } from "./lib/userMustChangePassword";
 import { ControlView } from "./components/ControlView";
 import { CancelFlightModal } from "./components/CancelFlightModal";
+import { DeleteFlightConfirmModal } from "./components/DeleteFlightConfirmModal";
 import { DailyReportView } from "./components/DailyReportView";
 import { ManualFlightModal } from "./components/ManualFlightModal";
 import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
@@ -124,6 +125,7 @@ function App() {
   const [fleetVersion, setFleetVersion] = useState(0);
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
+  const [deleteConfirmFlight, setDeleteConfirmFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
   /** Menú ⋯ en tarjeta de vuelo (reprogramar / cancelar) */
   const [openFlightActionsMenuId, setOpenFlightActionsMenuId] = useState<string | null>(null);
@@ -420,6 +422,20 @@ function App() {
       alert(`Se eliminaron ${removedCount} vuelo${removedCount === 1 ? "" : "s"} repetido${removedCount === 1 ? "" : "s"}.`);
     } catch {
       alert("No se pudo guardar. Revisá la conexión e intentá de nuevo.");
+    }
+  };
+
+  const handleConfirmDeleteFlight = async (flight: Flight) => {
+    try {
+      await removeFlightsByIds([flight.id]);
+      setDeleteConfirmFlight(null);
+      setOpenFlightActionsMenuId(null);
+      setSelectedFlight((prev) => (prev?.id === flight.id ? null : prev));
+      setCancelModalFlight((prev) => (prev?.id === flight.id ? null : prev));
+      setRescheduleModalFlight((prev) => (prev?.id === flight.id ? null : prev));
+      setRouteModalFlight((prev) => (prev?.id === flight.id ? null : prev));
+    } catch {
+      alert("No se pudo borrar el vuelo. Revisá la conexión e intentá de nuevo.");
     }
   };
 
@@ -1372,7 +1388,8 @@ function App() {
 
               const canRescheduleFlight = isHccDeskRole(userRole) && !isCancelled;
               const canCancelFlight = isAdminOrHccDesk(userRole) && !isCancelled;
-              const showFlightActionsMenu = canRescheduleFlight || canCancelFlight;
+              const canDeleteFlight = isHccDeskRole(userRole);
+              const showFlightActionsMenu = canRescheduleFlight || canCancelFlight || canDeleteFlight;
               const showHitosDownload =
                 canDownloadHitosSummaryRole(userRole) &&
                 hasMvt &&
@@ -1456,6 +1473,23 @@ function App() {
                                 >
                                   <Ban className="w-3.5 h-3.5 shrink-0" aria-hidden />
                                   Cancelar vuelo
+                                </button>
+                              )}
+                              {canDeleteFlight && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-red-800 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40 ${
+                                    canRescheduleFlight || canCancelFlight ? "border-t border-slate-100 dark:border-slate-700" : ""
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenFlightActionsMenuId(null);
+                                    setDeleteConfirmFlight(flight);
+                                  }}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                  Borrar vuelo
                                 </button>
                               )}
                             </div>
@@ -1749,6 +1783,14 @@ function App() {
           flight={cancelModalFlight}
           onClose={() => setCancelModalFlight(null)}
           onConfirm={(reason) => handleCancelFlight(cancelModalFlight.id, reason)}
+        />
+      )}
+
+      {deleteConfirmFlight && (
+        <DeleteFlightConfirmModal
+          flight={deleteConfirmFlight}
+          onClose={() => setDeleteConfirmFlight(null)}
+          onConfirm={() => handleConfirmDeleteFlight(deleteConfirmFlight)}
         />
       )}
 

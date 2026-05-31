@@ -7,6 +7,7 @@ import {
     crewMilestoneRealMins,
     getCrewTargetInfo,
     hitosDataForCrewTargets,
+    hitosRevisarWarning,
     isMilestoneOnTime,
     parseToMins as hitosParseToMins,
     refMinutesForHitos,
@@ -503,22 +504,58 @@ export function computeFleetMixShare(flights: Flight[], family: "A320" | "A321")
     return { countOfType, totalFlights, sharePct };
 }
 
+/** Máxima duración plausible de embarque (rechaza fin «anterior» mal interpretado como día siguiente). */
+export const MAX_BOARDING_DURATION_MINUTES = 12 * 60;
+
+/** Máxima duración plausible de uso GPU. */
+export const MAX_GPU_DURATION_MINUTES = 18 * 60;
+
 /**
- * Duración uso GPU (minutos) desde hitos operacionales: inicio y fin en HHMM, sin «no se utilizó GPU».
- * Horarios en el mismo día; si fin &lt; inicio se asume cruce de medianoche.
+ * Duración en minutos entre dos horarios HHMM.
+ * Si el fin es menor que el inicio en reloj (ej. 00:30 tras 23:30), se asume cruce de medianoche (+24 h).
+ * Devuelve null si faltan datos, duración 0 o supera `maxMinutes`.
  */
-export function gpuUsageDurationMinutesFromFlight(f: Flight): number | null {
-    const h = normalizeHitosData(f.hitosData);
-    if (h.gpuNotUsed) return null;
-    const gs = String(h.gpuStart ?? "").replace(/\D/g, "");
-    const ge = String(h.gpuEnd ?? "").replace(/\D/g, "");
+export function hhmmDurationMinutes(
+    startRaw: string | undefined | null,
+    endRaw: string | undefined | null,
+    options?: { maxMinutes?: number },
+): number | null {
+    const max = options?.maxMinutes ?? MAX_GPU_DURATION_MINUTES;
+    const gs = String(startRaw ?? "").replace(/\D/g, "");
+    const ge = String(endRaw ?? "").replace(/\D/g, "");
     if (gs.length < 3 || ge.length < 3) return null;
     const startM = parseHHmmToMinutes(gs.padStart(4, "0").slice(-4));
     const endM = parseHHmmToMinutes(ge.padStart(4, "0").slice(-4));
     let diff = endM - startM;
     if (diff === 0) return null;
     if (diff < 0) diff += 24 * 60;
-    return diff > 0 ? diff : null;
+    if (diff <= 0 || diff > max) return null;
+    return diff;
+}
+
+/** Aviso «Revisar (hito)» si fin no puede ser anterior a inicio (salvo cruce de medianoche válido). */
+export function validateHhmmEndNotBeforeStart(
+    startRaw: string | undefined | null,
+    endRaw: string | undefined | null,
+    opts: { hitoLabel: string; maxMinutes?: number },
+): string | null {
+    const gs = String(startRaw ?? "").replace(/\D/g, "");
+    const ge = String(endRaw ?? "").replace(/\D/g, "");
+    if (gs.length < 3 || ge.length < 3) return null;
+
+    const max = opts.maxMinutes ?? MAX_GPU_DURATION_MINUTES;
+    if (hhmmDurationMinutes(startRaw, endRaw, { maxMinutes: max }) != null) return null;
+
+    return hitosRevisarWarning(opts.hitoLabel);
+}
+
+/**
+ * Duración uso GPU (minutos) desde hitos operacionales: inicio y fin en HHMM, sin «no se utilizó GPU».
+ */
+export function gpuUsageDurationMinutesFromFlight(f: Flight): number | null {
+    const h = normalizeHitosData(f.hitosData);
+    if (h.gpuNotUsed) return null;
+    return hhmmDurationMinutes(h.gpuStart, h.gpuEnd, { maxMinutes: MAX_GPU_DURATION_MINUTES });
 }
 
 /** Promedio de minutos de uso GPU en el conjunto de vuelos (solo los que tienen inicio/fin válidos en hitos). */
@@ -534,6 +571,42 @@ export function computeAverageGpuUsageMinutes(flights: Flight[]): {
     if (mins.length === 0) return { avgMinutes: null, countWithGpu: 0 };
     const sum = mins.reduce((a, b) => a + b, 0);
     return { avgMinutes: sum / mins.length, countWithGpu: mins.length };
+}
+
+/** Destinos de vuelos internacionales para estadísticas de GPU (salida o llegada). */
+export const INTERNATIONAL_GPU_DESTINATIONS = [
+    "GIG",
+    "LIM",
+    "ASU",
+    "FLN",
+    "SCL",
+    "NAT",
+    "REC",
+] as const;
+
+export function flightTouchesInternationalGpuDestination(f: Flight): boolean {
+    const dep = String(f.dep ?? "").trim().toUpperCase();
+    const arr = String(f.arr ?? "").trim().toUpperCase();
+    return (INTERNATIONAL_GPU_DESTINATIONS as readonly string[]).some((d) => d === dep || d === arr);
+}
+
+export interface GpuFlightUsageRow {
+    flight: Flight;
+    durationMinutes: number;
+}
+
+/** Vuelos con duración GPU válida, ordenados de mayor a menor utilización. */
+export function buildGpuUsageFlightRows(flights: Flight[]): GpuFlightUsageRow[] {
+    const rows: GpuFlightUsageRow[] = [];
+    for (const f of flights) {
+        const d = gpuUsageDurationMinutesFromFlight(f);
+        if (d != null) rows.push({ flight: f, durationMinutes: d });
+    }
+    return rows.sort(
+        (a, b) =>
+            b.durationMinutes - a.durationMinutes ||
+            flightDateToIso(a.flight).localeCompare(flightDateToIso(b.flight)),
+    );
 }
 
 function hitosEntryHhmm(entries: Record<string, string>, milestoneName: string): string | null {
@@ -565,12 +638,7 @@ export function boardingDurationMinutesFromFlight(f: Flight): number | null {
         end = hitosEntryHhmm(crew, "Fin embarque");
     }
     if (!start || !end) return null;
-    const startM = parseHHmmToMinutes(start);
-    const endM = parseHHmmToMinutes(end);
-    let diff = endM - startM;
-    if (diff === 0) return null;
-    if (diff < 0) diff += 24 * 60;
-    return diff > 0 ? diff : null;
+    return hhmmDurationMinutes(start, end, { maxMinutes: MAX_BOARDING_DURATION_MINUTES });
 }
 
 export type BoardingStatsFilter = "manga" | "remota" | "A320" | "A321";

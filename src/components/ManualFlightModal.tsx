@@ -117,13 +117,13 @@ export function ManualFlightModal({ onSubmit, onClose, initialDateIso }: Props) 
                         </div>
                         <div>
                             <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">
-                                Ruta (código / descripción)
+                                Operador
                             </label>
                             <input
                                 type="text"
                                 value={route}
                                 onChange={(e) => setRoute(e.target.value)}
-                                placeholder="Ej. 3832"
+                                placeholder="Ej: JES"
                                 className="w-full rounded-xl border border-input bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm"
                                 autoComplete="off"
                             />

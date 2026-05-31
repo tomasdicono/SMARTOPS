@@ -20,6 +20,22 @@ export const HITO_MILESTONE_HINTS: Record<string, string> = {
     "Fin embarque": "Último pax sube al avión",
 };
 
+/** Aviso al guardar hitos cuando un horario o hito debe corregirse. */
+export function hitosRevisarWarning(hitoLabel: string): string {
+    return `Revisar (${hitoLabel})`;
+}
+
+/** Inicio / fin de embarque en entradas de hitos operacionales (nombres de carta). */
+export function getEmbarqueTimesFromHitosEntries(entries: Record<string, string>): {
+    start: string;
+    end: string;
+} {
+    return {
+        start: String(entries["Inicio Embarque"] ?? entries["Inicio embarque"] ?? "").trim(),
+        end: String(entries["Fin embarque"] ?? "").trim(),
+    };
+}
+
 /** Claves reservadas en `hitosCrewData` para carta y ATA elegidos por tripulación */
 export const CREW_STORAGE_KEYS = {
     gantt: "__crewGanttChartName",

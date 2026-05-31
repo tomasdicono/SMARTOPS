@@ -30,6 +30,7 @@ import {
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
 import { ControlFuelTab } from "./ControlFuelTab";
+import { ControlGpuTab } from "./ControlGpuTab";
 import { ControlUsageTab } from "./ControlUsageTab";
 import { ControlAirportMultiSelect } from "./ControlAirportMultiSelect";
 import { ControlBoardingStatsPanel } from "./ControlBoardingStatsPanel";
@@ -58,6 +59,7 @@ import {
     Gauge,
     UserCheck,
     CircleCheck,
+    PlugZap,
 } from "lucide-react";
 
 interface Props {
@@ -81,7 +83,7 @@ function formatHm(minutes: number): string {
     return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
-type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel" | "usage";
+type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel" | "usage" | "gpu";
 const FLIGHT_CARD_STYLES = [
     "from-cyan-500 via-cyan-600 to-teal-600 shadow-cyan-900/25",
     "from-sky-500 via-blue-600 to-indigo-600 shadow-indigo-900/25",
@@ -340,6 +342,18 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                     >
                         <Flame className="w-4 h-4 shrink-0" />
                         Fuel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSubTab("gpu")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                            subTab === "gpu"
+                                ? "bg-amber-600 text-white shadow-md"
+                                : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
+                        }`}
+                    >
+                        <PlugZap className="w-4 h-4 shrink-0" aria-hidden />
+                        GPU
                     </button>
                     <button
                         type="button"
@@ -1207,6 +1221,16 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
 
                 {subTab === "fuel" && (
                     <ControlFuelTab
+                        flights={flights}
+                        selectedDate={selectedDate}
+                        selectedAirports={controlAirports}
+                        onAirportsChange={setControlAirports}
+                        airportOptions={airportOptions}
+                    />
+                )}
+
+                {subTab === "gpu" && (
+                    <ControlGpuTab
                         flights={flights}
                         selectedDate={selectedDate}
                         selectedAirports={controlAirports}

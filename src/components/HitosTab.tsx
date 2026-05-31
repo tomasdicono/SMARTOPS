@@ -1,12 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { GANTT_CHARTS } from "../lib/hitosData";
 import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { getHitosDepartureTime } from "../lib/flightHelpers";
-import { HITO_MILESTONE_HINTS, getMilestoneLimitLabel, getMilestoneTargetMinutes, isActiveMilestone } from "../lib/hitosReference";
+import {
+    HITO_MILESTONE_HINTS,
+    getEmbarqueTimesFromHitosEntries,
+    getMilestoneLimitLabel,
+    getMilestoneTargetMinutes,
+    hitosRevisarWarning,
+    isActiveMilestone,
+} from "../lib/hitosReference";
+import {
+    hhmmDurationMinutes,
+    MAX_BOARDING_DURATION_MINUTES,
+    MAX_GPU_DURATION_MINUTES,
+    parseHHmmToMinutes,
+    validateHhmmEndNotBeforeStart,
+} from "../lib/controlHelpers";
+import { formatMinutesToHHMM } from "../lib/mvtTime";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
-import { Save, AlertCircle, Clock, Zap, Lock } from "lucide-react";
+import { Save, AlertCircle, AlertTriangle, Clock, Zap, Lock } from "lucide-react";
 
 interface Props {
     flight: Flight;
@@ -19,7 +34,7 @@ interface Props {
 }
 
 export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersistHitos }: Props) {
-    const [errorMsg, setErrorMsg] = useState("");
+    const [revisarMsg, setRevisarMsg] = useState("");
     const [data, setData] = useState<HitosData>(() => normalizeHitosData(flight.hitosData));
     const hitosSent =
         flight.hitosData?.hitosSentAt != null && String(flight.hitosData.hitosSentAt).trim() !== "";
@@ -102,7 +117,7 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
 
     const handleSave = () => {
         if (!selectedChart) {
-            setErrorMsg("Selecciona una carta primero.");
+            setRevisarMsg(hitosRevisarWarning("Carta de referencia"));
             return;
         }
 
@@ -110,19 +125,50 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
         for (const m of requiredMs) {
             const val = data.entries[m.name];
             if (!val || val.trim() === "") {
-                setErrorMsg(`El hito "${m.name}" es obligatorio.`);
+                setRevisarMsg(hitosRevisarWarning(m.name));
                 return;
             }
         }
 
         if (!is1stWave && (!data.ata || data.ata.trim() === "")) {
-            setErrorMsg("El campo ATA (Llegada) es obligatorio para esta carta.");
+            setRevisarMsg(hitosRevisarWarning("ATA (Llegada)"));
             return;
         }
 
-        setErrorMsg("");
+        if (!data.gpuNotUsed) {
+            const gpuWarn = validateHhmmEndNotBeforeStart(data.gpuStart, data.gpuEnd, {
+                hitoLabel: "Control de GPU",
+                maxMinutes: MAX_GPU_DURATION_MINUTES,
+            });
+            if (gpuWarn) {
+                setRevisarMsg(gpuWarn);
+                return;
+            }
+        }
+
+        const { start: embStart, end: embEnd } = getEmbarqueTimesFromHitosEntries(data.entries);
+        const embWarn = validateHhmmEndNotBeforeStart(embStart, embEnd, {
+            hitoLabel: "Fin embarque",
+            maxMinutes: MAX_BOARDING_DURATION_MINUTES,
+        });
+        if (embWarn) {
+            setRevisarMsg(embWarn);
+            return;
+        }
+
+        setRevisarMsg("");
         onSave(data);
     };
+
+    const gpuDurationPreview = useMemo(() => {
+        if (data.gpuNotUsed) return null;
+        return hhmmDurationMinutes(data.gpuStart, data.gpuEnd, { maxMinutes: MAX_GPU_DURATION_MINUTES });
+    }, [data.gpuStart, data.gpuEnd, data.gpuNotUsed]);
+
+    const embarqueDurationPreview = useMemo(() => {
+        const { start, end } = getEmbarqueTimesFromHitosEntries(data.entries);
+        return hhmmDurationMinutes(start, end, { maxMinutes: MAX_BOARDING_DURATION_MINUTES });
+    }, [data.entries]);
 
     return (
         <fieldset disabled={readOnly} className="flex flex-col h-full bg-slate-50/50 p-6 overflow-y-auto custom-scrollbar border-none m-0">
@@ -180,6 +226,17 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                                 No se utilizó GPU
                             </label>
                         </div>
+                        {gpuDurationPreview != null ? (
+                            <p className="text-[11px] font-semibold text-amber-800/90 mt-1">
+                                Duración GPU:{" "}
+                                <span className="font-black tabular-nums">
+                                    {formatMinutesToHHMM(gpuDurationPreview)}
+                                </span>
+                                {parseHHmmToMinutes(data.gpuEnd) < parseHHmmToMinutes(data.gpuStart) ? (
+                                    <span className="text-amber-700/80"> (cruce de medianoche)</span>
+                                ) : null}
+                            </p>
+                        ) : null}
                     </div>
                     <div>
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
@@ -283,6 +340,14 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                         Control de Hitos ({selectedChart.name})
                     </h3>
 
+                    {embarqueDurationPreview != null ? (
+                        <p className="text-[11px] font-semibold text-slate-600 mb-4 -mt-2">
+                            Duración de embarque:{" "}
+                            <span className="font-black text-slate-800 tabular-nums">
+                                {formatMinutesToHHMM(embarqueDurationPreview)}
+                            </span>
+                        </p>
+                    ) : null}
                     <div className="space-y-4 flex-1">
                         {selectedChart.milestones.filter(m => isActiveMilestone(m)).map((m, idx) => {
                             const targetMins = getMilestoneTargetMinutes(flight, data, selectedChart, m);
@@ -343,9 +408,13 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                             <p className="text-xs text-slate-500 w-full text-right">
                                 Progreso guardado automáticamente; al actualizar la página no se pierde.
                             </p>
-                            {errorMsg && (
-                                <div className="text-red-600 font-bold text-sm flex items-center gap-1.5 animate-in slide-in-from-right-2">
-                                    <AlertCircle className="w-4 h-4" /> {errorMsg}
+                            {revisarMsg && (
+                                <div
+                                    role="alert"
+                                    className="w-full text-amber-900 font-bold text-sm flex items-center gap-2 animate-in slide-in-from-right-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"
+                                >
+                                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" aria-hidden />
+                                    {revisarMsg}
                                 </div>
                             )}
                             <button

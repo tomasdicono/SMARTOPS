@@ -4,8 +4,12 @@ import type { HitosData } from "../types";
 import { GANTT_CHARTS } from "../lib/hitosData";
 import { getAircraftInfo } from "../lib/fleetData";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
-import { Clock, Save, AlertCircle } from "lucide-react";
-import { getCrewTargetInfo, parseToMins, CREW_STORAGE_KEYS } from "../lib/hitosReference";
+import { Clock, Save, AlertCircle, AlertTriangle } from "lucide-react";
+import { getCrewTargetInfo, hitosRevisarWarning, parseToMins, CREW_STORAGE_KEYS } from "../lib/hitosReference";
+import {
+    MAX_BOARDING_DURATION_MINUTES,
+    validateHhmmEndNotBeforeStart,
+} from "../lib/controlHelpers";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 
 interface Props {
@@ -46,14 +50,14 @@ export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: P
     const [ata, setAta] = useState("");
     const [entries, setEntries] = useState<Record<string, string>>({});
     const [savedState, setSavedState] = useState(false);
-    const [errorMsg, setErrorMsg] = useState("");
+    const [revisarMsg, setRevisarMsg] = useState("");
 
     useEffect(() => {
         const s = splitCrewStorage(flight.hitosCrewData);
         setGanttChartName(s.ganttChartName);
         setAta(s.ata);
         setEntries(s.entries);
-        setErrorMsg("");
+        setRevisarMsg("");
     }, [flight.id]);
 
     const persistPayload = useMemo(
@@ -84,21 +88,33 @@ export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: P
     };
 
     const handleSave = () => {
-        setErrorMsg("");
+        setRevisarMsg("");
         if (!selectedChart) {
-            setErrorMsg("Seleccioná una carta Gantt.");
+            setRevisarMsg(hitosRevisarWarning("Carta de referencia"));
             return;
         }
         if (!is1stWave && (!ata || ata.trim() === "")) {
-            setErrorMsg("El ATA (llegada) es obligatorio para esta carta.");
+            setRevisarMsg(hitosRevisarWarning("ATA (llegada)"));
             return;
         }
         for (const name of CREW_MILESTONES) {
             const val = entries[name];
             if (!val || val.trim() === "") {
-                setErrorMsg(`Completá el hito "${name}".`);
+                setRevisarMsg(hitosRevisarWarning(name));
                 return;
             }
+        }
+        const embWarn = validateHhmmEndNotBeforeStart(
+            entries["Inicio embarque"],
+            entries["Fin embarque"],
+            {
+                hitoLabel: "Fin embarque",
+                maxMinutes: MAX_BOARDING_DURATION_MINUTES,
+            },
+        );
+        if (embWarn) {
+            setRevisarMsg(embWarn);
+            return;
         }
         onSave(persistPayload);
         setSavedState(true);
@@ -230,9 +246,13 @@ export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: P
 
             {!readOnly && (
                 <div className="pt-6 mt-4 border-t border-slate-200 flex flex-col items-end gap-2">
-                    {errorMsg && (
-                        <div className="text-red-600 font-bold text-sm flex items-center gap-1.5 w-full justify-end">
-                            <AlertCircle className="w-4 h-4 shrink-0" /> {errorMsg}
+                    {revisarMsg && (
+                        <div
+                            role="alert"
+                            className="w-full text-amber-900 font-bold text-sm flex items-center gap-2 justify-end rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"
+                        >
+                            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" aria-hidden />
+                            {revisarMsg}
                         </div>
                     )}
                     <p className="text-xs text-slate-500 w-full text-right">
