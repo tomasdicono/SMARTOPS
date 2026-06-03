@@ -178,7 +178,7 @@ export function ControlGpuTab({
                         selected={selectedAirports}
                         onChange={onAirportsChange}
                         label="Aeropuertos"
-                        emptyHint="Todos (salida o llegada)"
+                        emptyHint="Todas las escalas de salida"
                     />
                 </div>
 

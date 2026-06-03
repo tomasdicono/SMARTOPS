@@ -9,7 +9,6 @@ import {
     getMvtPaxOnly,
     getScheduledPax,
     filterFlightsForStats,
-    filterFlightsForStatsDepartureOnly,
     computeFleetMixShare,
     uniqueAirportsFromFlights,
     flightDaySegments,
@@ -132,7 +131,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         () =>
             controlAirports.length === 0
                 ? dayFlights
-                : dayFlights.filter((f) => flightMatchesStatsAirports(f, controlAirports, "depOrArr")),
+                : dayFlights.filter((f) => flightMatchesStatsAirports(f, controlAirports, "depOnly")),
         [dayFlights, controlAirports],
     );
 
@@ -196,7 +195,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         const dateAirportRaw = filterFlightsForStats(flights, statsDateFrom, statsDateTo, controlAirports);
         const raw = dateAirportRaw.filter((f) => flightMatchesStatsAtdTimeFilter(f, statsTimeFrom, statsTimeTo));
         const operational = raw.filter((f) => !f.cancelled);
-        const cancelled = filterFlightsForStatsDepartureOnly(flights, statsDateFrom, statsDateTo, controlAirports)
+        const cancelled = filterFlightsForStats(flights, statsDateFrom, statsDateTo, controlAirports)
             .filter((f) => f.cancelled)
             .filter((f) => flightMatchesStatsAtdTimeFilter(f, statsTimeFrom, statsTimeTo))
             .sort((a, b) => {
@@ -279,7 +278,9 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
             return;
         }
         const airportLabel =
-            controlAirports.length > 0 ? controlAirports.join(", ") : "Todos (salida o llegada)";
+            controlAirports.length > 0
+                ? `${controlAirports.join(", ")} (origen)`
+                : "Todas las escalas de salida";
         downloadStatsReport(
             buildStatsReportData({
                 flights: statsFlights,
@@ -967,7 +968,7 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                             selected={controlAirports}
                             onChange={setControlAirports}
                             label="Aeropuertos"
-                            emptyHint="Todos los aeropuertos"
+                            emptyHint="Todas las escalas de salida"
                         />
                         <div className="shrink-0">
                             <label className="block text-xs font-black uppercase text-slate-500 mb-1">ATD desde</label>

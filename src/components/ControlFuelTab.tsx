@@ -5,7 +5,6 @@ import {
     computeAverageFobByDestination,
     countDaysInclusiveIso,
     filterFlightsForStats,
-    filterFlightsForStatsDepartureOnly,
     normalizeIsoDateRange,
     startOfMonthIso,
 } from "../lib/controlHelpers";
@@ -83,10 +82,7 @@ export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirp
     };
 
     const fuelScopeFlights = useMemo(() => {
-        const inRange =
-            selectedAirports.length > 0
-                ? filterFlightsForStatsDepartureOnly(flights, fuelDateFrom, fuelDateTo, selectedAirports)
-                : filterFlightsForStats(flights, fuelDateFrom, fuelDateTo, "");
+        const inRange = filterFlightsForStats(flights, fuelDateFrom, fuelDateTo, selectedAirports);
         return inRange.filter((f) => !f.cancelled);
     }, [flights, fuelDateFrom, fuelDateTo, selectedAirports]);
 

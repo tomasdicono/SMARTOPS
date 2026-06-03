@@ -72,17 +72,13 @@ function routeGroupKey(f: Flight): string {
     return `${dep}-${arr}`;
 }
 
-/** Aeropuerto «destino» respecto al filtro seleccionado (el extremo que no está en la selección). */
+/** Destino (arr) para agrupar métricas cuando el filtro es por escala(s) de salida (dep). */
 function destinationGroupKey(f: Flight, selectedAirports: string[]): string | null {
     const set = new Set(resolveStatsAirportList(selectedAirports));
     const dep = String(f.dep ?? "").trim().toUpperCase();
     const arr = String(f.arr ?? "").trim().toUpperCase();
-    const depSelected = set.has(dep);
-    const arrSelected = set.has(arr);
-    if (depSelected && !arrSelected) return arr;
-    if (arrSelected && !depSelected) return dep;
-    if (depSelected && arrSelected) return arr;
-    return null;
+    if (!set.has(dep)) return null;
+    return arr || null;
 }
 
 /**
@@ -250,11 +246,11 @@ function resolveStatsAirportList(airport: StatsAirportFilter): string[] {
     return s ? [s] : [];
 }
 
-/** Filtro multi-aeropuerto: vacío = todos; si no, coincide dep o arr (o solo dep). */
+/** Filtro multi-aeropuerto: vacío = todos; si no, coincide dep (origen) o dep/arr según `mode`. */
 export function flightMatchesStatsAirports(
     f: Flight,
     airports: StatsAirportFilter,
-    mode: "depOrArr" | "depOnly" = "depOrArr",
+    mode: "depOrArr" | "depOnly" = "depOnly",
 ): boolean {
     const list = resolveStatsAirportList(airports);
     if (list.length === 0) return true;
@@ -415,23 +411,8 @@ export function countDaysInclusiveIso(lo: string, hi: string): number {
     return Math.round((t1 - t0) / 86400000) + 1;
 }
 
-/** Vuelos con fecha en [isoFrom, isoTo] inclusive; opcional filtro aeropuerto(s) (dep o arr) */
+/** Vuelos con fecha en [isoFrom, isoTo] inclusive; opcional filtro aeropuerto(s) por origen (dep). */
 export function filterFlightsForStats(
-    flights: Flight[],
-    isoFrom: string,
-    isoTo: string,
-    airport: StatsAirportFilter = "",
-): Flight[] {
-    const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
-    if (!lo || !hi) return [];
-    return flights.filter((f) => {
-        const d = flightDateToIso(f);
-        return d >= lo && d <= hi && flightMatchesStatsAirports(f, airport, "depOrArr");
-    });
-}
-
-/** Mismo rango de fechas; filtro aeropuerto(s) solo por origen (dep). Usado p. ej. en vuelos cancelados. */
-export function filterFlightsForStatsDepartureOnly(
     flights: Flight[],
     isoFrom: string,
     isoTo: string,
@@ -443,6 +424,16 @@ export function filterFlightsForStatsDepartureOnly(
         const d = flightDateToIso(f);
         return d >= lo && d <= hi && flightMatchesStatsAirports(f, airport, "depOnly");
     });
+}
+
+/** @deprecated Alias de `filterFlightsForStats` (mismo criterio: origen / dep). */
+export function filterFlightsForStatsDepartureOnly(
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+    airport: StatsAirportFilter = "",
+): Flight[] {
+    return filterFlightsForStats(flights, isoFrom, isoTo, airport);
 }
 
 /** MVT con ATD cargado con al menos hora:minuto parseables (mismo umbral que OTP en status día). */
