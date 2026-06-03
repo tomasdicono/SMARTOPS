@@ -1,6 +1,7 @@
 import type { Flight, HitosData } from "../types";
 import { GANTT_CHARTS } from "./hitosData";
-import { gpuUsageDurationMinutesFromFlight } from "./controlHelpers";
+import { getMvtPaxOnly, gpuUsageDurationMinutesFromFlight } from "./controlHelpers";
+import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 import {
@@ -32,6 +33,17 @@ function getPeaAndGpuSummary(flight: Flight): { peaLine: string; gpuLine: string
         }
     }
     return { peaLine, gpuLine };
+}
+
+/** PAX MVT y ocupación sobre capacidad del equipo (mismo criterio que control OBVK). */
+function getPaxOccupancyForHitosSummary(flight: Flight): { paxLine: string; ocupacionLine: string } {
+    const hasMvtPax = String(flight.mvtData?.paxActual ?? "").trim() !== "";
+    const pax = getMvtPaxOnly(flight);
+    const paxLine = hasMvtPax ? pax.toLocaleString("es-AR") : "—";
+    const ac = getAircraftInfo(flight.reg);
+    const cap = ac?.capacity ?? 0;
+    const ocupacionLine = hasMvtPax && cap > 0 ? `${((pax / cap) * 100).toFixed(1)}%` : "—";
+    return { paxLine, ocupacionLine };
 }
 
 /** Debe coincidir con HitosCrewTab */
@@ -255,6 +267,7 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
 export function buildHitosSummaryText(flight: Flight): string {
     const p = buildHitosSummaryPayload(flight);
     const { peaLine, gpuLine } = getPeaAndGpuSummary(flight);
+    const { paxLine, ocupacionLine } = getPaxOccupancyForHitosSummary(flight);
     const lines: string[] = [];
     lines.push("SMARTOPS — Resumen de hitos");
     lines.push("");
@@ -263,6 +276,8 @@ export function buildHitosSummaryText(flight: Flight): string {
     lines.push(`Ruta: ${p.meta.dep} → ${p.meta.arr}`);
     lines.push(`Matrícula: ${p.meta.reg}`);
     lines.push(`STD/ATD: ${p.meta.std} / ${p.meta.atdDisplay}  STA ${p.meta.sta}`);
+    lines.push(`Pasajeros transportados (MVT): ${paxLine}`);
+    lines.push(`Ocupación del vuelo: ${ocupacionLine}`);
     lines.push(`PEA: ${peaLine}`);
     lines.push(`Uso total GPU: ${gpuLine}`);
     lines.push("");
@@ -313,6 +328,7 @@ export function buildHitosSummaryHtml(flight: Flight): string {
     const p = buildHitosSummaryPayload(flight);
     const m = p.meta;
     const { peaLine, gpuLine } = getPeaAndGpuSummary(flight);
+    const { paxLine, ocupacionLine } = getPaxOccupancyForHitosSummary(flight);
 
     const opRowsHtml = p.operational.rows
         .map(
@@ -545,6 +561,8 @@ export function buildHitosSummaryHtml(flight: Flight): string {
         <div><span>STD/ATD</span><span class="v mono">${escapeHtml(m.std)} / ${escapeHtml(m.atdDisplay)}</span></div>
         ${m.etd ? `<div><span>ETD</span><span class="v mono">${escapeHtml(m.etd)}</span></div>` : ""}
         <div><span>STA</span><span class="v mono">${escapeHtml(m.sta)}</span></div>
+        <div><span>Pasajeros transportados</span><span class="v tabular-nums">${escapeHtml(paxLine)}</span></div>
+        <div><span>Ocupación</span><span class="v tabular-nums">${escapeHtml(ocupacionLine)}</span></div>
         <div><span>PEA</span><span class="v">${escapeHtml(peaLine)}</span></div>
         <div><span>Uso total GPU</span><span class="v mono">${escapeHtml(gpuLine)}</span></div>
       </div>
