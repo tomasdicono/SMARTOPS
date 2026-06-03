@@ -120,6 +120,14 @@ export function isLimpiezaPendiente(
     return false;
 }
 
+/** Destinos de pernocte donde aplica checklist de precarga (último ATO del día). */
+const PERNOCTE_PRECARGA_ATO = new Set(["REC", "NAT", "USH"]);
+
+export function pernocteRowRequiresPrecarga(ato: string): boolean {
+    const code = String(ato ?? "").trim().toUpperCase();
+    return PERNOCTE_PRECARGA_ATO.has(code);
+}
+
 export function defaultPernocteRow(): PernocteRowState {
     return { limpieza: false, precargaQ: "", precarga: false };
 }

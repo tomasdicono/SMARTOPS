@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import type { PernocteRowState } from "../types";
-import { coercePernocteRow, defaultPernocteRow, type PernocteTableRow } from "../lib/pernocteHelpers";
+import {
+    coercePernocteRow,
+    defaultPernocteRow,
+    pernocteRowRequiresPrecarga,
+    type PernocteTableRow,
+} from "../lib/pernocteHelpers";
 import { CalendarDays, Moon } from "lucide-react";
 
 interface Props {
@@ -14,7 +19,15 @@ interface Props {
 
 type AvionListoVariant = "ok" | "partial" | "pending";
 
-function avionListoLabel(limpieza: boolean, precarga: boolean): { variant: AvionListoVariant; text: string } {
+function avionListoLabel(
+    limpieza: boolean,
+    precarga: boolean,
+    requiresPrecarga: boolean
+): { variant: AvionListoVariant; text: string } {
+    if (!requiresPrecarga) {
+        if (limpieza) return { variant: "ok", text: "Sí" };
+        return { variant: "pending", text: "Pendiente Limpieza" };
+    }
     if (limpieza && precarga) return { variant: "ok", text: "Sí" };
     if (!limpieza && !precarga) return { variant: "pending", text: "Pendiente Limpieza/Precarga" };
     /** Solo una de las dos: aviso en amarillo */
@@ -92,7 +105,8 @@ export function PernocteView({
                         <tbody className="divide-y divide-slate-100">
                             {rows.map(({ reg, ato, salidaFlt, salidaArr }) => {
                                 const row = coercePernocteRow(pernocteByReg[reg] ?? defaultPernocteRow());
-                                const status = avionListoLabel(row.limpieza, row.precarga);
+                                const requiresPrecarga = pernocteRowRequiresPrecarga(ato);
+                                const status = avionListoLabel(row.limpieza, row.precarga, requiresPrecarga);
                                 const hasSalida = Boolean(salidaFlt);
                                 return (
                                     <tr key={reg} className="hover:bg-slate-50/80">
@@ -125,33 +139,41 @@ export function PernocteView({
                                             />
                                         </td>
                                         <td className="px-4 py-3">
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                pattern="[0-9]*"
-                                                value={
-                                                    precargaQDraft[reg] !== undefined
-                                                        ? precargaQDraft[reg]!
-                                                        : row.precargaQ
-                                                }
-                                                onChange={(e) => {
-                                                    const v = e.target.value.replace(/\D/g, "");
-                                                    setPrecargaQDraft((prev) => ({ ...prev, [reg]: v }));
-                                                    onPatchRow(reg, { precargaQ: v });
-                                                }}
-                                                placeholder="—"
-                                                className="w-full max-w-[10rem] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono font-bold tabular-nums text-slate-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                                                aria-label={`Precarga Q ${reg}`}
-                                            />
+                                            {requiresPrecarga ? (
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
+                                                    value={
+                                                        precargaQDraft[reg] !== undefined
+                                                            ? precargaQDraft[reg]!
+                                                            : row.precargaQ
+                                                    }
+                                                    onChange={(e) => {
+                                                        const v = e.target.value.replace(/\D/g, "");
+                                                        setPrecargaQDraft((prev) => ({ ...prev, [reg]: v }));
+                                                        onPatchRow(reg, { precargaQ: v });
+                                                    }}
+                                                    placeholder="—"
+                                                    className="w-full max-w-[10rem] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono font-bold tabular-nums text-slate-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                                                    aria-label={`Precarga Q ${reg}`}
+                                                />
+                                            ) : (
+                                                <span className="text-slate-400 font-semibold">—</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={row.precarga}
-                                                onChange={(e) => onPatchRow(reg, { precarga: e.target.checked })}
-                                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                                aria-label={`Precarga ${reg}`}
-                                            />
+                                            {requiresPrecarga ? (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={row.precarga}
+                                                    onChange={(e) => onPatchRow(reg, { precarga: e.target.checked })}
+                                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                    aria-label={`Precarga ${reg}`}
+                                                />
+                                            ) : (
+                                                <span className="text-slate-400 font-semibold">—</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3">
                                             {status.variant === "ok" ? (
