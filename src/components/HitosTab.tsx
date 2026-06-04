@@ -11,7 +11,8 @@ import {
     getMilestoneLimitLabel,
     getMilestoneTargetMinutes,
     hitosRevisarWarning,
-    isActiveMilestone,
+    isRequiredOperationalHito,
+    isVisibleOperationalHito,
     parseToMins,
 } from "../lib/hitosReference";
 import {
@@ -108,7 +109,7 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
             return;
         }
 
-        const requiredMs = selectedChart.milestones.filter(m => isActiveMilestone(m) && m.name !== "Inicio búsqueda de equipaje");
+        const requiredMs = selectedChart.milestones.filter((m) => isRequiredOperationalHito(m, flight));
         for (const m of requiredMs) {
             const val = data.entries[m.name];
             if (!val || val.trim() === "") {
@@ -336,7 +337,7 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                         </p>
                     ) : null}
                     <div className="space-y-4 flex-1">
-                        {selectedChart.milestones.filter(m => isActiveMilestone(m)).map((m, idx) => {
+                        {selectedChart.milestones.filter((m) => isVisibleOperationalHito(m, flight)).map((m, idx) => {
                             const targetMins = getMilestoneTargetMinutes(flight, data, selectedChart, m);
                             const target = targetMins != null ? formatMins(targetMins) : "—";
                             const val = data.entries[m.name] || "";
