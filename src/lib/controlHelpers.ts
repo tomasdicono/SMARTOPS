@@ -1,6 +1,7 @@
 import type { Flight, RouteAfectacionEntry } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
-import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isQrfActive } from "./flightHelpers";
+import { normalizeAirportCode } from "./routeAfectaciones";
+import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isQrfActive, isAlternoActive } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
 import {
@@ -933,6 +934,15 @@ export interface QrfStatusDiaRow {
     reason: string;
 }
 
+export interface AlternoStatusDiaRow {
+    flt: string;
+    reg: string;
+    std: string;
+    arrProgramado: string;
+    ato: string;
+    reason: string;
+}
+
 /** Mismos agregados que la pestaña Control → Status día (día calendario + afectaciones de ruta). */
 export interface StatusDiaDaySummary {
     paxAfectadosReprogramacion: number;
@@ -962,6 +972,8 @@ export interface StatusDiaDaySummary {
     pasajerosEmbarcados: number;
     /** Vuelos con QRF activo en el día filtrado. */
     qrfFlights: QrfStatusDiaRow[];
+    /** Vuelos con alterno activo en el día filtrado. */
+    alternoFlights: AlternoStatusDiaRow[];
 }
 
 export function listQrfFlightsForDay(flights: Flight[]): QrfStatusDiaRow[] {
@@ -975,6 +987,60 @@ export function listQrfFlightsForDay(flights: Flight[]): QrfStatusDiaRow[] {
             std: String(f.std ?? "").trim() || "—",
             reason: String(f.qrfReason ?? "").trim() || "—",
         }));
+}
+
+export function listAlternoFlightsForDay(flights: Flight[]): AlternoStatusDiaRow[] {
+    return flights
+        .filter((f) => !f.cancelled && isAlternoActive(f))
+        .sort(compareFlightsByStd)
+        .map((f) => ({
+            flt: `${getAirlinePrefix(f.flt)}${f.flt}`,
+            reg: String(f.reg ?? "").trim() || "—",
+            std: String(f.std ?? "").trim() || "—",
+            arrProgramado: String(f.arr ?? "").trim() || "—",
+            ato: String(f.alternoArr ?? "").trim() || "—",
+            reason: String(f.alternoReason ?? "").trim() || "—",
+        }));
+}
+
+export interface RouteAfectacionStatsRow extends RouteAfectacionEntry {
+    /** Fecha calendario del registro (YYYY-MM-DD). */
+    dateKey: string;
+}
+
+/** Cambios de ruta en rango de fechas, aeropuerto (origen) y ventana ATD opcional. */
+export function filterRouteAfectacionesForStats(
+    byDate: Record<string, RouteAfectacionEntry[]>,
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+    airports: StatsAirportFilter,
+    atdFrom: string,
+    atdTo: string,
+): RouteAfectacionStatsRow[] {
+    const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
+    if (!lo || !hi) return [];
+    const atdActive = isStatsAtdTimeFilterActive(atdFrom, atdTo);
+    const flightById = new Map(flights.map((f) => [f.id, f]));
+    const rows: RouteAfectacionStatsRow[] = [];
+
+    for (const [dateKey, list] of Object.entries(byDate)) {
+        if (dateKey < lo || dateKey > hi) continue;
+        for (const row of list) {
+            const dep = normalizeAirportCode(row.depAntes);
+            const listAir = resolveStatsAirportList(airports);
+            if (listAir.length > 0 && !listAir.includes(dep)) continue;
+
+            if (atdActive && row.flightId) {
+                const flight = flightById.get(row.flightId);
+                if (flight && !flightMatchesStatsAtdTimeFilter(flight, atdFrom, atdTo)) continue;
+            }
+
+            rows.push({ ...row, dateKey });
+        }
+    }
+
+    return rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
 
 export function computeStatusDiaDaySummary(
@@ -1051,6 +1117,7 @@ export function computeStatusDiaDaySummary(
     const factorOcupacionRealPct = seatsMvtEnviados > 0 ? (paxMvtEnviadosSum / seatsMvtEnviados) * 100 : null;
 
     const qrfFlights = listQrfFlightsForDay(dayFlights);
+    const alternoFlights = listAlternoFlightsForDay(dayFlights);
 
     return {
         paxAfectadosReprogramacion,
@@ -1072,6 +1139,7 @@ export function computeStatusDiaDaySummary(
         factorOcupacionRealPct,
         pasajerosEmbarcados: paxMvtEnviadosSum,
         qrfFlights,
+        alternoFlights,
     };
 }
 
@@ -1166,6 +1234,18 @@ export function buildStatusDiaPrensaText(
     } else {
         for (const row of s.qrfFlights) {
             out.push(`  • ${row.flt} · ${row.reg} · ${row.route} · STD ${row.std} — ${row.reason}`);
+        }
+    }
+    out.push("");
+
+    out.push("Alternos");
+    if (s.alternoFlights.length === 0) {
+        out.push("Sin alternos activos.");
+    } else {
+        for (const row of s.alternoFlights) {
+            out.push(
+                `  • ${row.flt} · ${row.reg} · STD ${row.std} · ${row.arrProgramado} → ${row.ato} — ${row.reason}`,
+            );
         }
     }
     out.push("");

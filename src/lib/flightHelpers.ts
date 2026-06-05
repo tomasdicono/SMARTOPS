@@ -88,6 +88,17 @@ export function coerceFlightFromDb(f: Flight): Flight {
     } else {
         delete base.qrfReason;
     }
+    const alternoArrRaw = String(f.alternoArr ?? "").trim().toUpperCase();
+    if (alternoArrRaw.length >= 3) {
+        base.alternoArr = alternoArrRaw;
+    } else {
+        delete base.alternoArr;
+    }
+    if (f.alternoReason != null && String(f.alternoReason).trim() !== "") {
+        base.alternoReason = String(f.alternoReason).trim();
+    } else {
+        delete base.alternoReason;
+    }
     const explicitEtd = f.etd != null && String(f.etd).trim() !== "";
     if (explicitEtd) {
         base.etd = String(f.etd).trim();
@@ -121,6 +132,11 @@ export function isHitosCompleteForCard(f: Flight): boolean {
 /** Vuelo en QRF (regreso a posición tras salida). */
 export function isQrfActive(f: Flight): boolean {
     return readQrfActiveFlag((f as { qrfActive?: unknown }).qrfActive);
+}
+
+/** Vuelo con alterno activo (ATO distinto del destino programado). */
+export function isAlternoActive(f: Flight): boolean {
+    return String(f.alternoArr ?? "").trim().length >= 3;
 }
 
 /** Misma lógica de color que el tablero de vuelos (sin caso Limpieza pendiente ni QRF). */

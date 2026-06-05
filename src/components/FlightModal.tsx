@@ -13,12 +13,13 @@ import {
 } from "../lib/flightHelpers";
 import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
 import { isLimpiezaRole, canEditMvtDelayAfterSent, canSubmitMvtAfterQrf } from "../types";
-import { isQrfActive } from "../lib/flightHelpers";
+import { isQrfActive, isAlternoActive } from "../lib/flightHelpers";
 
 type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA";
 import { hasMvtSent } from "../lib/controlHelpers";
 import { downloadHitosSummary } from "../lib/downloadHitosSummary";
 import { X, Ban, Download, RotateCcw } from "lucide-react";
+import { AlternoIcon } from "./AlternoIcon";
 import { BroomIcon } from "./BroomIcon";
 
 interface Props {
@@ -75,6 +76,7 @@ export function FlightModal({
             userRole === "AJS");
     const isReadOnlyView = !!flight.cancelled;
     const qrfActive = isQrfActive(flight);
+    const alternoActive = isAlternoActive(flight);
     const mvtSent = hasMvtSent(flight);
     const canEditOperationalAfterSent =
         canEditMvtDelayAfterSent(userRole) && !isReadOnlyView;
@@ -152,7 +154,17 @@ export function FlightModal({
                             <h2 className="text-xl md:text-2xl font-black text-primary tracking-tight">
                                 {getAirlinePrefix(flight.flt)} {flight.flt}
                             </h2>
-                            <p className="text-sm font-semibold text-muted-foreground">{flight.dep} → {flight.arr}</p>
+                            <p className="text-sm font-semibold text-muted-foreground">
+                                {flight.dep} →{" "}
+                                {alternoActive ? (
+                                    <>
+                                        <span className="line-through text-slate-400">{flight.arr}</span>{" "}
+                                        <span className="text-amber-700 dark:text-amber-300 font-bold">{flight.alternoArr}</span>
+                                    </>
+                                ) : (
+                                    flight.arr
+                                )}
+                            </p>
                         </div>
                         <div className="hidden sm:block h-8 w-px bg-border mx-2"></div>
                         <div className="flex gap-4 items-center">
@@ -219,6 +231,26 @@ export function FlightModal({
                             {flight.qrfReason?.trim() ? (
                                 <p className="text-sm text-blue-800 mt-2 font-semibold whitespace-pre-wrap">
                                     Motivo: {flight.qrfReason.trim()}
+                                </p>
+                            ) : null}
+                        </div>
+                    </div>
+                )}
+
+                {!flight.cancelled && alternoActive && (
+                    <div className="px-4 sm:px-6 py-3 bg-amber-50 border-b border-amber-200 flex items-start gap-3">
+                        <AlternoIcon className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                            <p className="text-sm font-black text-amber-950 uppercase tracking-wide">Alterno activo</p>
+                            <p className="text-sm text-amber-900 mt-1 leading-snug">
+                                Destino programado{" "}
+                                <span className="line-through text-amber-700/70">{flight.arr}</span>
+                                {" → "}
+                                <span className="font-bold">{flight.alternoArr}</span>
+                            </p>
+                            {flight.alternoReason?.trim() ? (
+                                <p className="text-sm text-amber-800 mt-2 font-semibold whitespace-pre-wrap">
+                                    Motivo: {flight.alternoReason.trim()}
                                 </p>
                             ) : null}
                         </div>

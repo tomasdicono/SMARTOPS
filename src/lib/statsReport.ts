@@ -10,13 +10,18 @@ import {
     getMvtPaxOnly,
     hasMvtAtdForOtp,
     hasMvtSent,
+    listAlternoFlightsForDay,
+    listQrfFlightsForDay,
     otpDelayMinutes,
     rankDelayCodesByShare,
+    type AlternoStatusDiaRow,
     type BoardingStatsFilter,
     type DelayCodeShare,
     type MilestoneComplianceStats,
+    type QrfStatusDiaRow,
+    type RouteAfectacionStatsRow,
 } from "./controlHelpers";
-import { isJesFlightNumber } from "./flightHelpers";
+import { isJesFlightNumber, getAirlinePrefix } from "./flightHelpers";
 import { formatMinutesToHHMM } from "./mvtTime";
 
 export interface StatsReportBoardingRow {
@@ -52,6 +57,9 @@ export interface StatsReportData {
     peaRemotaCount: number;
     peaMvtBase: number;
     boardingRows: StatsReportBoardingRow[];
+    qrfFlights: QrfStatusDiaRow[];
+    alternoFlights: AlternoStatusDiaRow[];
+    routeAfectaciones: RouteAfectacionStatsRow[];
 }
 
 const BOARDING_FILTERS: { filter: BoardingStatsFilter; label: string }[] = [
@@ -85,11 +93,14 @@ function computeOtpStats(flights: Flight[]): {
 
 export function buildStatsReportData(params: {
     flights: Flight[];
+    /** Vuelos del filtro (fecha, aeropuerto, ATD) para QRF / alterno. */
+    eventFlights: Flight[];
+    routeAfectaciones: RouteAfectacionStatsRow[];
     periodLabel: string;
     airportLabel: string;
     atdTimeLabel: string;
 }): StatsReportData {
-    const { flights, periodLabel, airportLabel, atdTimeLabel } = params;
+    const { flights, eventFlights, routeAfectaciones, periodLabel, airportLabel, atdTimeLabel } = params;
     const operational = flights.filter((f) => !f.cancelled);
     const mvtSent = operational.filter(hasMvtSent);
     const otp = computeOtpStats(operational);
@@ -139,6 +150,9 @@ export function buildStatsReportData(params: {
         peaRemotaCount: peaCounts.remota,
         peaMvtBase,
         boardingRows,
+        qrfFlights: listQrfFlightsForDay(eventFlights),
+        alternoFlights: listAlternoFlightsForDay(eventFlights),
+        routeAfectaciones,
     };
 }
 
@@ -156,6 +170,71 @@ function fmtPct(v: number | null, digits = 1): string {
 
 function fmtBoarding(m: number | null): string {
     return m != null ? formatMinutesToHHMM(Math.round(m)) : "—";
+}
+
+function formatStatsAt(iso: string): string {
+    if (!iso.trim()) return "—";
+    try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return "—";
+        return d.toLocaleString("es-AR", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    } catch {
+        return "—";
+    }
+}
+
+function renderEventTable(headers: string[], rows: string[][]): string {
+    if (rows.length === 0) {
+        return '<p class="empty">Sin registros en el filtro.</p>';
+    }
+    const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
+    const body = rows
+        .map(
+            (cells) =>
+                `<tr>${cells.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`,
+        )
+        .join("");
+    return `<div class="evt-wrap"><table class="evt-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function renderOperationalEventsSection(data: StatsReportData): string {
+    const qrfRows = data.qrfFlights.map((r) => [r.std, r.flt, r.reg, r.route, r.reason]);
+    const alternoRows = data.alternoFlights.map((r) => [
+        r.std,
+        r.flt,
+        r.reg,
+        r.arrProgramado,
+        r.ato,
+        r.reason,
+    ]);
+    const routeRows = data.routeAfectaciones.map((r) => [
+        formatStatsAt(r.at),
+        `${getAirlinePrefix(r.flt)}${r.flt}`.trim(),
+        r.reg,
+        `${r.depAntes}-${r.arrAntes}`,
+        `${r.depDespues}-${r.arrDespues}`,
+        r.by || "—",
+    ]);
+
+    return `
+    <section class="section">
+      <h2>Eventos operacionales del período</h2>
+      <p class="sub">QRF, alternos y cambios de ruta según fechas, aeropuertos de origen y filtro ATD del informe.</p>
+
+      <h3 class="evt-title">QRF (regreso a posición) · ${data.qrfFlights.length}</h3>
+      ${renderEventTable(["STD", "Vuelo", "Reg", "Ruta", "Motivo"], qrfRows)}
+
+      <h3 class="evt-title">Alternos · ${data.alternoFlights.length}</h3>
+      ${renderEventTable(["STD", "Vuelo", "Reg", "Dest. prog.", "ATO", "Motivo"], alternoRows)}
+
+      <h3 class="evt-title">Cambios de ruta · ${data.routeAfectaciones.length}</h3>
+      ${renderEventTable(["Hora", "Vuelo", "Reg", "Antes", "Después", "Registró"], routeRows)}
+    </section>`;
 }
 
 function renderHBar(
@@ -346,6 +425,13 @@ function buildStatsReportHtml(data: StatsReportData): string {
     .sub { font-size: .75rem; color: var(--muted); font-weight: 600; margin: 8px 0 0; }
     .sub.center { text-align: center; }
     .empty { color: var(--muted); font-style: italic; font-size: .85rem; margin: 0; }
+    .evt-title { margin: 18px 0 8px; font-size: .72rem; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .evt-title:first-of-type { margin-top: 4px; }
+    .evt-wrap { overflow-x: auto; margin-bottom: 4px; }
+    .evt-table { width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 480px; }
+    .evt-table th { text-align: left; padding: 6px 8px; background: #f1f5f9; font-size: .65rem; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; color: var(--navy); border-bottom: 1px solid var(--border); }
+    .evt-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .evt-table tr:nth-child(even) td { background: #fafafa; }
     footer { text-align: center; font-size: .7rem; color: var(--muted); margin-top: 24px; }
     @media print {
       body { background: #fff; padding: 12px; }
@@ -423,6 +509,8 @@ function buildStatsReportHtml(data: StatsReportData): string {
       <p class="sub">Participación de cada código en demoras MVT del filtro (top 12).</p>
       ${delayBars}
     </section>
+
+    ${renderOperationalEventsSection(data)}
 
     <footer>SMARTOPS — Informe según filtros de la pestaña Estadísticas (fechas, aeropuertos y ATD).</footer>
   </div>

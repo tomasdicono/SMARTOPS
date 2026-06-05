@@ -53,6 +53,8 @@ function mergeFlightRecords(a: Flight, b: Flight): Flight {
         rescheduleReason: pickNonEmptyStr(thinner.rescheduleReason, richer.rescheduleReason),
         qrfActive: isQrfActive(b) || isQrfActive(a) ? true : undefined,
         qrfReason: pickNonEmptyStr(b.qrfReason, a.qrfReason) || undefined,
+        alternoArr: pickNonEmptyStr(b.alternoArr, a.alternoArr) || undefined,
+        alternoReason: pickNonEmptyStr(b.alternoReason, a.alternoReason) || undefined,
     });
 }
 

@@ -27,6 +27,8 @@ const FLIGHT_SCALAR_KEYS = [
     "dailyReportObs",
     "qrfActive",
     "qrfReason",
+    "alternoArr",
+    "alternoReason",
 ] as const satisfies readonly (keyof Flight)[];
 
 const MVT_DB_KEYS = [

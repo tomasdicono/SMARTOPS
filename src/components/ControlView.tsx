@@ -16,6 +16,8 @@ import {
     computeStatusDiaDaySummary,
     buildStatusDiaPrensaText,
     listQrfFlightsForDay,
+    listAlternoFlightsForDay,
+    filterRouteAfectacionesForStats,
     normalizeIsoDateRange,
     countDaysInclusiveIso,
     flightMatchesStatsAtdTimeFilter,
@@ -38,6 +40,7 @@ import { ControlBoardingStatsPanel } from "./ControlBoardingStatsPanel";
 import { ControlBagsStatsCard } from "./ControlBagsStatsCard";
 import { ControlCargaStatsCard } from "./ControlCargaStatsCard";
 import { ControlPaxStatsCard } from "./ControlPaxStatsCard";
+import { AlternoIcon } from "./AlternoIcon";
 import {
     BarChart3,
     GanttChartSquare,
@@ -71,6 +74,8 @@ interface Props {
     selectedDate: string;
     /** Cambios de ruta registrados para ese día (Firebase routeAfectaciones/{fecha}) */
     routeAfectaciones?: RouteAfectacionEntry[];
+    /** Todos los cambios de ruta por fecha (informe de estadísticas multi-día). */
+    routeAfectacionesByDate?: Record<string, RouteAfectacionEntry[]>;
 }
 
 const WINDOW_HOURS = 8;
@@ -95,7 +100,12 @@ const FLIGHT_CARD_STYLES = [
     "from-amber-500 via-orange-500 to-rose-600 shadow-amber-900/20",
 ];
 
-export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: Props) {
+export function ControlView({
+    flights,
+    selectedDate,
+    routeAfectaciones = [],
+    routeAfectacionesByDate = {},
+}: Props) {
     const [subTab, setSubTab] = useState<ControlSubTab>("statusDia");
     const [statsDateFrom, setStatsDateFrom] = useState(selectedDate);
     const [statsDateTo, setStatsDateTo] = useState(selectedDate);
@@ -286,6 +296,16 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         downloadStatsReport(
             buildStatsReportData({
                 flights: statsFlights,
+                eventFlights: statsScope.raw,
+                routeAfectaciones: filterRouteAfectacionesForStats(
+                    routeAfectacionesByDate,
+                    flights,
+                    statsDateFrom,
+                    statsDateTo,
+                    controlAirports,
+                    statsTimeFrom,
+                    statsTimeTo,
+                ),
                 periodLabel: statsRangeLabel,
                 airportLabel,
                 atdTimeLabel: statsAtdTimeLabel,
@@ -297,8 +317,9 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         const summary = computeStatusDiaDaySummary(dayFlightsAirportFiltered, routeAfectaciones.length);
         return {
             ...summary,
-            /** QRF: siempre todos los del día (sin filtro de aeropuerto del status). */
+            /** QRF / Alterno: siempre todos los del día (sin filtro de aeropuerto del status). */
             qrfFlights: listQrfFlightsForDay(dayFlights),
+            alternoFlights: listAlternoFlightsForDay(dayFlights),
         };
     }, [dayFlightsAirportFiltered, dayFlights, routeAfectaciones.length]);
 
@@ -806,6 +827,58 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                                 <td className="px-1.5 py-0.5 font-mono">{row.reg}</td>
                                                 <td className="px-1.5 py-0.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
                                                     {row.route}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 text-slate-700">
+                                                    <span className="line-clamp-2 break-words">{row.reason}</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-2 sm:p-2.5 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400 print:bg-white">
+                        <div className="flex flex-wrap items-center gap-1.5 justify-between mb-1.5">
+                            <h4 className="text-[11px] font-black uppercase tracking-wide text-amber-900 flex items-center gap-1">
+                                <AlternoIcon className="w-3.5 h-3.5 shrink-0" />
+                                Alternos
+                            </h4>
+                            <span className="text-[10px] font-black tabular-nums bg-amber-100 text-amber-950 px-1.5 py-0.5 rounded border border-amber-200">
+                                {statusDia.alternoFlights.length}
+                            </span>
+                        </div>
+                        {statusDia.alternoFlights.length === 0 ? (
+                            <p className="text-[11px] text-slate-500 py-1">Sin alternos activos.</p>
+                        ) : (
+                            <div className="overflow-x-auto rounded border border-amber-100 bg-white print:border-slate-300">
+                                <table className="w-full text-[11px] min-w-[520px] leading-tight">
+                                    <thead>
+                                        <tr className="bg-amber-50 text-left text-[9px] font-black uppercase tracking-wide text-amber-900 print:bg-slate-100">
+                                            <th className="px-1.5 py-1 whitespace-nowrap">STD</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Vuelo</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Reg</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Dest. prog.</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">ATO</th>
+                                            <th className="px-1.5 py-1">Motivo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-amber-50">
+                                        {statusDia.alternoFlights.map((row, i) => (
+                                            <tr key={`${row.flt}-${row.std}-${i}`} className="hover:bg-amber-50/40 print:hover:bg-transparent">
+                                                <td className="px-1.5 py-0.5 font-mono tabular-nums text-slate-700 whitespace-nowrap">
+                                                    {row.std}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 font-bold text-slate-900 whitespace-nowrap">
+                                                    {row.flt}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 font-mono">{row.reg}</td>
+                                                <td className="px-1.5 py-0.5 font-mono text-slate-500 line-through whitespace-nowrap">
+                                                    {row.arrProgramado}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 font-mono font-bold text-amber-800 whitespace-nowrap">
+                                                    {row.ato}
                                                 </td>
                                                 <td className="px-1.5 py-0.5 text-slate-700">
                                                     <span className="line-clamp-2 break-words">{row.reason}</span>

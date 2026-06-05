@@ -34,6 +34,7 @@ import {
   isMvtCompleteForCard,
   isHitosCompleteForCard,
   isQrfActive,
+  isAlternoActive,
   canDownloadHitosSummaryRole,
   hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
@@ -50,6 +51,7 @@ import {
 } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
 import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2 } from "lucide-react";
+import { AlternoIcon } from "./components/AlternoIcon";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
@@ -72,6 +74,7 @@ import { userMustChangePassword } from "./lib/userMustChangePassword";
 import { ControlView } from "./components/ControlView";
 import { CancelFlightModal } from "./components/CancelFlightModal";
 import { QrfModal } from "./components/QrfModal";
+import { AlternoModal } from "./components/AlternoModal";
 import { DeleteFlightConfirmModal } from "./components/DeleteFlightConfirmModal";
 import { DailyReportView } from "./components/DailyReportView";
 import { ManualFlightModal } from "./components/ManualFlightModal";
@@ -130,12 +133,15 @@ function App() {
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [qrfModalFlight, setQrfModalFlight] = useState<Flight | null>(null);
+  const [alternoModalFlight, setAlternoModalFlight] = useState<Flight | null>(null);
   const [deleteConfirmFlight, setDeleteConfirmFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
   /** Menú ⋯ en tarjeta de vuelo (reprogramar / cancelar) */
   const [openFlightActionsMenuId, setOpenFlightActionsMenuId] = useState<string | null>(null);
   const [routeModalFlight, setRouteModalFlight] = useState<Flight | null>(null);
-  const [routeAfectaciones, setRouteAfectaciones] = useState<RouteAfectacionEntry[]>([]);
+  const [routeAfectacionesByDate, setRouteAfectacionesByDate] = useState<
+    Record<string, RouteAfectacionEntry[]>
+  >({});
   const [dailyReportOtp, setDailyReportOtp] = useState<DailyReportOtp>(emptyDailyReportOtp);
   /** Matrícula → texto (Firebase: diferidos/{matrícula}) */
   const [diferidosMap, setDiferidosMap] = useState<Record<string, DiferidoEntry>>({});
@@ -215,6 +221,7 @@ function App() {
     setCancelModalFlight(null);
     setRescheduleModalFlight(null);
     setRouteModalFlight(null);
+    setAlternoModalFlight(null);
     setShowParser(false);
     setShowGestiones(false);
     setShowManualFlight(false);
@@ -283,32 +290,46 @@ function App() {
         if (!prev) return null;
         return validFlights.find((f) => f.id === prev.id) ?? null;
       });
+      setAlternoModalFlight((prev) => {
+        if (!prev) return null;
+        return validFlights.find((f) => f.id === prev.id) ?? null;
+      });
     });
 
     return () => unsubscribe();
   }, [currentUser]);
 
+  const routeAfectaciones = useMemo(
+    () => (selectedDate ? routeAfectacionesByDate[selectedDate] ?? [] : []),
+    [routeAfectacionesByDate, selectedDate],
+  );
+
   useEffect(() => {
-    if (!currentUser || !selectedDate) {
-      setRouteAfectaciones([]);
+    if (!currentUser) {
+      setRouteAfectacionesByDate({});
       return;
     }
-    const r = ref(db, `routeAfectaciones/${selectedDate}`);
+    const r = ref(db, "routeAfectaciones");
     const unsub = onValue(r, (snapshot) => {
       const v = snapshot.val();
       if (!v || typeof v !== "object") {
-        setRouteAfectaciones([]);
+        setRouteAfectacionesByDate({});
         return;
       }
-      const list: RouteAfectacionEntry[] = [];
-      for (const [id, raw] of Object.entries(v as Record<string, unknown>)) {
-        list.push(coerceRouteAfectacion(raw, id));
+      const byDate: Record<string, RouteAfectacionEntry[]> = {};
+      for (const [dateKey, dayNode] of Object.entries(v as Record<string, unknown>)) {
+        if (!dayNode || typeof dayNode !== "object") continue;
+        const list: RouteAfectacionEntry[] = [];
+        for (const [id, raw] of Object.entries(dayNode as Record<string, unknown>)) {
+          list.push(coerceRouteAfectacion(raw, id));
+        }
+        list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+        byDate[dateKey] = list;
       }
-      list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-      setRouteAfectaciones(list);
+      setRouteAfectacionesByDate(byDate);
     });
     return () => unsub();
-  }, [selectedDate, currentUser]);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser || !selectedDate) {
@@ -424,6 +445,7 @@ function App() {
       setCancelModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
       setRescheduleModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
       setRouteModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
+      setAlternoModalFlight((prev) => (prev && removedSet.has(prev.id) ? null : prev));
       alert(`Se eliminaron ${removedCount} vuelo${removedCount === 1 ? "" : "s"} repetido${removedCount === 1 ? "" : "s"}.`);
     } catch {
       alert("No se pudo guardar. Revisá la conexión e intentá de nuevo.");
@@ -439,6 +461,8 @@ function App() {
       setCancelModalFlight((prev) => (prev?.id === flight.id ? null : prev));
       setRescheduleModalFlight((prev) => (prev?.id === flight.id ? null : prev));
       setRouteModalFlight((prev) => (prev?.id === flight.id ? null : prev));
+      setAlternoModalFlight((prev) => (prev?.id === flight.id ? null : prev));
+      setAlternoModalFlight((prev) => (prev?.id === flight.id ? null : prev));
     } catch {
       alert("No se pudo borrar el vuelo. Revisá la conexión e intentá de nuevo.");
     }
@@ -710,6 +734,36 @@ function App() {
     }
   };
 
+  const handleConfirmAlterno = async (id: string, ato: string, reason: string) => {
+    try {
+      await updateFlight(id, { alternoArr: ato, alternoReason: reason });
+      setAlternoModalFlight(null);
+      setFlights((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, alternoArr: ato, alternoReason: reason } : f)),
+      );
+      setSelectedFlight((prev) =>
+        prev?.id === id ? { ...prev, alternoArr: ato, alternoReason: reason } : prev,
+      );
+    } catch {
+      alert("No se pudo registrar el alterno. Revisá la conexión e intentá de nuevo.");
+    }
+  };
+
+  const handleClearAlterno = async (id: string) => {
+    try {
+      await updateFlight(id, { alternoArr: "", alternoReason: "" });
+      setAlternoModalFlight(null);
+      setFlights((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, alternoArr: undefined, alternoReason: undefined } : f)),
+      );
+      setSelectedFlight((prev) =>
+        prev?.id === id ? { ...prev, alternoArr: undefined, alternoReason: undefined } : prev,
+      );
+    } catch {
+      alert("No se pudo quitar el alterno. Revisá la conexión e intentá de nuevo.");
+    }
+  };
+
   const handleUpdateRegistration = async (id: string, newReg: string) => {
     const flight = flights.find(f => f.id === id);
     if (!flight) return;
@@ -750,6 +804,8 @@ function App() {
         dep: depDespues,
         arr: arrDespues,
         route: `${depDespues}-${arrDespues}`,
+        alternoArr: "",
+        alternoReason: "",
       });
       await set(logRef, {
         flightId: id,
@@ -1302,7 +1358,12 @@ function App() {
         ) : mainTab === "diferidos" && isHccDeskRole(userRole) ? (
           <DiferidosView diferidos={diferidosMap} onSave={handleSaveDiferido} onRemove={handleRemoveDiferido} />
         ) : mainTab === "control" && isHccDeskRole(userRole) ? (
-          <ControlView flights={flights} selectedDate={selectedDate} routeAfectaciones={routeAfectaciones} />
+          <ControlView
+            flights={flights}
+            selectedDate={selectedDate}
+            routeAfectaciones={routeAfectaciones}
+            routeAfectacionesByDate={routeAfectacionesByDate}
+          />
         ) : mainTab === "reporte" && isHccDeskRole(userRole) ? (
           <DailyReportView
             flights={flights}
@@ -1474,7 +1535,10 @@ function App() {
               const canRescheduleFlight = isHccDeskRole(userRole) && !isCancelled;
               const canCancelFlight = isAdminOrHccDesk(userRole) && !isCancelled;
               const canDeleteFlight = isHccDeskRole(userRole);
-              const showFlightActionsMenu = canRescheduleFlight || canCancelFlight || canDeleteFlight;
+              const canChangeRoute = isAdminOrHccDesk(userRole) && !isCancelled;
+              const showFlightActionsMenu =
+                canRescheduleFlight || canCancelFlight || canDeleteFlight || canChangeRoute;
+              const alternoActive = isAlternoActive(flight);
               const showHitosDownload =
                 canDownloadHitosSummaryRole(userRole) &&
                 hasMvt &&
@@ -1545,6 +1609,21 @@ function App() {
                                   Reprogramar vuelo
                                 </button>
                               )}
+                              {canChangeRoute && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-cyan-900 hover:bg-cyan-50 dark:text-cyan-100 dark:hover:bg-cyan-950/50"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenFlightActionsMenuId(null);
+                                    setRouteModalFlight(flight);
+                                  }}
+                                >
+                                  <Route className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                  Cambio de ruta
+                                </button>
+                              )}
                               {canCancelFlight && (
                                 <button
                                   type="button"
@@ -1565,7 +1644,9 @@ function App() {
                                   type="button"
                                   role="menuitem"
                                   className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-red-800 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40 ${
-                                    canRescheduleFlight || canCancelFlight ? "border-t border-slate-100 dark:border-slate-700" : ""
+                                    canRescheduleFlight || canCancelFlight || canChangeRoute
+                                      ? "border-t border-slate-100 dark:border-slate-700"
+                                      : ""
                                   }`}
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1646,10 +1727,39 @@ function App() {
                       className="flex flex-col items-end leading-tight relative min-w-0 max-w-[45%]"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {showWeatherOnCard ? (
-                        <WeatherIndicator iata={flight.arr} date={flight.date} time={flight.sta} align="right" />
+                      {alternoActive ? (
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                          Alterno
+                        </span>
                       ) : null}
-                      <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.arr}</span>
+                      {showWeatherOnCard ? (
+                        <WeatherIndicator
+                          iata={alternoActive ? flight.alternoArr! : flight.arr}
+                          date={flight.date}
+                          time={flight.sta}
+                          align="right"
+                        />
+                      ) : null}
+                      {alternoActive ? (
+                        <>
+                          <span
+                            className={`text-xl line-through decoration-2 text-slate-400 dark:text-slate-500 ${
+                              isLate ? "dark:text-slate-400" : ""
+                            }`}
+                          >
+                            {flight.arr}
+                          </span>
+                          <span
+                            className={`text-2xl font-black text-amber-700 dark:text-amber-300 ${
+                              isLate ? "dark:text-amber-200" : ""
+                            }`}
+                          >
+                            {flight.alternoArr}
+                          </span>
+                        </>
+                      ) : (
+                        <span className={`text-2xl ${isLate ? "dark:text-white" : ""}`}>{flight.arr}</span>
+                      )}
                       <span className="text-sm font-black text-muted-foreground dark:text-slate-300/70">{flight.sta}</span>
                     </div>
                   </div>
@@ -1677,12 +1787,16 @@ function App() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setRouteModalFlight(flight);
+                        setAlternoModalFlight(flight);
                       }}
-                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide text-cyan-950 dark:text-cyan-100 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-300 dark:border-cyan-700 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-colors"
+                      className={`mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${
+                        alternoActive
+                          ? "text-white bg-amber-600 border-amber-700 hover:bg-amber-700 dark:bg-amber-700 dark:border-amber-500 dark:hover:bg-amber-600"
+                          : "text-amber-950 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                      }`}
                     >
-                      <Route className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                      Cambio ruta
+                      <AlternoIcon className="w-3.5 h-3.5 shrink-0" />
+                      Alterno{alternoActive ? " · activo" : ""}
                     </button>
                   )}
 
@@ -1813,6 +1927,14 @@ function App() {
                       {flight.rescheduleReason}
                     </p>
                   )}
+                  {!isCancelled && alternoActive && flight.alternoReason?.trim() && (
+                    <p className="mt-2 text-xs text-amber-900/90 dark:text-amber-200/90 line-clamp-4 border-t border-amber-200/80 dark:border-amber-800/80 pt-2 text-left">
+                      <span className="font-bold text-amber-800 dark:text-amber-300">
+                        Alterno · {flight.alternoArr}:{" "}
+                      </span>
+                      {flight.alternoReason}
+                    </p>
+                  )}
                   {isCancelled && flight.cancellationReason && (
                     <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 line-clamp-4 border-t border-slate-200 dark:border-slate-600 pt-2 text-left">
                       <span className="font-bold text-slate-500 dark:text-slate-500">Motivo: </span>
@@ -1890,6 +2012,15 @@ function App() {
           flight={qrfModalFlight}
           onClose={() => setQrfModalFlight(null)}
           onConfirm={(reason) => void handleActivateQrf(qrfModalFlight.id, reason)}
+        />
+      )}
+
+      {alternoModalFlight && isAdminOrHccDesk(userRole) && (
+        <AlternoModal
+          flight={alternoModalFlight}
+          onClose={() => setAlternoModalFlight(null)}
+          onConfirm={(ato, reason) => handleConfirmAlterno(alternoModalFlight.id, ato, reason)}
+          onClear={() => handleClearAlterno(alternoModalFlight.id)}
         />
       )}
 
