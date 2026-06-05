@@ -76,6 +76,7 @@ function buildStatusDiaPdfRows(s: StatusDiaDaySummary, manualOtp: DailyReportOtp
             "Factor de ocupación ejecutado",
             s.factorOcupacionRealPct != null ? `${s.factorOcupacionRealPct.toFixed(1)}%` : "—",
         ],
+        ["Pasajeros embarcados", s.pasajerosEmbarcados.toLocaleString("es-AR")],
         ["Vuelos reprogramados", String(s.countVuelosReprogramados)],
         ["PAX afectados (reprogramación)", String(s.paxAfectadosReprogramacion)],
         ["Afectaciones de ruta", String(s.countAfectacionesRuta)],

@@ -687,12 +687,19 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                         Los datos que se muestran a continuación provienen de la data extraída de los mensajes operacionales.
                     </p>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 print:gap-1.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-9 gap-2 print:gap-1.5">
                         <div className="rounded-lg border border-sky-200/90 bg-sky-50/80 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
                             <p className="text-[9px] font-black uppercase text-sky-900 leading-tight">Operados</p>
                             <p className="text-[8px] font-semibold text-sky-800/80 leading-tight">MVT enviado</p>
                             <p className="text-xl sm:text-2xl font-black text-sky-950 tabular-nums leading-tight mt-0.5">
                                 {statusDia.countVuelosOperados}
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-blue-200/90 bg-blue-50/80 p-2 print:p-1.5 print:border-slate-400 print:bg-white">
+                            <p className="text-[9px] font-black uppercase text-blue-900 leading-tight">Pasajeros embarcados</p>
+                            <p className="text-[8px] font-semibold text-blue-800/80 leading-tight">PAX MVT</p>
+                            <p className="text-xl sm:text-2xl font-black text-blue-950 tabular-nums leading-tight mt-0.5">
+                                {statusDia.pasajerosEmbarcados.toLocaleString("es-AR")}
                             </p>
                         </div>
                         <div className="rounded-lg border border-emerald-200/90 bg-emerald-50/90 p-2 print:p-1.5 print:border-slate-400 print:bg-white">

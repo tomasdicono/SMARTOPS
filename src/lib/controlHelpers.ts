@@ -950,6 +950,8 @@ export interface StatusDiaDaySummary {
     factorOcupacionProgramadoPct: number | null;
     /** Σ PAX MVT / Σ asientos solo en vuelos con MVT enviado (`mvtSentAt`). */
     factorOcupacionRealPct: number | null;
+    /** Σ PAX actual del MVT en vuelos operados (MVT enviado). */
+    pasajerosEmbarcados: number;
 }
 
 export function computeStatusDiaDaySummary(
@@ -1043,6 +1045,7 @@ export function computeStatusDiaDaySummary(
         countAfectacionesRuta: routeAfectacionesCount,
         factorOcupacionProgramadoPct,
         factorOcupacionRealPct,
+        pasajerosEmbarcados: paxMvtEnviadosSum,
     };
 }
 
@@ -1126,6 +1129,9 @@ export function buildStatusDiaPrensaText(
     } else {
         out.push("Factor de ocupación de vuelos ejecutados: sin dato.");
     }
+    out.push(
+        `Pasajeros embarcados (PAX MVT): ${s.pasajerosEmbarcados.toLocaleString("es-AR")}.`
+    );
     out.push("");
 
     out.push("Reprogramaciones");

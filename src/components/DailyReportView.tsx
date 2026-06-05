@@ -69,7 +69,7 @@ export function DailyReportView({
     const otpTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
     const otpComplete = isDailyReportOtpComplete(otpDraft);
-    const canDownloadPdf = rows.length > 0 && otpComplete;
+    const canDownloadPdf = otpComplete;
 
     useEffect(() => {
         setOtpDraft(dailyReportOtp);
@@ -140,11 +140,7 @@ export function DailyReportView({
         }
     };
 
-    const downloadTitle = !otpComplete
-        ? "Completá OTP0 y OTP15 para descargar el informe"
-        : rows.length === 0
-          ? "No hay vuelos con demoras cargadas para esta fecha"
-          : undefined;
+    const downloadTitle = !otpComplete ? "Completá OTP0 y OTP15 para descargar el informe" : undefined;
 
     return (
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -235,8 +231,11 @@ export function DailyReportView({
             </p>
 
             {rows.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 py-16 text-center text-slate-600 font-semibold">
-                    No hay vuelos con demoras cargadas (DLY TIME) para esta fecha.
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 py-16 text-center text-slate-600 font-semibold px-4">
+                    <p>No hay vuelos con demoras operativas para esta fecha.</p>
+                    <p className="text-sm font-normal text-slate-500 mt-2">
+                        Podés descargar el PDF igual con OTP y el resumen de status del día.
+                    </p>
                 </div>
             ) : (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-200/80">
