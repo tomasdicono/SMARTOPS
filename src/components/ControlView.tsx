@@ -309,6 +309,8 @@ export function ControlView({
                 periodLabel: statsRangeLabel,
                 airportLabel,
                 atdTimeLabel: statsAtdTimeLabel,
+                statsDateFrom,
+                statsDateTo,
             }),
         );
     };

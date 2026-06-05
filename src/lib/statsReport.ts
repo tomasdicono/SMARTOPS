@@ -14,6 +14,9 @@ import {
     listQrfFlightsForDay,
     otpDelayMinutes,
     rankDelayCodesByShare,
+    flightDateToIso,
+    normalizeIsoDateRange,
+    countDaysInclusiveIso,
     type AlternoStatusDiaRow,
     type BoardingStatsFilter,
     type DelayCodeShare,
@@ -30,15 +33,26 @@ export interface StatsReportBoardingRow {
     countWithBoarding: number;
 }
 
+export interface StatsReportOtpDailyColumn {
+    dateIso: string;
+    dateLabel: string;
+    otp15Pct: number | null;
+    otp60Pct: number | null;
+    nMvtOtp: number;
+}
+
 export interface StatsReportData {
     periodLabel: string;
     airportLabel: string;
     atdTimeLabel: string;
     generatedAt: string;
     flightCount: number;
-    otp0Pct: number | null;
     otp15Pct: number | null;
+    otp60Pct: number | null;
     otpBase: number;
+    /** OTP por día calendario del filtro (solo si el rango tiene más de un día). */
+    otpDailyColumns: StatsReportOtpDailyColumn[];
+    periodDayCount: number;
     demoraCodigos: DelayCodeShare[];
     totalPax: number;
     totalBags: number;
@@ -71,24 +85,72 @@ const BOARDING_FILTERS: { filter: BoardingStatsFilter; label: string }[] = [
 
 function computeOtpStats(flights: Flight[]): {
     nMvtOtp: number;
-    otp0Pct: number | null;
     otp15Pct: number | null;
+    otp60Pct: number | null;
 } {
     const conMvtOtp = flights.filter((f) => isJesFlightNumber(f.flt) && hasMvtAtdForOtp(f));
     const nMvtOtp = conMvtOtp.length;
-    let otp0Count = 0;
     let otp15Count = 0;
+    let otp60Count = 0;
     for (const f of conMvtOtp) {
         const d = otpDelayMinutes(f);
         if (d == null) continue;
-        if (d <= 0) otp0Count += 1;
         if (d <= 14) otp15Count += 1;
+        if (d < 60) otp60Count += 1;
     }
     return {
         nMvtOtp,
-        otp0Pct: nMvtOtp > 0 ? (otp0Count / nMvtOtp) * 100 : null,
         otp15Pct: nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null,
+        otp60Pct: nMvtOtp > 0 ? (otp60Count / nMvtOtp) * 100 : null,
     };
+}
+
+function enumerateIsoDaysInclusive(lo: string, hi: string): string[] {
+    const days: string[] = [];
+    let cur = lo;
+    while (cur <= hi) {
+        days.push(cur);
+        const d = new Date(`${cur}T12:00:00`);
+        if (Number.isNaN(d.getTime())) break;
+        d.setDate(d.getDate() + 1);
+        cur = d.toISOString().slice(0, 10);
+    }
+    return days;
+}
+
+function formatOtpDayColumnLabel(isoYmd: string): string {
+    const d = new Date(`${isoYmd}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return isoYmd;
+    return d.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
+}
+
+function computeOtpDailyColumns(
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+): StatsReportOtpDailyColumn[] {
+    const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
+    if (!lo || !hi) return [];
+    const byDay = new Map<string, Flight[]>();
+    for (const f of flights) {
+        if (f.cancelled) continue;
+        const key = flightDateToIso(f);
+        if (!key || key < lo || key > hi) continue;
+        const prev = byDay.get(key);
+        if (prev) prev.push(f);
+        else byDay.set(key, [f]);
+    }
+    return enumerateIsoDaysInclusive(lo, hi).map((dateIso) => {
+        const dayFlights = byDay.get(dateIso) ?? [];
+        const otp = computeOtpStats(dayFlights);
+        return {
+            dateIso,
+            dateLabel: formatOtpDayColumnLabel(dateIso),
+            otp15Pct: otp.otp15Pct,
+            otp60Pct: otp.otp60Pct,
+            nMvtOtp: otp.nMvtOtp,
+        };
+    });
 }
 
 export function buildStatsReportData(params: {
@@ -96,14 +158,29 @@ export function buildStatsReportData(params: {
     /** Vuelos del filtro (fecha, aeropuerto, ATD) para QRF / alterno. */
     eventFlights: Flight[];
     routeAfectaciones: RouteAfectacionStatsRow[];
+    statsDateFrom: string;
+    statsDateTo: string;
     periodLabel: string;
     airportLabel: string;
     atdTimeLabel: string;
 }): StatsReportData {
-    const { flights, eventFlights, routeAfectaciones, periodLabel, airportLabel, atdTimeLabel } = params;
+    const {
+        flights,
+        eventFlights,
+        routeAfectaciones,
+        statsDateFrom,
+        statsDateTo,
+        periodLabel,
+        airportLabel,
+        atdTimeLabel,
+    } = params;
     const operational = flights.filter((f) => !f.cancelled);
     const mvtSent = operational.filter(hasMvtSent);
     const otp = computeOtpStats(operational);
+    const { lo, hi } = normalizeIsoDateRange(statsDateFrom, statsDateTo);
+    const periodDayCount = lo && hi ? countDaysInclusiveIso(lo, hi) : 0;
+    const otpDailyColumns =
+        periodDayCount > 1 ? computeOtpDailyColumns(operational, statsDateFrom, statsDateTo) : [];
     const mix320 = computeFleetMixShare(operational, "A320");
     const mix321 = computeFleetMixShare(operational, "A321");
     const peaCounts = computePeaCounts(mvtSent);
@@ -130,9 +207,11 @@ export function buildStatsReportData(params: {
         atdTimeLabel,
         generatedAt,
         flightCount: operational.length,
-        otp0Pct: otp.otp0Pct,
         otp15Pct: otp.otp15Pct,
+        otp60Pct: otp.otp60Pct,
         otpBase: otp.nMvtOtp,
+        otpDailyColumns,
+        periodDayCount,
         demoraCodigos: rankDelayCodesByShare(operational),
         totalPax,
         totalBags,
@@ -272,9 +351,33 @@ function renderComplianceBlock(title: string, stats: MilestoneComplianceStats, c
     </div>`;
 }
 
+function renderOtpDailyTable(columns: StatsReportOtpDailyColumn[]): string {
+    if (columns.length <= 1) return "";
+    const header = columns.map((c) => `<th>${escapeHtml(c.dateLabel)}</th>`).join("");
+    const otp15Cells = columns
+        .map((c) => `<td>${escapeHtml(c.otp15Pct != null ? fmtPct(c.otp15Pct) : "—")}</td>`)
+        .join("");
+    const otp60Cells = columns
+        .map((c) => `<td>${escapeHtml(c.otp60Pct != null ? fmtPct(c.otp60Pct) : "—")}</td>`)
+        .join("");
+    return `
+    <div class="otp-daily-wrap">
+      <p class="sub center" style="margin-top:16px;margin-bottom:8px">OTP por día (JES con ATD)</p>
+      <table class="otp-daily-table">
+        <thead>
+          <tr><th class="otp-daily-corner"></th>${header}</tr>
+        </thead>
+        <tbody>
+          <tr><th>OTP 15</th>${otp15Cells}</tr>
+          <tr><th>OTP 60</th>${otp60Cells}</tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
 function renderOtpDonuts(data: StatsReportData): string {
-    const o0 = data.otp0Pct ?? 0;
     const o15 = data.otp15Pct ?? 0;
+    const o60 = data.otp60Pct ?? 0;
     const base =
         data.otpBase > 0
             ? `Base: ${data.otpBase} vuelo${data.otpBase !== 1 ? "s" : ""} JES con ATD`
@@ -285,24 +388,25 @@ function renderOtpDonuts(data: StatsReportData): string {
         <div class="donut-wrap">
           <svg viewBox="0 0 36 36" class="donut">
             <path class="donut-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-            <path class="donut-fill emerald" stroke-dasharray="${o0.toFixed(1)}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-          </svg>
-          <span class="donut-pct">${fmtPct(data.otp0Pct)}</span>
-        </div>
-        <p class="otp-title">OTP 0</p>
-      </div>
-      <div class="otp-item">
-        <div class="donut-wrap">
-          <svg viewBox="0 0 36 36" class="donut">
-            <path class="donut-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-            <path class="donut-fill teal" stroke-dasharray="${o15.toFixed(1)}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+            <path class="donut-fill emerald" stroke-dasharray="${o15.toFixed(1)}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
           </svg>
           <span class="donut-pct">${fmtPct(data.otp15Pct)}</span>
         </div>
         <p class="otp-title">OTP 15</p>
       </div>
+      <div class="otp-item">
+        <div class="donut-wrap">
+          <svg viewBox="0 0 36 36" class="donut">
+            <path class="donut-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+            <path class="donut-fill teal" stroke-dasharray="${o60.toFixed(1)}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+          </svg>
+          <span class="donut-pct">${fmtPct(data.otp60Pct)}</span>
+        </div>
+        <p class="otp-title">OTP 60</p>
+      </div>
     </div>
-    <p class="sub center">${escapeHtml(base)}</p>`;
+    <p class="sub center">${escapeHtml(base)}</p>
+    ${renderOtpDailyTable(data.otpDailyColumns)}`;
 }
 
 function buildStatsReportHtml(data: StatsReportData): string {
@@ -422,6 +526,12 @@ function buildStatsReportHtml(data: StatsReportData): string {
     .donut-fill.emerald { stroke: #059669; }
     .donut-fill.teal { stroke: #0d9488; }
     .donut-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 900; color: var(--navy); }
+    .otp-daily-wrap { overflow-x: auto; margin-top: 4px; }
+    .otp-daily-table { width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 280px; }
+    .otp-daily-table th, .otp-daily-table td { padding: 8px 10px; border: 1px solid var(--border); text-align: center; }
+    .otp-daily-table thead th { background: #f1f5f9; font-size: .65rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; color: var(--navy); }
+    .otp-daily-table tbody th { background: #f8fafc; font-weight: 900; text-align: left; color: var(--navy); white-space: nowrap; }
+    .otp-daily-corner { background: #f8fafc !important; }
     .sub { font-size: .75rem; color: var(--muted); font-weight: 600; margin: 8px 0 0; }
     .sub.center { text-align: center; }
     .empty { color: var(--muted); font-style: italic; font-size: .85rem; margin: 0; }
