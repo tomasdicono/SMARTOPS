@@ -40,6 +40,10 @@ export function flightNeedsCleaningWarning(f: Flight): boolean {
 
 const MONTH_ABBRS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
+function readQrfActiveFlag(raw: unknown): boolean {
+    return raw === true || raw === 1 || String(raw ?? "").toLowerCase() === "true";
+}
+
 /**
  * Firebase a veces devuelve números en campos tipados como string (p. ej. flt: 3010).
  * Eso rompe `.includes` / `.match` y puede dejar la app en pantalla blanca.
@@ -74,6 +78,16 @@ export function coerceFlightFromDb(f: Flight): Flight {
     if (f.dailyReportObs != null) {
         base.dailyReportObs = String(f.dailyReportObs);
     }
+    if (readQrfActiveFlag((f as { qrfActive?: unknown }).qrfActive)) {
+        base.qrfActive = true;
+    } else {
+        delete base.qrfActive;
+    }
+    if (f.qrfReason != null && String(f.qrfReason).trim() !== "") {
+        base.qrfReason = String(f.qrfReason).trim();
+    } else {
+        delete base.qrfReason;
+    }
     const explicitEtd = f.etd != null && String(f.etd).trim() !== "";
     if (explicitEtd) {
         base.etd = String(f.etd).trim();
@@ -104,9 +118,15 @@ export function isHitosCompleteForCard(f: Flight): boolean {
     return t != null && String(t).trim() !== "";
 }
 
-/** Misma lógica de color que el tablero de vuelos (sin caso Limpieza pendiente). */
+/** Vuelo en QRF (regreso a posición tras salida). */
+export function isQrfActive(f: Flight): boolean {
+    return readQrfActiveFlag((f as { qrfActive?: unknown }).qrfActive);
+}
+
+/** Misma lógica de color que el tablero de vuelos (sin caso Limpieza pendiente ni QRF). */
 export function getFlightCardTone(f: Flight): FlightCardTone {
     if (f.cancelled) return "grey";
+    if (isQrfActive(f)) return "grey";
     const hasMvt = isMvtCompleteForCard(f);
     const hasHitos = isHitosCompleteForCard(f);
     if (hasMvt && hasHitos) return "green";

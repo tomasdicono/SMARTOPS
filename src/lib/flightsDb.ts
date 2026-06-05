@@ -2,7 +2,7 @@ import { ref, set, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
 import { forFirebaseDb } from "./forFirebaseDb";
 import type { Flight } from "../types";
-import { coerceFlightFromDb } from "./flightHelpers";
+import { coerceFlightFromDb, isQrfActive } from "./flightHelpers";
 import {
     mergeHitosDataUnion,
     mergeMvtDataUnion,
@@ -10,8 +10,23 @@ import {
     normalizeMvtData,
 } from "./flightDataNormalize";
 import { buildFlightRtdbUpdate } from "./flightRtdbPatch";
+/** Prefiere el registro con más campos de programación (evita que un patch parcial pise el vuelo). */
+function flightRecordRichness(f: Flight): number {
+    return [f.date, f.flt, f.std, f.dep, f.arr, f.reg].filter((s) => String(s ?? "").trim() !== "").length;
+}
+
+function pickNonEmptyStr(...vals: (string | undefined | null)[]): string {
+    for (const v of vals) {
+        const t = String(v ?? "").trim();
+        if (t) return t;
+    }
+    return "";
+}
+
 /** Une dos lecturas del mismo `id` (p. ej. programación en `flights/0` y MVT en `flights/{id}`). */
 function mergeFlightRecords(a: Flight, b: Flight): Flight {
+    const richer = flightRecordRichness(a) >= flightRecordRichness(b) ? a : b;
+    const thinner = richer === a ? b : a;
     const mvtA = a.mvtData ? normalizeMvtData(a.mvtData) : undefined;
     const mvtB = b.mvtData ? normalizeMvtData(b.mvtData) : undefined;
     const hitosA = a.hitosData ? normalizeHitosData(a.hitosData) : undefined;
@@ -27,14 +42,17 @@ function mergeFlightRecords(a: Flight, b: Flight): Flight {
         return mergeHitosDataUnion(hitosA, hitosB);
     };
     return coerceFlightFromDb({
-        ...a,
-        ...b,
+        ...richer,
         mvtData: pickMvt(),
         hitosData: pickHitos(),
-        hitosCrewData: b.hitosCrewData ?? a.hitosCrewData,
-        cancelled: b.cancelled ?? a.cancelled,
-        cancellationReason: b.cancellationReason ?? a.cancellationReason,
-        dailyReportObs: b.dailyReportObs ?? a.dailyReportObs,
+        hitosCrewData: thinner.hitosCrewData ?? richer.hitosCrewData,
+        cancelled: thinner.cancelled ?? richer.cancelled,
+        cancellationReason: pickNonEmptyStr(thinner.cancellationReason, richer.cancellationReason),
+        dailyReportObs: pickNonEmptyStr(thinner.dailyReportObs, richer.dailyReportObs),
+        etd: pickNonEmptyStr(thinner.etd, richer.etd),
+        rescheduleReason: pickNonEmptyStr(thinner.rescheduleReason, richer.rescheduleReason),
+        qrfActive: isQrfActive(b) || isQrfActive(a) ? true : undefined,
+        qrfReason: pickNonEmptyStr(b.qrfReason, a.qrfReason) || undefined,
     });
 }
 

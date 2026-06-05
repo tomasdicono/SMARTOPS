@@ -1,6 +1,6 @@
 import type { Flight, RouteAfectacionEntry } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
-import { getAirlinePrefix, isJesFlightNumber } from "./flightHelpers";
+import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isQrfActive } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
 import {
@@ -925,6 +925,14 @@ export function rankStringsByFrequency(items: (string | undefined | null)[]): { 
         .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
 }
 
+export interface QrfStatusDiaRow {
+    flt: string;
+    reg: string;
+    route: string;
+    std: string;
+    reason: string;
+}
+
 /** Mismos agregados que la pestaña Control → Status día (día calendario + afectaciones de ruta). */
 export interface StatusDiaDaySummary {
     paxAfectadosReprogramacion: number;
@@ -952,6 +960,21 @@ export interface StatusDiaDaySummary {
     factorOcupacionRealPct: number | null;
     /** Σ PAX actual del MVT en vuelos operados (MVT enviado). */
     pasajerosEmbarcados: number;
+    /** Vuelos con QRF activo en el día filtrado. */
+    qrfFlights: QrfStatusDiaRow[];
+}
+
+export function listQrfFlightsForDay(flights: Flight[]): QrfStatusDiaRow[] {
+    return flights
+        .filter((f) => !f.cancelled && isQrfActive(f))
+        .sort(compareFlightsByStd)
+        .map((f) => ({
+            flt: `${getAirlinePrefix(f.flt)}${f.flt}`,
+            reg: String(f.reg ?? "").trim() || "—",
+            route: `${f.dep}-${f.arr}`,
+            std: String(f.std ?? "").trim() || "—",
+            reason: String(f.qrfReason ?? "").trim() || "—",
+        }));
 }
 
 export function computeStatusDiaDaySummary(
@@ -1027,6 +1050,8 @@ export function computeStatusDiaDaySummary(
     const factorOcupacionProgramadoPct = seatsOcc > 0 ? (paxProgramadosSum / seatsOcc) * 100 : null;
     const factorOcupacionRealPct = seatsMvtEnviados > 0 ? (paxMvtEnviadosSum / seatsMvtEnviados) * 100 : null;
 
+    const qrfFlights = listQrfFlightsForDay(dayFlights);
+
     return {
         paxAfectadosReprogramacion,
         countVuelosReprogramados,
@@ -1046,6 +1071,7 @@ export function computeStatusDiaDaySummary(
         factorOcupacionProgramadoPct,
         factorOcupacionRealPct,
         pasajerosEmbarcados: paxMvtEnviadosSum,
+        qrfFlights,
     };
 }
 
@@ -1132,6 +1158,16 @@ export function buildStatusDiaPrensaText(
     out.push(
         `Pasajeros embarcados (PAX MVT): ${s.pasajerosEmbarcados.toLocaleString("es-AR")}.`
     );
+    out.push("");
+
+    out.push("QRF (regreso a posición)");
+    if (s.qrfFlights.length === 0) {
+        out.push("Sin QRF activos.");
+    } else {
+        for (const row of s.qrfFlights) {
+            out.push(`  • ${row.flt} · ${row.reg} · ${row.route} · STD ${row.std} — ${row.reason}`);
+        }
+    }
     out.push("");
 
     out.push("Reprogramaciones");

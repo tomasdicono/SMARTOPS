@@ -15,6 +15,7 @@ import {
     clipSegmentToWindow,
     computeStatusDiaDaySummary,
     buildStatusDiaPrensaText,
+    listQrfFlightsForDay,
     normalizeIsoDateRange,
     countDaysInclusiveIso,
     flightMatchesStatsAtdTimeFilter,
@@ -60,6 +61,7 @@ import {
     Gauge,
     UserCheck,
     CircleCheck,
+    RotateCcw,
     PlugZap,
 } from "lucide-react";
 
@@ -291,10 +293,14 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
         );
     };
 
-    const statusDia = useMemo(
-        () => computeStatusDiaDaySummary(dayFlightsAirportFiltered, routeAfectaciones.length),
-        [dayFlightsAirportFiltered, routeAfectaciones.length]
-    );
+    const statusDia = useMemo(() => {
+        const summary = computeStatusDiaDaySummary(dayFlightsAirportFiltered, routeAfectaciones.length);
+        return {
+            ...summary,
+            /** QRF: siempre todos los del día (sin filtro de aeropuerto del status). */
+            qrfFlights: listQrfFlightsForDay(dayFlights),
+        };
+    }, [dayFlightsAirportFiltered, dayFlights, routeAfectaciones.length]);
 
     const [prensaModal, setPrensaModal] = useState<{ open: boolean; text: string }>({
         open: false,
@@ -762,6 +768,54 @@ export function ControlView({ flights, selectedDate, routeAfectaciones = [] }: P
                                 {statusDia.countAfectacionesRuta}
                             </p>
                         </div>
+                    </div>
+
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-2 sm:p-2.5 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400 print:bg-white">
+                        <div className="flex flex-wrap items-center gap-1.5 justify-between mb-1.5">
+                            <h4 className="text-[11px] font-black uppercase tracking-wide text-blue-900 flex items-center gap-1">
+                                <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                                QRF (regreso a posición)
+                            </h4>
+                            <span className="text-[10px] font-black tabular-nums bg-blue-100 text-blue-950 px-1.5 py-0.5 rounded border border-blue-200">
+                                {statusDia.qrfFlights.length}
+                            </span>
+                        </div>
+                        {statusDia.qrfFlights.length === 0 ? (
+                            <p className="text-[11px] text-slate-500 py-1">Sin QRF activos.</p>
+                        ) : (
+                            <div className="overflow-x-auto rounded border border-blue-100 bg-white print:border-slate-300">
+                                <table className="w-full text-[11px] min-w-[480px] leading-tight">
+                                    <thead>
+                                        <tr className="bg-blue-50 text-left text-[9px] font-black uppercase tracking-wide text-blue-900 print:bg-slate-100">
+                                            <th className="px-1.5 py-1 whitespace-nowrap">STD</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Vuelo</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Reg</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Ruta</th>
+                                            <th className="px-1.5 py-1">Motivo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-blue-50">
+                                        {statusDia.qrfFlights.map((row, i) => (
+                                            <tr key={`${row.flt}-${row.std}-${i}`} className="hover:bg-blue-50/40 print:hover:bg-transparent">
+                                                <td className="px-1.5 py-0.5 font-mono tabular-nums text-slate-700 whitespace-nowrap">
+                                                    {row.std}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 font-bold text-slate-900 whitespace-nowrap">
+                                                    {row.flt}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 font-mono">{row.reg}</td>
+                                                <td className="px-1.5 py-0.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
+                                                    {row.route}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 text-slate-700">
+                                                    <span className="line-clamp-2 break-words">{row.reason}</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
                     <div className="rounded-lg border border-cyan-200 bg-white p-2 sm:p-3 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400">

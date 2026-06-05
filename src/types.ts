@@ -34,6 +34,11 @@ export function canEditMvtDelayAfterSent(role: UserRole): boolean {
     return role === "HCC" || role === "AJS";
 }
 
+/** QRF activo: SC (y ADMIN) pueden reenviar el MVT completo sin cambiar STD/ETD. */
+export function canSubmitMvtAfterQrf(role: UserRole): boolean {
+    return role === "SC" || role === "ADMIN";
+}
+
 export interface User {
     id: string; // auth uid
     email: string;
@@ -126,6 +131,10 @@ export interface Flight {
 
     /** Notas libres en Reporte Diario (HCC / AJS). */
     dailyReportObs?: string;
+
+    /** QRF: avión regresó a posición; SC debe reenviar MVT (STD/ETD de programación sin cambio). */
+    qrfActive?: boolean;
+    qrfReason?: string;
 }
 
 /** Registro de cambio de ruta (Firebase: routeAfectaciones/{YYYY-MM-DD}/{pushId}) */

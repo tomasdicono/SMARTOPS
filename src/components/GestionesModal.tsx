@@ -15,8 +15,12 @@ interface Props {
     onApply: (parsed: ParseGestionesResult, opts: { syncStdSta: boolean; defaultRescheduleReason: string }) => Promise<void>;
 }
 
-/** Solo si el usuario no escribe motivo en el modal */
-const FALLBACK_REASON = "Gestión masiva (pegado tabla)";
+/** Solo cancelaciones sin MOTIVO en fila ni motivo global */
+const FALLBACK_CANCEL_REASON = "Gestión (pegado)";
+
+function parsedHasEtdRows(parsed: ParseGestionesResult): boolean {
+    return parsed.rows.some((row) => row.raw.etd?.trim());
+}
 
 export function GestionesModal({ flights, onClose, onApply }: Props) {
     const [text, setText] = useState("");
@@ -25,12 +29,15 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
     const [busy, setBusy] = useState(false);
     const [applyError, setApplyError] = useState<string | null>(null);
 
-    const reasonEfectivo = motivoOperativo.trim() || FALLBACK_REASON;
-
     const parsed = useMemo(() => {
         if (!text.trim()) return null;
         return parseGestionesTable(text);
     }, [text]);
+
+    const hasEtdRows = parsed != null && parsedHasEtdRows(parsed);
+    const motivoTrimmed = motivoOperativo.trim();
+    const motivoRescheduleOk = !hasEtdRows || motivoTrimmed.length > 0;
+    const defaultReasonForPreview = motivoTrimmed || FALLBACK_CANCEL_REASON;
 
     const preview = useMemo(() => {
         if (!parsed || parsed.rows.length === 0) return [];
@@ -47,12 +54,14 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
             const previewFlight = flight
                 ? applyGestionesRowToFlight(flight, row, {
                       syncStdSta,
-                      defaultRescheduleReason: reasonEfectivo,
+                      defaultRescheduleReason: row.raw.etd?.trim()
+                          ? motivoTrimmed
+                          : defaultReasonForPreview,
                   })
                 : null;
             return { row, flight, iso, note, previewFlight };
         });
-    }, [parsed, flights, syncStdSta, reasonEfectivo]);
+    }, [parsed, flights, syncStdSta, motivoTrimmed, defaultReasonForPreview]);
 
     const stats = useMemo(() => {
         const ok = preview.filter((p) => p.flight).length;
@@ -62,12 +71,16 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
 
     const handleApply = async () => {
         if (!parsed || parsed.rows.length === 0) return;
+        if (hasEtdRows && !motivoTrimmed) {
+            setApplyError("Ingresá el motivo operativo: es obligatorio cuando la tabla incluye reprogramaciones (ETD).");
+            return;
+        }
         setApplyError(null);
         setBusy(true);
         try {
             await onApply(parsed, {
                 syncStdSta,
-                defaultRescheduleReason: motivoOperativo.trim() || FALLBACK_REASON,
+                defaultRescheduleReason: motivoTrimmed || FALLBACK_CANCEL_REASON,
             });
             setText("");
             setMotivoOperativo("");
@@ -125,21 +138,45 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
                     <div>
                         <label className="block text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                             Motivo operativo
+                            {hasEtdRows ? <span className="text-red-600 dark:text-red-400 normal-case font-black"> *</span> : null}
                         </label>
                         <textarea
-                            className="w-full min-h-[72px] p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-600 rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-y placeholder:text-slate-400"
+                            className={`w-full min-h-[72px] p-3 bg-white dark:bg-slate-950 border rounded-xl text-sm font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-y placeholder:text-slate-400 ${
+                                hasEtdRows && !motivoTrimmed
+                                    ? "border-red-300 dark:border-red-700 focus:ring-red-400"
+                                    : "border-slate-200 dark:border-slate-600"
+                            }`}
                             placeholder="Ej.: Coordinación OCC · cambio de equipo por mantenimiento · demora ATC…"
                             value={motivoOperativo}
-                            onChange={(e) => setMotivoOperativo(e.target.value)}
+                            onChange={(e) => {
+                                setMotivoOperativo(e.target.value);
+                                if (applyError) setApplyError(null);
+                            }}
                             rows={2}
+                            required={hasEtdRows}
                         />
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-1.5">
                             Se guarda como motivo de reprogramación (ETD) y, en cancelaciones, si la fila no trae columna MOTIVO.{" "}
-                            {motivoOperativo.trim() ? (
-                                <span className="text-slate-700 dark:text-slate-300">Vista previa del texto: «{reasonEfectivo.slice(0, 120)}
-                                {reasonEfectivo.length > 120 ? "…" : ""}»</span>
+                            {hasEtdRows ? (
+                                motivoTrimmed ? (
+                                    <span className="text-slate-700 dark:text-slate-300">
+                                        Vista previa: «{motivoTrimmed.slice(0, 120)}
+                                        {motivoTrimmed.length > 120 ? "…" : ""}»
+                                    </span>
+                                ) : (
+                                    <span className="text-red-700 dark:text-red-300">
+                                        Obligatorio: la tabla incluye ETD (reprogramación).
+                                    </span>
+                                )
+                            ) : motivoTrimmed ? (
+                                <span className="text-slate-700 dark:text-slate-300">
+                                    Vista previa: «{motivoTrimmed.slice(0, 120)}
+                                    {motivoTrimmed.length > 120 ? "…" : ""}»
+                                </span>
                             ) : (
-                                <span className="text-amber-700 dark:text-amber-300">Vacío: se usará «{FALLBACK_REASON}».</span>
+                                <span className="text-slate-600 dark:text-slate-400">
+                                    Opcional si no hay ETD; se usará en cancelaciones sin columna MOTIVO.
+                                </span>
                             )}
                         </p>
                     </div>
@@ -246,7 +283,7 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
                     <button
                         type="button"
                         onClick={() => void handleApply()}
-                        disabled={busy || !parsed || parsed.rows.length === 0 || stats.ok === 0}
+                        disabled={busy || !parsed || parsed.rows.length === 0 || stats.ok === 0 || !motivoRescheduleOk}
                         className="flex-1 py-3 rounded-xl font-black bg-cyan-600 hover:bg-cyan-500 text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {busy ? "Aplicando…" : "Aplicar a vuelos"}

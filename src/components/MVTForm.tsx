@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import type { Flight } from "../types";
-import { Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
+import { RotateCcw, Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
 import {
     formatMinutesToHHMM,
@@ -12,6 +12,7 @@ import { getMvtMaxPax, getMvtMaxPaxLabel } from "../lib/mvtPaxLimits";
 import { evaluateMvtSendGate } from "../lib/mvtSendGate";
 import { DELAY_CODE_OPTIONS, formatDelayOption } from "../lib/delayCodes";
 import { normalizeMvtData } from "../lib/flightDataNormalize";
+import { isQrfActive } from "../lib/flightHelpers";
 import { clearMvtDraft, readLegacyMvtDraft } from "../lib/mvtDraftStorage";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 
@@ -130,7 +131,8 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
     const [isDirty, setIsDirty] = useState(false);
     const mvtSent = hasMvtSent(flight);
-    const fullEditAfterSent = Boolean(canEditFullMvtAfterSent && mvtSent);
+    const qrfActive = isQrfActive(flight);
+    const fullEditAfterSent = Boolean(canEditFullMvtAfterSent && (mvtSent || qrfActive));
     const fieldDisabled = (_isDelayField: boolean) => Boolean(readOnly);
     const canPersist = !readOnly && (!mvtSent || fullEditAfterSent);
     const onPersistRef = useRef(onPersistMvt);
@@ -274,7 +276,9 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
                 <div className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${fullEditAfterSent ? "border-cyan-200 bg-cyan-50 text-cyan-950" : "border-slate-200 bg-slate-100 text-slate-800"}`}>
                     <Lock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
                     <p className="font-semibold leading-snug">
-                        {fullEditAfterSent
+                        {qrfActive && fullEditAfterSent
+                            ? "QRF activo: reenviá el MVT completo. El STD de programación no cambia."
+                            : fullEditAfterSent
                             ? "MVT enviado. Podés corregir cualquier dato y guardar con «Actualizar MVT»."
                             : "MVT enviado. El formulario no puede editarse."}
                     </p>
@@ -457,10 +461,20 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
                         title={!canSendMvt ? sendBlockMessage ?? undefined : undefined}
                         className={`px-8 py-3 rounded-xl font-bold tracking-wide shadow-lg transition-all flex items-center gap-2 ${canSendMvt ? (mvtSent ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-xl hover:-translate-y-0.5" : "bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-xl hover:-translate-y-0.5") : "bg-slate-300 text-slate-600 cursor-not-allowed shadow-none opacity-70"}`}
                     >
-                        {canSendMvt && mvtSent ? (
-                            <CheckCircle2 className="w-5 h-5" />
+                        {mvtSent ? (
+                            qrfActive && fullEditAfterSent ? (
+                                <RotateCcw className="w-5 h-5" />
+                            ) : (
+                                <CheckCircle2 className="w-5 h-5" />
+                            )
                         ) : null}
-                        {mvtSent ? "Actualizar MVT" : "Enviar MVT"}
+                        {qrfActive && fullEditAfterSent
+                            ? mvtSent
+                                ? "Reenviar MVT (QRF)"
+                                : "Enviar MVT (QRF)"
+                            : mvtSent
+                              ? "Actualizar MVT"
+                              : "Enviar MVT"}
                     </button>
                 </div>
             ) : null}

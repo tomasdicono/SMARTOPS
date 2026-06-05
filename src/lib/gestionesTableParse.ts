@@ -473,9 +473,11 @@ export function applyGestionesRowToFlight(
     const etd = row.raw.etd?.trim();
     if (etd) {
         next.etd = normalizeTimeToken(etd);
-        if (!next.rescheduleReason?.trim()) {
-            next.rescheduleReason = defaultRescheduleReason;
+        const reason = next.rescheduleReason?.trim() || defaultRescheduleReason.trim();
+        if (!reason) {
+            throw new Error(`Fila ${row.rowIndex}: motivo de reprogramación obligatorio (ETD).`);
         }
+        next.rescheduleReason = reason;
     }
 
     const eta = row.raw.eta?.trim();

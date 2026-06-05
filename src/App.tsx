@@ -4,6 +4,7 @@ import {
   isHccDeskRole,
   isAdminOrHccDesk,
   canEditMvtDelayAfterSent,
+  canSubmitMvtAfterQrf,
   isLimpiezaRole,
   isScRole,
   type Flight,
@@ -32,6 +33,7 @@ import {
   getFlightCardTone,
   isMvtCompleteForCard,
   isHitosCompleteForCard,
+  isQrfActive,
   canDownloadHitosSummaryRole,
   hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
@@ -69,6 +71,7 @@ import { UserManagement } from "./components/UserManagement";
 import { userMustChangePassword } from "./lib/userMustChangePassword";
 import { ControlView } from "./components/ControlView";
 import { CancelFlightModal } from "./components/CancelFlightModal";
+import { QrfModal } from "./components/QrfModal";
 import { DeleteFlightConfirmModal } from "./components/DeleteFlightConfirmModal";
 import { DailyReportView } from "./components/DailyReportView";
 import { ManualFlightModal } from "./components/ManualFlightModal";
@@ -126,6 +129,7 @@ function App() {
   const [fleetVersion, setFleetVersion] = useState(0);
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
+  const [qrfModalFlight, setQrfModalFlight] = useState<Flight | null>(null);
   const [deleteConfirmFlight, setDeleteConfirmFlight] = useState<Flight | null>(null);
   const [rescheduleModalFlight, setRescheduleModalFlight] = useState<Flight | null>(null);
   /** Menú ⋯ en tarjeta de vuelo (reprogramar / cancelar) */
@@ -473,6 +477,10 @@ function App() {
     let payload = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
     payload = sanitizeMvtDelaysIfOnTime(payload, existingFlight?.std ?? "");
     const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
+    const qrfResubmit = existingFlight?.qrfActive && canSubmitMvtAfterQrf(userRole);
+    if (alreadySent && !canEditMvtDelayAfterSent(userRole) && !qrfResubmit) {
+      return;
+    }
     if (alreadySent) {
       payload.mvtSentAt = prevMvt.mvtSentAt;
       if (prevMvt.mvtEditedByHccAt) {
@@ -493,8 +501,9 @@ function App() {
     const existingFlight = flights.find((x) => x.id === id);
     const prevMvt = normalizeMvtData(existingFlight?.mvtData);
     const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
+    const qrfResubmit = existingFlight?.qrfActive && canSubmitMvtAfterQrf(userRole);
 
-    if (alreadySent && !canEditMvtDelayAfterSent(userRole)) {
+    if (alreadySent && !canEditMvtDelayAfterSent(userRole) && !qrfResubmit) {
       alert("El MVT ya fue enviado y no puede modificarse.");
       return;
     }
@@ -503,6 +512,29 @@ function App() {
       mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData)),
       existingFlight?.std ?? "",
     );
+
+    if (qrfResubmit) {
+      const sendGate = evaluateMvtSendGate({
+        mvt: payload,
+        std: existingFlight?.std ?? "",
+        reg: existingFlight?.reg,
+        delayOnlyMode: false,
+      });
+      if (!sendGate.ok) {
+        alert(sendGate.message);
+        return;
+      }
+      payload.mvtSentAt = new Date().toISOString();
+      const f = existingFlight;
+      const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
+      try {
+        await updateFlight(id, { mvtData: payload, qrfActive: false, qrfReason: "" });
+        setMvtSentToast({ open: true, subtitle: subtitle ? `${subtitle} · QRF` : "QRF" });
+      } catch {
+        alert("No se pudo guardar el MVT. Revisá la conexión e intentá de nuevo.");
+      }
+      return;
+    }
 
     if (alreadySent && canEditMvtDelayAfterSent(userRole)) {
       payload.mvtSentAt = prevMvt.mvtSentAt;
@@ -533,8 +565,9 @@ function App() {
 
     const f = existingFlight;
     const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
+    const qrfClear = existingFlight?.qrfActive ? { qrfActive: false as const, qrfReason: "" } : {};
     try {
-      await updateFlight(id, { mvtData: payload });
+      await updateFlight(id, { mvtData: payload, ...qrfClear });
       if (!alreadySent) {
         setMvtSentToast({ open: true, subtitle });
       }
@@ -637,6 +670,46 @@ function App() {
     setSelectedFlight((prev) => (prev?.id === id ? flights.find((x) => x.id === id) ?? null : prev));
   };
 
+  const handleToggleQrf = (flight: Flight) => {
+    if (!isHccDeskRole(userRole) || flight.cancelled) return;
+    if (flight.qrfActive) {
+      if (!window.confirm("¿Desactivar QRF? SC ya no podrá cargar o reenviar el MVT desde este estado.")) return;
+      void handleDeactivateQrf(flight.id);
+      return;
+    }
+    setQrfModalFlight(flight);
+  };
+
+  const handleActivateQrf = async (id: string, reason: string) => {
+    const trimmed = reason.trim();
+    try {
+      await updateFlight(id, { qrfActive: true, qrfReason: trimmed });
+      setQrfModalFlight(null);
+      setFlights((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, qrfActive: true, qrfReason: trimmed } : f)),
+      );
+      setSelectedFlight((prev) =>
+        prev?.id === id ? { ...prev, qrfActive: true, qrfReason: trimmed } : prev,
+      );
+    } catch {
+      alert("No se pudo activar QRF. Revisá la conexión e intentá de nuevo.");
+    }
+  };
+
+  const handleDeactivateQrf = async (id: string) => {
+    try {
+      await updateFlight(id, { qrfActive: false, qrfReason: "" });
+      setFlights((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, qrfActive: false, qrfReason: "" } : f)),
+      );
+      setSelectedFlight((prev) =>
+        prev?.id === id ? { ...prev, qrfActive: false, qrfReason: "" } : prev,
+      );
+    } catch {
+      alert("No se pudo desactivar QRF. Revisá la conexión e intentá de nuevo.");
+    }
+  };
+
   const handleUpdateRegistration = async (id: string, newReg: string) => {
     const flight = flights.find(f => f.id === id);
     if (!flight) return;
@@ -705,6 +778,10 @@ function App() {
     parsed: ParseGestionesResult,
     opts: { syncStdSta: boolean; defaultRescheduleReason: string }
   ) => {
+    const hasEtd = parsed.rows.some((row) => row.raw.etd?.trim());
+    if (hasEtd && !opts.defaultRescheduleReason.trim()) {
+      throw new Error("Motivo operativo obligatorio para reprogramaciones (ETD).");
+    }
     const updates: Promise<void>[] = [];
     const seen = new Set<string>();
     const byName = currentUser?.name?.trim() || currentUser?.email || "—";
@@ -1356,6 +1433,12 @@ function App() {
                 badgeText = "LIMPIEZA PENDIENTE";
                 badgeColor = "bg-red-600 border-white dark:border-[#450a0a] text-white";
                 badgeIcon = "alert";
+              } else if (isQrfActive(flight)) {
+                cardBg =
+                  "bg-blue-50 dark:bg-[#1e3a8a] border-blue-500 dark:border-blue-400 shadow-blue-900/20 hover:border-blue-600 dark:hover:border-blue-300";
+                badgeText = "QRF · MVT pendiente";
+                badgeColor = "bg-blue-600 border-white dark:border-[#1e3a8a] text-white";
+                badgeIcon = "alert";
               } else if (hasMvt && hasHitos) {
                 cardBg = "bg-emerald-50 dark:bg-[#064e3b] border-emerald-400 dark:border-emerald-500 shadow-emerald-900/20";
                 badgeText = "MVT ✓ · HITOS ✓";
@@ -1571,6 +1654,24 @@ function App() {
                     </div>
                   </div>
 
+                  {isHccDeskRole(userRole) && !isCancelled && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleToggleQrf(flight);
+                      }}
+                      className={`mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${
+                        flight.qrfActive
+                          ? "text-white bg-blue-600 border-blue-700 hover:bg-blue-700 dark:bg-blue-700 dark:border-blue-500 dark:hover:bg-blue-600"
+                          : "text-blue-950 dark:text-blue-100 bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                      }`}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                      QRF{flight.qrfActive ? " · activo" : ""}
+                    </button>
+                  )}
+
                   {isAdminOrHccDesk(userRole) && !isCancelled && (
                     <button
                       type="button"
@@ -1781,6 +1882,14 @@ function App() {
           flight={cancelModalFlight}
           onClose={() => setCancelModalFlight(null)}
           onConfirm={(reason) => handleCancelFlight(cancelModalFlight.id, reason)}
+        />
+      )}
+
+      {qrfModalFlight && (
+        <QrfModal
+          flight={qrfModalFlight}
+          onClose={() => setQrfModalFlight(null)}
+          onConfirm={(reason) => void handleActivateQrf(qrfModalFlight.id, reason)}
         />
       )}
 

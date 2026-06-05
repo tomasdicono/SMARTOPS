@@ -12,12 +12,13 @@ import {
     canDownloadHitosSummaryRole,
 } from "../lib/flightHelpers";
 import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
-import { isLimpiezaRole, canEditMvtDelayAfterSent } from "../types";
+import { isLimpiezaRole, canEditMvtDelayAfterSent, canSubmitMvtAfterQrf } from "../types";
+import { isQrfActive } from "../lib/flightHelpers";
 
 type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA";
 import { hasMvtSent } from "../lib/controlHelpers";
 import { downloadHitosSummary } from "../lib/downloadHitosSummary";
-import { X, Ban, Download } from "lucide-react";
+import { X, Ban, Download, RotateCcw } from "lucide-react";
 import { BroomIcon } from "./BroomIcon";
 
 interface Props {
@@ -73,10 +74,14 @@ export function FlightModal({
             userRole === "SC" ||
             userRole === "AJS");
     const isReadOnlyView = !!flight.cancelled;
+    const qrfActive = isQrfActive(flight);
     const mvtSent = hasMvtSent(flight);
     const canEditOperationalAfterSent =
         canEditMvtDelayAfterSent(userRole) && !isReadOnlyView;
-    const canEditMvtAfterSent = mvtSent && canEditOperationalAfterSent;
+    const canResubmitMvtAfterQrf =
+        qrfActive && canSubmitMvtAfterQrf(userRole) && !isReadOnlyView;
+    const canEditMvtAfterSent =
+        (mvtSent && canEditOperationalAfterSent) || canResubmitMvtAfterQrf;
     const mvtFormReadOnly = isReadOnlyView || (mvtSent && !canEditMvtAfterSent);
     const hitosSent =
         flight.hitosData?.hitosSentAt != null && String(flight.hitosData.hitosSentAt).trim() !== "";
@@ -199,6 +204,23 @@ export function FlightModal({
                                 <p className="text-sm text-rose-700 mt-1">Sin motivo registrado.</p>
                             )}
                             <p className="text-xs text-rose-700/80 mt-2">Los formularios están bloqueados; solo lectura.</p>
+                        </div>
+                    </div>
+                )}
+
+                {!flight.cancelled && qrfActive && (
+                    <div className="px-4 sm:px-6 py-3 bg-blue-50 border-b border-blue-200 flex items-start gap-3">
+                        <RotateCcw className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" aria-hidden />
+                        <div className="min-w-0">
+                            <p className="text-sm font-black text-blue-950 uppercase tracking-wide">QRF activo</p>
+                            <p className="text-sm text-blue-900 mt-1 leading-snug">
+                                El avión regresó a posición. SC debe {mvtSent ? "reenviar" : "cargar"} el MVT; el STD y la programación del vuelo no se modifican.
+                            </p>
+                            {flight.qrfReason?.trim() ? (
+                                <p className="text-sm text-blue-800 mt-2 font-semibold whitespace-pre-wrap">
+                                    Motivo: {flight.qrfReason.trim()}
+                                </p>
+                            ) : null}
                         </div>
                     </div>
                 )}
