@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { GANTT_CHARTS } from "../lib/hitosData";
+import { FUEL_BODEGA_HITO_NAMES, GANTT_CHARTS } from "../lib/hitosData";
 import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
@@ -36,13 +36,18 @@ interface Props {
     onPersistHitos?: (hitosData: HitosData) => void;
 }
 
+function hasMissingFuelBodegaEntries(entries: Record<string, string>): boolean {
+    return FUEL_BODEGA_HITO_NAMES.some((name) => !String(entries[name] ?? "").trim());
+}
+
 export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersistHitos }: Props) {
     const [revisarMsg, setRevisarMsg] = useState("");
     const [data, setData] = useState<HitosData>(() => normalizeHitosData(flight.hitosData));
     const hitosSent =
         flight.hitosData?.hitosSentAt != null && String(flight.hitosData.hitosSentAt).trim() !== "";
-    const lockedAfterSend = hitosSent && !canEditAfterSent;
-    const canPersist = !readOnly && (!hitosSent || !!canEditAfterSent);
+    const completingFuelBodega = hitosSent && hasMissingFuelBodegaEntries(data.entries);
+    const lockedAfterSend = hitosSent && !canEditAfterSent && !completingFuelBodega;
+    const canPersist = !readOnly && (!hitosSent || !!canEditAfterSent || completingFuelBodega);
 
     useEffect(() => {
         setData(normalizeHitosData(flight.hitosData));
@@ -168,7 +173,9 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                     <p className="font-semibold leading-snug">
                         {canEditAfterSent
                             ? "Hitos enviados. Podés corregir cualquier dato y guardar con «Guardar Hitos»."
-                            : "Hitos enviados. El formulario no puede editarse."}
+                            : completingFuelBodega
+                              ? "Hitos enviados. Completá combustible y bodega; el progreso se guarda automáticamente."
+                              : "Hitos enviados. El formulario no puede editarse."}
                     </p>
                 </div>
             ) : null}

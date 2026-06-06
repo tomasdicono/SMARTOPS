@@ -34,7 +34,7 @@ const NEW_MILESTONE_HEADERS = [
     "Fin Cargue de Bodegas",
 ] as const;
 
-/** Hitos combustible/bodega agregados en despliegue; no obligatorios si el vuelo ya tenía hitos enviados. */
+/** Hitos combustible/bodega agregados en despliegue (mismos en todas las cartas). */
 export const FUEL_BODEGA_HITO_NAMES: readonly string[] = NEW_MILESTONE_HEADERS;
 
 /** Valores Excel negativos → offsetMinutes positivos (T− respecto a salida). */

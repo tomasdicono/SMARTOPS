@@ -1,5 +1,5 @@
 import type { Flight, HitosData } from "../types";
-import { FUEL_BODEGA_HITO_NAMES, GANTT_CHARTS, type GanttChart, type MilestoneDef } from "./hitosData";
+import { GANTT_CHARTS, type GanttChart, type MilestoneDef } from "./hitosData";
 import { getHitosDepartureTime } from "./flightHelpers";
 import { normalizeHitosData } from "./flightDataNormalize";
 
@@ -80,23 +80,16 @@ export function hitosAlreadySent(flight: Flight): boolean {
     return t != null && String(t).trim() !== "";
 }
 
-function isFuelBodegaHitoName(name: string): boolean {
-    return FUEL_BODEGA_HITO_NAMES.includes(name);
-}
-
-/** Obligatorio al guardar/enviar; combustible/bodega solo en vuelos sin hitos enviados previos. */
-export function isRequiredOperationalHito(m: MilestoneDef, flight: Flight): boolean {
+/** Obligatorio al guardar/enviar (incluye combustible/bodega aunque el vuelo ya haya enviado hitos). */
+export function isRequiredOperationalHito(m: MilestoneDef, _flight?: Flight): boolean {
     if (!isActiveMilestone(m)) return false;
     if (m.name === "Inicio búsqueda de equipaje") return false;
-    if (isFuelBodegaHitoName(m.name) && hitosAlreadySent(flight)) return false;
     return true;
 }
 
-/** En UI: ocultar hitos nuevos en vuelos que ya enviaron hitos (no reabrir carga). */
-export function isVisibleOperationalHito(m: MilestoneDef, flight: Flight): boolean {
-    if (!isActiveMilestone(m)) return false;
-    if (isFuelBodegaHitoName(m.name) && hitosAlreadySent(flight)) return false;
-    return true;
+/** Hitos operacionales visibles en la pestaña Hitos. */
+export function isVisibleOperationalHito(m: MilestoneDef, _flight?: Flight): boolean {
+    return isActiveMilestone(m);
 }
 
 function ataMinutesFromHitos(data: HitosData): number | null {
