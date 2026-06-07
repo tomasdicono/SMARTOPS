@@ -85,6 +85,11 @@ export function resolveLatestOpenQrfEvent(history: QrfEvent[]): QrfEvent[] {
     return history.map((ev, i) => (i === openIdx ? { ...ev, resolvedAt: now } : ev));
 }
 
+export function removeQrfEventAt(history: QrfEvent[], index: number): QrfEvent[] {
+    if (index < 0 || index >= history.length) return history;
+    return history.filter((_, i) => i !== index);
+}
+
 /** Eventos QRF del vuelo (historial + compatibilidad con QRF activo sin historial). */
 export function getFlightQrfEvents(f: Flight): QrfEvent[] {
     const history = normalizeQrfHistory(f.qrfHistory);
