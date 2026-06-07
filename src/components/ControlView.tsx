@@ -41,6 +41,7 @@ import { ControlBagsStatsCard } from "./ControlBagsStatsCard";
 import { ControlCargaStatsCard } from "./ControlCargaStatsCard";
 import { ControlPaxStatsCard } from "./ControlPaxStatsCard";
 import { AlternoIcon } from "./AlternoIcon";
+import { RemoveQrfConfirmModal } from "./RemoveQrfConfirmModal";
 import {
     BarChart3,
     GanttChartSquare,
@@ -66,6 +67,7 @@ import {
     CircleCheck,
     RotateCcw,
     PlugZap,
+    X,
 } from "lucide-react";
 
 interface Props {
@@ -76,6 +78,7 @@ interface Props {
     routeAfectaciones?: RouteAfectacionEntry[];
     /** Todos los cambios de ruta por fecha (informe de estadísticas multi-día). */
     routeAfectacionesByDate?: Record<string, RouteAfectacionEntry[]>;
+    onRemoveQrfEvent?: (flightId: string, eventIndex: number) => void | Promise<void>;
 }
 
 const WINDOW_HOURS = 8;
@@ -105,6 +108,7 @@ export function ControlView({
     selectedDate,
     routeAfectaciones = [],
     routeAfectacionesByDate = {},
+    onRemoveQrfEvent,
 }: Props) {
     const [subTab, setSubTab] = useState<ControlSubTab>("statusDia");
     const [statsDateFrom, setStatsDateFrom] = useState(selectedDate);
@@ -116,6 +120,12 @@ export function ControlView({
     const [controlAirports, setControlAirports] = useState<string[]>([]);
     /** Inicio de la ventana visible en la línea de tiempo (0, 8 o 16 h) */
     const [timelineWindowStartH, setTimelineWindowStartH] = useState(0);
+    const [qrfDeleteTarget, setQrfDeleteTarget] = useState<{
+        flightId: string;
+        eventIndex: number;
+        flt: string;
+        reason: string;
+    } | null>(null);
     useEffect(() => {
         setStatsDateFrom(selectedDate);
         setStatsDateTo(selectedDate);
@@ -807,7 +817,7 @@ export function ControlView({
                             <p className="text-[11px] text-slate-500 py-1">Sin QRF registrados.</p>
                         ) : (
                             <div className="overflow-x-auto rounded border border-blue-100 bg-white print:border-slate-300">
-                                <table className="w-full text-[11px] min-w-[520px] leading-tight">
+                                <table className="w-full text-[11px] min-w-[560px] leading-tight">
                                     <thead>
                                         <tr className="bg-blue-50 text-left text-[9px] font-black uppercase tracking-wide text-blue-900 print:bg-slate-100">
                                             <th className="px-1.5 py-1 whitespace-nowrap">STD</th>
@@ -816,11 +826,14 @@ export function ControlView({
                                             <th className="px-1.5 py-1 whitespace-nowrap">Ruta</th>
                                             <th className="px-1.5 py-1 whitespace-nowrap">Estado</th>
                                             <th className="px-1.5 py-1">Motivo</th>
+                                            {onRemoveQrfEvent ? (
+                                                <th className="px-1 py-1 w-8 print:hidden" aria-label="Eliminar" />
+                                            ) : null}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-blue-50">
                                         {statusDia.qrfFlights.map((row, i) => (
-                                            <tr key={`${row.flt}-${row.std}-${row.status}-${i}`} className="hover:bg-blue-50/40 print:hover:bg-transparent">
+                                            <tr key={`${row.flightId}-${row.eventIndex}-${i}`} className="hover:bg-blue-50/40 print:hover:bg-transparent">
                                                 <td className="px-1.5 py-0.5 font-mono tabular-nums text-slate-700 whitespace-nowrap">
                                                     {row.std}
                                                 </td>
@@ -845,6 +858,26 @@ export function ControlView({
                                                 <td className="px-1.5 py-0.5 text-slate-700">
                                                     <span className="line-clamp-2 break-words">{row.reason}</span>
                                                 </td>
+                                                {onRemoveQrfEvent ? (
+                                                    <td className="px-1 py-0.5 text-center print:hidden">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setQrfDeleteTarget({
+                                                                    flightId: row.flightId,
+                                                                    eventIndex: row.eventIndex,
+                                                                    flt: row.flt,
+                                                                    reason: row.reason,
+                                                                })
+                                                            }
+                                                            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition-colors"
+                                                            title="Eliminar QRF"
+                                                            aria-label={`Eliminar QRF ${row.flt}`}
+                                                        >
+                                                            <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                                                        </button>
+                                                    </td>
+                                                ) : null}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1488,6 +1521,17 @@ export function ControlView({
                 </div>
             </div>
         )}
+        {qrfDeleteTarget && onRemoveQrfEvent ? (
+            <RemoveQrfConfirmModal
+                flt={qrfDeleteTarget.flt}
+                reason={qrfDeleteTarget.reason}
+                onClose={() => setQrfDeleteTarget(null)}
+                onConfirm={async () => {
+                    await onRemoveQrfEvent(qrfDeleteTarget.flightId, qrfDeleteTarget.eventIndex);
+                    setQrfDeleteTarget(null);
+                }}
+            />
+        ) : null}
         </>
     );
 }

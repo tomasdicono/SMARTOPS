@@ -41,6 +41,8 @@ import {
   appendQrfEvent,
   normalizeQrfHistory,
   resolveLatestOpenQrfEvent,
+  removeQrfEventAt,
+  getFlightQrfEvents,
   type FlightCardTone,
 } from "./lib/flightHelpers";
 import { FlightCardToneFilters } from "./components/FlightCardToneFilters";
@@ -754,6 +756,37 @@ function App() {
     }
   };
 
+  const handleRemoveQrfEvent = async (flightId: string, eventIndex: number) => {
+    const existingFlight = flights.find((f) => f.id === flightId);
+    if (!existingFlight) return;
+
+    const events = getFlightQrfEvents(existingFlight);
+    if (eventIndex < 0 || eventIndex >= events.length) return;
+
+    const history = normalizeQrfHistory(existingFlight.qrfHistory);
+    const newHistory = history.length > 0 ? removeQrfEventAt(history, eventIndex) : [];
+    const removed = events[eventIndex];
+    const patch: Partial<Flight> = { qrfHistory: newHistory.length > 0 ? newHistory : [] };
+
+    if (!removed.resolvedAt && existingFlight.qrfActive) {
+      patch.qrfActive = false;
+      patch.qrfReason = "";
+    }
+
+    try {
+      await updateFlight(flightId, patch);
+      setFlights((prev) =>
+        prev.map((f) => (f.id === flightId ? { ...f, ...patch } : f)),
+      );
+      setSelectedFlight((prev) =>
+        prev?.id === flightId ? { ...prev, ...patch } : prev,
+      );
+    } catch {
+      alert("No se pudo eliminar el QRF. Revisá la conexión e intentá de nuevo.");
+      throw new Error("qrf-delete-failed");
+    }
+  };
+
   const handleConfirmAlterno = async (id: string, ato: string, reason: string) => {
     try {
       await updateFlight(id, { alternoArr: ato, alternoReason: reason });
@@ -1383,6 +1416,7 @@ function App() {
             selectedDate={selectedDate}
             routeAfectaciones={routeAfectaciones}
             routeAfectacionesByDate={routeAfectacionesByDate}
+            onRemoveQrfEvent={handleRemoveQrfEvent}
           />
         ) : mainTab === "reporte" && isHccDeskRole(userRole) ? (
           <DailyReportView

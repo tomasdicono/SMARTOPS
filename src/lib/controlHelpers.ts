@@ -927,6 +927,8 @@ export function rankStringsByFrequency(items: (string | undefined | null)[]): { 
 }
 
 export interface QrfStatusDiaRow {
+    flightId: string;
+    eventIndex: number;
     flt: string;
     reg: string;
     route: string;
@@ -985,18 +987,20 @@ export function listQrfFlightsForDay(flights: Flight[]): QrfStatusDiaRow[] {
         const events = getFlightQrfEvents(f);
         if (events.length === 0) continue;
         const base = {
+            flightId: f.id,
             flt: `${getAirlinePrefix(f.flt)}${f.flt}`,
             reg: String(f.reg ?? "").trim() || "—",
             route: `${f.dep}-${f.arr}`,
             std: String(f.std ?? "").trim() || "—",
         };
-        for (const ev of events) {
+        events.forEach((ev, eventIndex) => {
             rows.push({
                 ...base,
+                eventIndex,
                 reason: String(ev.reason ?? "").trim() || "—",
                 status: ev.resolvedAt ? "Resuelto" : "Activo",
             });
-        }
+        });
     }
     return rows.sort((a, b) => a.std.localeCompare(b.std) || a.flt.localeCompare(b.flt));
 }
