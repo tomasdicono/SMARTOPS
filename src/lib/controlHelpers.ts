@@ -1,7 +1,7 @@
 import type { Flight, RouteAfectacionEntry } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
 import { normalizeAirportCode } from "./routeAfectaciones";
-import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isQrfActive, isAlternoActive } from "./flightHelpers";
+import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isAlternoActive, getFlightQrfEvents } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
 import {
@@ -932,6 +932,8 @@ export interface QrfStatusDiaRow {
     route: string;
     std: string;
     reason: string;
+    /** Activo = SC aún debe reenviar MVT; Resuelto = MVT reenviado o QRF desactivado. */
+    status: "Activo" | "Resuelto";
 }
 
 export interface AlternoStatusDiaRow {
@@ -970,23 +972,33 @@ export interface StatusDiaDaySummary {
     factorOcupacionRealPct: number | null;
     /** Σ PAX actual del MVT en vuelos operados (MVT enviado). */
     pasajerosEmbarcados: number;
-    /** Vuelos con QRF activo en el día filtrado. */
+    /** Vuelos con QRF registrado en el día filtrado (activos o ya resueltos). */
     qrfFlights: QrfStatusDiaRow[];
     /** Vuelos con alterno activo en el día filtrado. */
     alternoFlights: AlternoStatusDiaRow[];
 }
 
 export function listQrfFlightsForDay(flights: Flight[]): QrfStatusDiaRow[] {
-    return flights
-        .filter((f) => !f.cancelled && isQrfActive(f))
-        .sort(compareFlightsByStd)
-        .map((f) => ({
+    const rows: QrfStatusDiaRow[] = [];
+    for (const f of flights) {
+        if (f.cancelled) continue;
+        const events = getFlightQrfEvents(f);
+        if (events.length === 0) continue;
+        const base = {
             flt: `${getAirlinePrefix(f.flt)}${f.flt}`,
             reg: String(f.reg ?? "").trim() || "—",
             route: `${f.dep}-${f.arr}`,
             std: String(f.std ?? "").trim() || "—",
-            reason: String(f.qrfReason ?? "").trim() || "—",
-        }));
+        };
+        for (const ev of events) {
+            rows.push({
+                ...base,
+                reason: String(ev.reason ?? "").trim() || "—",
+                status: ev.resolvedAt ? "Resuelto" : "Activo",
+            });
+        }
+    }
+    return rows.sort((a, b) => a.std.localeCompare(b.std) || a.flt.localeCompare(b.flt));
 }
 
 export function listAlternoFlightsForDay(flights: Flight[]): AlternoStatusDiaRow[] {
@@ -1230,10 +1242,10 @@ export function buildStatusDiaPrensaText(
 
     out.push("QRF (regreso a posición)");
     if (s.qrfFlights.length === 0) {
-        out.push("Sin QRF activos.");
+        out.push("Sin QRF registrados.");
     } else {
         for (const row of s.qrfFlights) {
-            out.push(`  • ${row.flt} · ${row.reg} · ${row.route} · STD ${row.std} — ${row.reason}`);
+            out.push(`  • ${row.flt} · ${row.reg} · ${row.route} · STD ${row.std} · ${row.status} — ${row.reason}`);
         }
     }
     out.push("");

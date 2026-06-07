@@ -38,6 +38,9 @@ import {
   canDownloadHitosSummaryRole,
   hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
+  appendQrfEvent,
+  normalizeQrfHistory,
+  resolveLatestOpenQrfEvent,
   type FlightCardTone,
 } from "./lib/flightHelpers";
 import { FlightCardToneFilters } from "./components/FlightCardToneFilters";
@@ -552,7 +555,10 @@ function App() {
       const f = existingFlight;
       const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
       try {
-        await updateFlight(id, { mvtData: payload, qrfActive: false, qrfReason: "" });
+        const qrfHistory = resolveLatestOpenQrfEvent(
+          normalizeQrfHistory(existingFlight?.qrfHistory),
+        );
+        await updateFlight(id, { mvtData: payload, qrfActive: false, qrfReason: "", qrfHistory });
         setMvtSentToast({ open: true, subtitle: subtitle ? `${subtitle} · QRF` : "QRF" });
       } catch {
         alert("No se pudo guardar el MVT. Revisá la conexión e intentá de nuevo.");
@@ -589,7 +595,13 @@ function App() {
 
     const f = existingFlight;
     const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
-    const qrfClear = existingFlight?.qrfActive ? { qrfActive: false as const, qrfReason: "" } : {};
+    const qrfClear = existingFlight?.qrfActive
+      ? {
+          qrfActive: false as const,
+          qrfReason: "",
+          qrfHistory: resolveLatestOpenQrfEvent(normalizeQrfHistory(existingFlight.qrfHistory)),
+        }
+      : {};
     try {
       await updateFlight(id, { mvtData: payload, ...qrfClear });
       if (!alreadySent) {
@@ -706,14 +718,18 @@ function App() {
 
   const handleActivateQrf = async (id: string, reason: string) => {
     const trimmed = reason.trim();
+    const existingFlight = flights.find((f) => f.id === id);
+    const qrfHistory = appendQrfEvent(normalizeQrfHistory(existingFlight?.qrfHistory), trimmed);
     try {
-      await updateFlight(id, { qrfActive: true, qrfReason: trimmed });
+      await updateFlight(id, { qrfActive: true, qrfReason: trimmed, qrfHistory });
       setQrfModalFlight(null);
       setFlights((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, qrfActive: true, qrfReason: trimmed } : f)),
+        prev.map((f) =>
+          f.id === id ? { ...f, qrfActive: true, qrfReason: trimmed, qrfHistory } : f,
+        ),
       );
       setSelectedFlight((prev) =>
-        prev?.id === id ? { ...prev, qrfActive: true, qrfReason: trimmed } : prev,
+        prev?.id === id ? { ...prev, qrfActive: true, qrfReason: trimmed, qrfHistory } : prev,
       );
     } catch {
       alert("No se pudo activar QRF. Revisá la conexión e intentá de nuevo.");
@@ -721,13 +737,17 @@ function App() {
   };
 
   const handleDeactivateQrf = async (id: string) => {
+    const existingFlight = flights.find((f) => f.id === id);
+    const qrfHistory = resolveLatestOpenQrfEvent(normalizeQrfHistory(existingFlight?.qrfHistory));
     try {
-      await updateFlight(id, { qrfActive: false, qrfReason: "" });
+      await updateFlight(id, { qrfActive: false, qrfReason: "", qrfHistory });
       setFlights((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, qrfActive: false, qrfReason: "" } : f)),
+        prev.map((f) =>
+          f.id === id ? { ...f, qrfActive: false, qrfReason: "", qrfHistory } : f,
+        ),
       );
       setSelectedFlight((prev) =>
-        prev?.id === id ? { ...prev, qrfActive: false, qrfReason: "" } : prev,
+        prev?.id === id ? { ...prev, qrfActive: false, qrfReason: "", qrfHistory } : prev,
       );
     } catch {
       alert("No se pudo desactivar QRF. Revisá la conexión e intentá de nuevo.");

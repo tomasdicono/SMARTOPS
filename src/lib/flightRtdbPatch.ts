@@ -127,6 +127,10 @@ export function buildFlightRtdbUpdate(
         }
     }
 
+    if (patch.qrfHistory !== undefined) {
+        updates.qrfHistory = patch.qrfHistory;
+    }
+
     return forFirebaseDb(updates) as Record<string, unknown>;
 }
 

@@ -282,7 +282,7 @@ function renderEventTable(headers: string[], rows: string[][]): string {
 }
 
 function renderOperationalEventsSection(data: StatsReportData): string {
-    const qrfRows = data.qrfFlights.map((r) => [r.std, r.flt, r.reg, r.route, r.reason]);
+    const qrfRows = data.qrfFlights.map((r) => [r.std, r.flt, r.reg, r.route, r.status, r.reason]);
     const alternoRows = data.alternoFlights.map((r) => [
         r.std,
         r.flt,
@@ -306,7 +306,7 @@ function renderOperationalEventsSection(data: StatsReportData): string {
       <p class="sub">QRF, alternos y cambios de ruta según fechas, aeropuertos de origen y filtro ATD del informe.</p>
 
       <h3 class="evt-title">QRF (regreso a posición) · ${data.qrfFlights.length}</h3>
-      ${renderEventTable(["STD", "Vuelo", "Reg", "Ruta", "Motivo"], qrfRows)}
+      ${renderEventTable(["STD", "Vuelo", "Reg", "Ruta", "Estado", "Motivo"], qrfRows)}
 
       <h3 class="evt-title">Alternos · ${data.alternoFlights.length}</h3>
       ${renderEventTable(["STD", "Vuelo", "Reg", "Dest. prog.", "ATO", "Motivo"], alternoRows)}

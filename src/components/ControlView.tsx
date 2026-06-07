@@ -804,22 +804,23 @@ export function ControlView({
                             </span>
                         </div>
                         {statusDia.qrfFlights.length === 0 ? (
-                            <p className="text-[11px] text-slate-500 py-1">Sin QRF activos.</p>
+                            <p className="text-[11px] text-slate-500 py-1">Sin QRF registrados.</p>
                         ) : (
                             <div className="overflow-x-auto rounded border border-blue-100 bg-white print:border-slate-300">
-                                <table className="w-full text-[11px] min-w-[480px] leading-tight">
+                                <table className="w-full text-[11px] min-w-[520px] leading-tight">
                                     <thead>
                                         <tr className="bg-blue-50 text-left text-[9px] font-black uppercase tracking-wide text-blue-900 print:bg-slate-100">
                                             <th className="px-1.5 py-1 whitespace-nowrap">STD</th>
                                             <th className="px-1.5 py-1 whitespace-nowrap">Vuelo</th>
                                             <th className="px-1.5 py-1 whitespace-nowrap">Reg</th>
                                             <th className="px-1.5 py-1 whitespace-nowrap">Ruta</th>
+                                            <th className="px-1.5 py-1 whitespace-nowrap">Estado</th>
                                             <th className="px-1.5 py-1">Motivo</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-blue-50">
                                         {statusDia.qrfFlights.map((row, i) => (
-                                            <tr key={`${row.flt}-${row.std}-${i}`} className="hover:bg-blue-50/40 print:hover:bg-transparent">
+                                            <tr key={`${row.flt}-${row.std}-${row.status}-${i}`} className="hover:bg-blue-50/40 print:hover:bg-transparent">
                                                 <td className="px-1.5 py-0.5 font-mono tabular-nums text-slate-700 whitespace-nowrap">
                                                     {row.std}
                                                 </td>
@@ -829,6 +830,17 @@ export function ControlView({
                                                 <td className="px-1.5 py-0.5 font-mono">{row.reg}</td>
                                                 <td className="px-1.5 py-0.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
                                                     {row.route}
+                                                </td>
+                                                <td className="px-1.5 py-0.5 whitespace-nowrap">
+                                                    <span
+                                                        className={
+                                                            row.status === "Activo"
+                                                                ? "font-bold text-blue-800"
+                                                                : "font-semibold text-emerald-700"
+                                                        }
+                                                    >
+                                                        {row.status}
+                                                    </span>
                                                 </td>
                                                 <td className="px-1.5 py-0.5 text-slate-700">
                                                     <span className="line-clamp-2 break-words">{row.reason}</span>

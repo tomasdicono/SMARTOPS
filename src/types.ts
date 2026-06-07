@@ -135,10 +135,19 @@ export interface Flight {
     /** QRF: avión regresó a posición; SC debe reenviar MVT (STD/ETD de programación sin cambio). */
     qrfActive?: boolean;
     qrfReason?: string;
+    /** Registro persistente de QRF del día (permanece en estadísticas tras reenvío de MVT). */
+    qrfHistory?: QrfEvent[];
 
     /** Alterno: destino programado sin cambiar; ATO y motivo operativo. */
     alternoArr?: string;
     alternoReason?: string;
+}
+
+/** Evento QRF registrado en el vuelo (activo hasta `resolvedAt`). */
+export interface QrfEvent {
+    reason: string;
+    at: string;
+    resolvedAt?: string;
 }
 
 /** Registro de cambio de ruta (Firebase: routeAfectaciones/{YYYY-MM-DD}/{pushId}) */

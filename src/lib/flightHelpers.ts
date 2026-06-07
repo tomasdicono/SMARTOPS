@@ -1,4 +1,4 @@
-import type { Flight, HitosData, UserRole } from "../types";
+import type { Flight, HitosData, QrfEvent, UserRole } from "../types";
 import { parseHHmmToMinutes } from "./controlHelpers";
 import { isFlightIncompleteAndLate } from "./dateHelpers";
 import { normalizeHitosCrewData, normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
@@ -44,6 +44,78 @@ function readQrfActiveFlag(raw: unknown): boolean {
     return raw === true || raw === 1 || String(raw ?? "").toLowerCase() === "true";
 }
 
+function coerceQrfEvent(raw: unknown): QrfEvent | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const reason = String((raw as { reason?: unknown }).reason ?? "").trim();
+    const at = String((raw as { at?: unknown }).at ?? "").trim();
+    if (!reason && !at) return null;
+    const resolvedAtRaw = String((raw as { resolvedAt?: unknown }).resolvedAt ?? "").trim();
+    return {
+        reason: reason || "—",
+        at: at || "",
+        ...(resolvedAtRaw ? { resolvedAt: resolvedAtRaw } : {}),
+    };
+}
+
+/** Normaliza el historial QRF persistido en Firebase (array u objeto mapa). */
+export function normalizeQrfHistory(raw: unknown): QrfEvent[] {
+    if (raw == null) return [];
+    const items: unknown[] = Array.isArray(raw) ? raw : Object.values(raw as Record<string, unknown>);
+    return items
+        .map(coerceQrfEvent)
+        .filter((ev): ev is QrfEvent => ev != null)
+        .sort((a, b) => a.at.localeCompare(b.at));
+}
+
+export function appendQrfEvent(history: QrfEvent[], reason: string): QrfEvent[] {
+    const trimmed = reason.trim();
+    return [...history, { reason: trimmed || "—", at: new Date().toISOString() }];
+}
+
+export function resolveLatestOpenQrfEvent(history: QrfEvent[]): QrfEvent[] {
+    const now = new Date().toISOString();
+    let openIdx = -1;
+    for (let i = history.length - 1; i >= 0; i--) {
+        if (!history[i].resolvedAt) {
+            openIdx = i;
+            break;
+        }
+    }
+    if (openIdx < 0) return history;
+    return history.map((ev, i) => (i === openIdx ? { ...ev, resolvedAt: now } : ev));
+}
+
+/** Eventos QRF del vuelo (historial + compatibilidad con QRF activo sin historial). */
+export function getFlightQrfEvents(f: Flight): QrfEvent[] {
+    const history = normalizeQrfHistory(f.qrfHistory);
+    if (history.length > 0) return history;
+    if (isQrfActive(f)) {
+        const reason = String(f.qrfReason ?? "").trim();
+        if (reason) return [{ reason, at: "" }];
+    }
+    return [];
+}
+
+export function mergeQrfHistory(a: unknown, b: unknown): QrfEvent[] | undefined {
+    const merged = [...normalizeQrfHistory(a), ...normalizeQrfHistory(b)];
+    if (merged.length === 0) return undefined;
+    const byKey = new Map<string, QrfEvent>();
+    for (const ev of merged) {
+        const key = ev.at || `${ev.reason}::${ev.resolvedAt ?? "open"}`;
+        const prev = byKey.get(key);
+        if (!prev) {
+            byKey.set(key, ev);
+            continue;
+        }
+        byKey.set(key, {
+            ...prev,
+            ...ev,
+            resolvedAt: prev.resolvedAt ?? ev.resolvedAt,
+        });
+    }
+    return [...byKey.values()].sort((x, y) => x.at.localeCompare(y.at));
+}
+
 /**
  * Firebase a veces devuelve números en campos tipados como string (p. ej. flt: 3010).
  * Eso rompe `.includes` / `.match` y puede dejar la app en pantalla blanca.
@@ -87,6 +159,12 @@ export function coerceFlightFromDb(f: Flight): Flight {
         base.qrfReason = String(f.qrfReason).trim();
     } else {
         delete base.qrfReason;
+    }
+    const qrfHistory = normalizeQrfHistory(f.qrfHistory);
+    if (qrfHistory.length > 0) {
+        base.qrfHistory = qrfHistory;
+    } else {
+        delete base.qrfHistory;
     }
     const alternoArrRaw = String(f.alternoArr ?? "").trim().toUpperCase();
     if (alternoArrRaw.length >= 3) {

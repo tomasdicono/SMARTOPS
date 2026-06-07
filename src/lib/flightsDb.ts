@@ -2,7 +2,7 @@ import { ref, set, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
 import { forFirebaseDb } from "./forFirebaseDb";
 import type { Flight } from "../types";
-import { coerceFlightFromDb, isQrfActive } from "./flightHelpers";
+import { coerceFlightFromDb, isQrfActive, mergeQrfHistory } from "./flightHelpers";
 import {
     mergeHitosDataUnion,
     mergeMvtDataUnion,
@@ -53,6 +53,7 @@ function mergeFlightRecords(a: Flight, b: Flight): Flight {
         rescheduleReason: pickNonEmptyStr(thinner.rescheduleReason, richer.rescheduleReason),
         qrfActive: isQrfActive(b) || isQrfActive(a) ? true : undefined,
         qrfReason: pickNonEmptyStr(b.qrfReason, a.qrfReason) || undefined,
+        qrfHistory: mergeQrfHistory(a.qrfHistory, b.qrfHistory),
         alternoArr: pickNonEmptyStr(b.alternoArr, a.alternoArr) || undefined,
         alternoReason: pickNonEmptyStr(b.alternoReason, a.alternoReason) || undefined,
     });
