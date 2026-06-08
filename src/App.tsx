@@ -1467,7 +1467,7 @@ function App() {
             onAdd={handleAddFleetReg}
           />
         ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
-          <CostControllingView />
+          <CostControllingView flights={flights} />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             {mainTab === "tablero" && isHccDeskRole(userRole) && flightsForSelectedDate.length > 0 ? (

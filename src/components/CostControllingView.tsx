@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
+import type { Flight } from "../types";
 import {
-    ARGENTINA_AIRPORTS,
     COST_CONTROLLING_CATEGORIES,
+    computeCostControllingRows,
     currentYearMonth,
+    flightsInMonth,
     formatCostAmount,
     formatCostMonthLabel,
     formatCostWeekTitle,
-    getCostRatesForWeek,
+    formatUnitRate,
     getCostWeekPeriods,
     getCurrentCostWeekId,
     parseYearMonth,
@@ -14,7 +16,11 @@ import {
 } from "../lib/costControllingHelpers";
 import { CalendarDays, Calculator } from "lucide-react";
 
-export function CostControllingView() {
+interface Props {
+    flights: Flight[];
+}
+
+export function CostControllingView({ flights }: Props) {
     const [monthValue, setMonthValue] = useState(currentYearMonth);
     const parsed = parseYearMonth(monthValue);
     const year = parsed?.year ?? new Date().getFullYear();
@@ -26,10 +32,23 @@ export function CostControllingView() {
     const [selectedWeekId, setSelectedWeekId] = useState<CostWeekId>(defaultWeek);
 
     const activeWeek = weeks.find((w) => w.id === selectedWeekId) ?? weeks[0];
-    const rates = useMemo(
-        () => getCostRatesForWeek(year, month, activeWeek?.id ?? "w1"),
-        [year, month, activeWeek?.id],
+    const monthFlights = useMemo(() => flightsInMonth(flights, year, month), [flights, year, month]);
+
+    const rows = useMemo(
+        () => (activeWeek ? computeCostControllingRows(monthFlights, year, month, activeWeek) : []),
+        [monthFlights, year, month, activeWeek],
     );
+
+    const weekTotalPasadasSobreAla = useMemo(
+        () =>
+            rows.reduce((sum, row) => {
+                const v = row.costs.pasadasSobreAla;
+                return sum + (v != null && Number.isFinite(v) ? v : 0);
+            }, 0),
+        [rows],
+    );
+
+    const servicedRows = rows.filter((r) => r.provider != null);
 
     return (
         <div className="space-y-5 animate-in fade-in duration-200 pb-12">
@@ -41,12 +60,13 @@ export function CostControllingView() {
                             Cost controlling
                         </p>
                         <p className="text-sm font-semibold text-slate-600 max-w-3xl">
-                            Análisis por semanas fijas del mes:{" "}
-                            <span className="font-black text-slate-800">01–07</span>,{" "}
-                            <span className="font-black text-slate-800">08–15</span>,{" "}
-                            <span className="font-black text-slate-800">16–22</span> y{" "}
-                            <span className="font-black text-slate-800">23 a fin de mes</span>. Tres conceptos de
-                            costo por aeropuerto argentino (tarifas pendientes de carga).
+                            Semanas fijas del mes.{" "}
+                            <span className="font-black text-slate-800">Pasada</span> = vuelo operado con salida
+                            desde el aeropuerto.{" "}
+                            <span className="font-black text-slate-800">Swissport</span> (AEP/EZE): tarifa mensual por
+                            tramo de pasadas acumuladas.{" "}
+                            <span className="font-black text-slate-800">FlySeg</span>: tarifa semanal por tramo.
+                            Adicionales y bajo ala: pendientes.
                         </p>
                     </div>
                 </div>
@@ -87,38 +107,62 @@ export function CostControllingView() {
             </div>
 
             {activeWeek && (
-                <p className="text-sm font-semibold text-slate-600">
-                    Período activo:{" "}
-                    <span className="font-black text-slate-900">
-                        {formatCostWeekTitle(activeWeek, year, month)}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-semibold text-slate-600">
+                    <span>
+                        Período:{" "}
+                        <span className="font-black text-slate-900">
+                            {formatCostWeekTitle(activeWeek, year, month)}
+                        </span>
                     </span>
-                </p>
+                    <span>
+                        Total pasadas sobre ala (semana):{" "}
+                        <span className="font-black text-emerald-700 tabular-nums">
+                            {formatCostAmount(weekTotalPasadasSobreAla)}
+                        </span>
+                    </span>
+                </div>
             )}
 
             <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <table className="w-full text-sm min-w-[720px]">
+                <table className="w-full text-sm min-w-[960px]">
                     <thead className="bg-slate-100 text-left">
                         <tr className="text-xs font-black uppercase tracking-wider text-slate-600">
-                            <th className="px-4 py-3 whitespace-nowrap">Aeropuerto</th>
+                            <th className="px-3 py-3 whitespace-nowrap">Aeropuerto</th>
+                            <th className="px-3 py-3 whitespace-nowrap">Proveedor</th>
+                            <th className="px-3 py-3 whitespace-nowrap text-right">Pasadas</th>
+                            <th className="px-3 py-3 whitespace-nowrap text-right">Tarifa / pasada</th>
                             {COST_CONTROLLING_CATEGORIES.map((cat) => (
-                                <th key={cat.id} className="px-4 py-3 whitespace-nowrap text-right">
+                                <th key={cat.id} className="px-3 py-3 whitespace-nowrap text-right">
                                     {cat.label}
                                 </th>
                             ))}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {ARGENTINA_AIRPORTS.map((airport) => {
-                            const row = rates[airport] ?? {};
+                        {rows.map((row) => {
+                            const hasProvider = row.provider != null;
+                            const dim = hasProvider ? "" : "opacity-50";
                             return (
-                                <tr key={airport} className="hover:bg-slate-50/80">
-                                    <td className="px-4 py-3 font-mono font-black text-slate-900">{airport}</td>
+                                <tr key={row.airport} className={`hover:bg-slate-50/80 ${dim}`}>
+                                    <td className="px-3 py-3 font-mono font-black text-slate-900">{row.airport}</td>
+                                    <td className="px-3 py-3 font-semibold text-slate-700">{row.providerLabel}</td>
+                                    <td className="px-3 py-3 text-right tabular-nums font-bold text-slate-800">
+                                        {row.weekPasadas}
+                                        {row.provider === "swissport" && row.weekPasadas > 0 ? (
+                                            <span className="block text-[10px] font-semibold text-slate-500">
+                                                mes acum. {row.monthPasadasForTier}
+                                            </span>
+                                        ) : null}
+                                    </td>
+                                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600 tabular-nums">
+                                        {formatUnitRate(row.unitRatePasadasSobreAla)}
+                                    </td>
                                     {COST_CONTROLLING_CATEGORIES.map((cat) => (
                                         <td
                                             key={cat.id}
-                                            className="px-4 py-3 text-right tabular-nums font-semibold text-slate-500"
+                                            className="px-3 py-3 text-right tabular-nums font-semibold text-slate-700"
                                         >
-                                            {formatCostAmount(row[cat.id] ?? null)}
+                                            {formatCostAmount(row.costs[cat.id])}
                                         </td>
                                     ))}
                                 </tr>
@@ -129,8 +173,8 @@ export function CostControllingView() {
             </div>
 
             <p className="text-xs font-semibold text-slate-500">
-                {ARGENTINA_AIRPORTS.length} aeropuertos · {COST_CONTROLLING_CATEGORIES.length} conceptos por semana.
-                Los importes se cargarán en la próxima iteración.
+                {servicedRows.length} estaciones con proveedor sobre ala · {rows.length} aeropuertos argentinos en
+                tabla · adicionales sobre/bajo ala pendientes de carga.
             </p>
         </div>
     );
