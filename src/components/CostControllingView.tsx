@@ -48,6 +48,15 @@ export function CostControllingView({ flights }: Props) {
         [rows],
     );
 
+    const weekTotalAdicionalesSobreAla = useMemo(
+        () =>
+            rows.reduce((sum, row) => {
+                const v = row.costs.adicionalesSobreAla;
+                return sum + (v != null && Number.isFinite(v) ? v : 0);
+            }, 0),
+        [rows],
+    );
+
     const servicedRows = rows.filter((r) => r.provider != null);
 
     return (
@@ -66,7 +75,8 @@ export function CostControllingView({ flights }: Props) {
                             <span className="font-black text-slate-800">Swissport</span> (AEP/EZE): tarifa mensual por
                             tramo de pasadas acumuladas.{" "}
                             <span className="font-black text-slate-800">FlySeg</span>: tarifa semanal por tramo.
-                            Adicionales y bajo ala: pendientes.
+                            <span className="font-black text-slate-800"> Adicionales</span>: asistencias WCH (partida y
+                            arribo por escala) + horas extra. Bajo ala: pendiente.
                         </p>
                     </div>
                 </div>
@@ -120,6 +130,12 @@ export function CostControllingView({ flights }: Props) {
                             {formatCostAmount(weekTotalPasadasSobreAla)}
                         </span>
                     </span>
+                    <span>
+                        Total adicionales sobre ala (semana):{" "}
+                        <span className="font-black text-emerald-700 tabular-nums">
+                            {formatCostAmount(weekTotalAdicionalesSobreAla)}
+                        </span>
+                    </span>
                 </div>
             )}
 
@@ -163,6 +179,28 @@ export function CostControllingView({ flights }: Props) {
                                             className="px-3 py-3 text-right tabular-nums font-semibold text-slate-700"
                                         >
                                             {formatCostAmount(row.costs[cat.id])}
+                                            {cat.id === "adicionalesSobreAla" && row.adicionalesBreakdown ? (
+                                                <span className="block text-[10px] font-semibold text-slate-500 mt-0.5 max-w-[14rem] ml-auto">
+                                                    WCH {row.adicionalesBreakdown.wchTotal} · asist.{" "}
+                                                    {formatCostAmount(row.adicionalesBreakdown.asistencias)} · h.extra{" "}
+                                                    {formatCostAmount(row.adicionalesBreakdown.horaExtra)}
+                                                    {row.adicionalesBreakdown.flysegHoraExtraDuration ? (
+                                                        <> · {row.adicionalesBreakdown.flysegHoraExtraDuration}</>
+                                                    ) : null}
+                                                    {row.adicionalesBreakdown.swissportHoraExtraHours != null &&
+                                                    row.adicionalesBreakdown.swissportHoraExtraHours > 0 ? (
+                                                        <>
+                                                            {" "}
+                                                            ·{" "}
+                                                            {row.adicionalesBreakdown.swissportHoraExtraHours.toLocaleString(
+                                                                "es-AR",
+                                                                { maximumFractionDigits: 2 },
+                                                            )}
+                                                            h dly
+                                                        </>
+                                                    ) : null}
+                                                </span>
+                                            ) : null}
                                         </td>
                                     ))}
                                 </tr>
@@ -173,8 +211,9 @@ export function CostControllingView({ flights }: Props) {
             </div>
 
             <p className="text-xs font-semibold text-slate-500">
-                {servicedRows.length} estaciones con proveedor sobre ala · {rows.length} aeropuertos argentinos en
-                tabla · adicionales sobre/bajo ala pendientes de carga.
+                {servicedRows.length} estaciones con proveedor sobre ala · asistencias: WCHR+WCHS+WCHC por escala
+                (partida y arribo) · FlySeg h.extra: minutos demora salida ×4 · Swissport h.extra: salidas/arribos
+                &gt;45 min (arribo por ATA) · Sprv + Rampa + Traf×4.
             </p>
         </div>
     );

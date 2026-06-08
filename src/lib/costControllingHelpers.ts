@@ -1,5 +1,6 @@
-import type { Flight, UserRole } from "../types";
+import type { Flight, SSEE, UserRole } from "../types";
 import { filterFlightsForStats, flightDateToIso } from "./controlHelpers";
+import { computeMvtDelayStatus, parseTimeToMinutes } from "./mvtTime";
 
 /** Semanas fijas del mes para cost controlling. */
 export type CostWeekId = "w1" | "w2" | "w3" | "w4";
@@ -138,6 +139,24 @@ const FLYSEG_WEEKLY_RATES: number[] = (() => {
     return rates;
 })();
 
+const ASISTENCIAS_RATE_FLYSEG = 63_730.7;
+const ASISTENCIAS_RATE_SWISSPORT = 60_301;
+const HORA_EXTRA_RATE_FLYSEG = 63_730.7;
+const SWISSPORT_H_EXTRA_SPRV_OPER = 85_898;
+const SWISSPORT_H_EXTRA_RAMPA = 76_716;
+const SWISSPORT_H_EXTRA_TRAF = 76_716;
+const SWISSPORT_MIN_DELAY_MINUTES = 45;
+
+export interface AdicionalesBreakdown {
+    asistencias: number;
+    horaExtra: number;
+    wchTotal: number;
+    /** FlySeg: minutos demora salida acumulados × 4, en HH:MM:SS */
+    flysegHoraExtraDuration?: string;
+    /** Swissport: horas de demora facturables (salidas/arribos &gt; 45 min) */
+    swissportHoraExtraHours?: number;
+}
+
 export function canAccessCostControlling(role: UserRole): boolean {
     return role === "AJS";
 }
@@ -262,6 +281,7 @@ export interface CostControllingRow {
     monthPasadasForTier: number;
     unitRatePasadasSobreAla: number | null;
     costs: Record<CostCategoryId, number | null>;
+    adicionalesBreakdown: AdicionalesBreakdown | null;
 }
 
 function emptyCosts(): Record<CostCategoryId, number | null> {
@@ -270,6 +290,126 @@ function emptyCosts(): Record<CostCategoryId, number | null> {
         adicionalesSobreAla: null,
         pasadasBajoAla: null,
         adicionalesBajoAla: null,
+    };
+}
+
+function normAirport(code: string | undefined | null): string {
+    return String(code ?? "").trim().toUpperCase();
+}
+
+function scheduledDeparture(f: Flight): string {
+    return String(f.etd ?? f.std ?? "").trim();
+}
+
+function countWchAssistances(ssee: SSEE[] | undefined): number {
+    let total = 0;
+    for (const row of ssee ?? []) {
+        const t = String(row.type ?? "").trim().toUpperCase();
+        if (t !== "WCHR" && t !== "WCHS" && t !== "WCHC") continue;
+        total += parseInt(String(row.qty ?? "0"), 10) || 0;
+    }
+    return total;
+}
+
+/** Demora de salida en minutos (ATD vs ETD/STD). */
+function getDepartureDelayMinutes(f: Flight): number {
+    const m = f.mvtData;
+    const atd = String(m?.atd ?? "").trim();
+    const sched = scheduledDeparture(f);
+    if (!m || atd.replace(/\D/g, "").length < 3 || !sched) return 0;
+    return computeMvtDelayStatus(sched, atd, m.dlyTime1, m.dlyTime2).delayMinutes;
+}
+
+/** Demora de arribo en minutos (ATA hitos vs STA). */
+function getArrivalDelayMinutes(f: Flight): number {
+    const ata = String(f.hitosData?.ata ?? "").trim();
+    const sta = String(f.sta ?? "").trim();
+    if (ata.replace(/\D/g, "").length < 3 || !sta) return 0;
+    const ataMin = parseTimeToMinutes(ata);
+    const staMin = parseTimeToMinutes(sta);
+    if (ataMin <= staMin) return 0;
+    return ataMin - staMin;
+}
+
+function flightsTouchingAirportInRange(
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+    airport: string,
+): Flight[] {
+    const ap = normAirport(airport);
+    return flights.filter((f) => {
+        if (f.cancelled) return false;
+        const d = flightDateToIso(f);
+        if (d < isoFrom || d > isoTo) return false;
+        return normAirport(f.dep) === ap || normAirport(f.arr) === ap;
+    });
+}
+
+/** Minutos totales → HH:MM:SS (horas pueden superar 24). */
+export function formatMinutesToHHMMSS(totalMinutes: number): string {
+    const safe = Math.max(0, Math.round(totalMinutes));
+    const h = Math.floor(safe / 60);
+    const m = safe % 60;
+    return `${h}:${String(m).padStart(2, "0")}:00`;
+}
+
+function computeAdicionalesSobreAla(
+    provider: OverWingProviderId,
+    airport: string,
+    flights: Flight[],
+    weekStart: string,
+    weekEnd: string,
+): AdicionalesBreakdown {
+    const touching = flightsTouchingAirportInRange(flights, weekStart, weekEnd, airport);
+    const ap = normAirport(airport);
+    let wchTotal = 0;
+    for (const f of touching) {
+        wchTotal += countWchAssistances(f.mvtData?.ssee);
+    }
+
+    const asistenciasRate =
+        provider === "flyseg" ? ASISTENCIAS_RATE_FLYSEG : ASISTENCIAS_RATE_SWISSPORT;
+    const asistencias = wchTotal * asistenciasRate;
+
+    let horaExtra = 0;
+    let flysegHoraExtraDuration: string | undefined;
+    let swissportHoraExtraHours: number | undefined;
+
+    if (provider === "flyseg") {
+        let depDelaySum = 0;
+        for (const f of touching) {
+            if (normAirport(f.dep) === ap) depDelaySum += getDepartureDelayMinutes(f);
+        }
+        const billingMinutes = depDelaySum * 4;
+        flysegHoraExtraDuration = formatMinutesToHHMMSS(billingMinutes);
+        horaExtra = (billingMinutes / 60) * HORA_EXTRA_RATE_FLYSEG;
+    } else if (provider === "swissport") {
+        let delayHours = 0;
+        for (const f of touching) {
+            if (normAirport(f.dep) === ap) {
+                const dm = getDepartureDelayMinutes(f);
+                if (dm > SWISSPORT_MIN_DELAY_MINUTES) delayHours += dm / 60;
+            }
+            if (normAirport(f.arr) === ap) {
+                const am = getArrivalDelayMinutes(f);
+                if (am > SWISSPORT_MIN_DELAY_MINUTES) delayHours += am / 60;
+            }
+        }
+        swissportHoraExtraHours = delayHours;
+        horaExtra =
+            delayHours *
+            (SWISSPORT_H_EXTRA_SPRV_OPER +
+                SWISSPORT_H_EXTRA_RAMPA +
+                SWISSPORT_H_EXTRA_TRAF * 4);
+    }
+
+    return {
+        asistencias,
+        horaExtra,
+        wchTotal,
+        flysegHoraExtraDuration,
+        swissportHoraExtraHours,
     };
 }
 
@@ -296,6 +436,8 @@ export function computeCostControllingRows(
         const costs = emptyCosts();
 
         let unitRate: number | null = null;
+        let adicionalesBreakdown: AdicionalesBreakdown | null = null;
+
         if (provider === "swissport" && weekPasadas > 0) {
             unitRate = swissportUnitRate(airport, monthPasadasForTier);
             if (unitRate != null) {
@@ -308,6 +450,18 @@ export function computeCostControllingRows(
             }
         }
 
+        if (provider === "swissport" || provider === "flyseg") {
+            adicionalesBreakdown = computeAdicionalesSobreAla(
+                provider,
+                airport,
+                flights,
+                weekStart,
+                weekEnd,
+            );
+            costs.adicionalesSobreAla =
+                adicionalesBreakdown.asistencias + adicionalesBreakdown.horaExtra;
+        }
+
         return {
             airport,
             provider,
@@ -316,6 +470,7 @@ export function computeCostControllingRows(
             monthPasadasForTier,
             unitRatePasadasSobreAla: unitRate,
             costs,
+            adicionalesBreakdown,
         };
     });
 }
