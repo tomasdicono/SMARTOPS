@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { FUEL_BODEGA_HITO_NAMES, GANTT_CHARTS } from "../lib/hitosData";
+import { getFuelBodegaHitoNames, GANTT_CHARTS } from "../lib/hitosData";
 import { getAircraftInfo } from "../lib/fleetData";
 import type { Flight, HitosData } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
@@ -36,8 +36,8 @@ interface Props {
     onPersistHitos?: (hitosData: HitosData) => void;
 }
 
-function hasMissingFuelBodegaEntries(entries: Record<string, string>): boolean {
-    return FUEL_BODEGA_HITO_NAMES.some((name) => !String(entries[name] ?? "").trim());
+function hasMissingFuelBodegaEntries(chartName: string, entries: Record<string, string>): boolean {
+    return getFuelBodegaHitoNames(chartName).some((name) => !String(entries[name] ?? "").trim());
 }
 
 export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersistHitos }: Props) {
@@ -45,7 +45,8 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
     const [data, setData] = useState<HitosData>(() => normalizeHitosData(flight.hitosData));
     const hitosSent =
         flight.hitosData?.hitosSentAt != null && String(flight.hitosData.hitosSentAt).trim() !== "";
-    const completingFuelBodega = hitosSent && hasMissingFuelBodegaEntries(data.entries);
+    const completingFuelBodega =
+        hitosSent && hasMissingFuelBodegaEntries(data.ganttChartName, data.entries);
     const lockedAfterSend = hitosSent && !canEditAfterSent && !completingFuelBodega;
     const canPersist = !readOnly && (!hitosSent || !!canEditAfterSent || completingFuelBodega);
 
