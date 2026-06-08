@@ -131,6 +131,7 @@ const GANTT_CHART_SOURCE: GanttChart[] = [
             { name: "Inicio Cargue de Bodegas", offsetMinutes: 32 },
             { name: "Fin Cargue de Bodegas", offsetMinutes: 17 },
             { name: "Apertura puerta principal", offsetMinutes: 48 },
+            { name: "Apertura puerta bodega", offsetMinutes: 53 },
             { name: "Inicio de desembarque", offsetMinutes: null, ataOffsetMinutes: 2 },
             { name: "Fin de desembarque", offsetMinutes: null, afterDisembarkStartMinutes: 10 },
             { name: "Inicio Embarque", offsetMinutes: 38 },
