@@ -55,7 +55,7 @@ import {
   type FleetModelOption,
 } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2 } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator } from "lucide-react";
 import { AlternoIcon } from "./components/AlternoIcon";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
@@ -87,6 +87,8 @@ import { RescheduleFlightModal } from "./components/RescheduleFlightModal";
 import { PernocteView } from "./components/PernocteView";
 import { DiferidosView } from "./components/DiferidosView";
 import { MatriculasView } from "./components/MatriculasView";
+import { CostControllingView } from "./components/CostControllingView";
+import { canAccessCostControlling } from "./lib/costControllingHelpers";
 import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import {
   computePernocteRows,
@@ -131,7 +133,7 @@ import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "documentos"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -1352,6 +1354,20 @@ function App() {
               <Plane className="w-4 h-4 shrink-0" />
               Matrículas
             </button>
+            {canAccessCostControlling(userRole) && (
+              <button
+                type="button"
+                onClick={() => setMainTab("costControlling")}
+                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                  mainTab === "costControlling"
+                    ? "bg-emerald-600 text-white shadow-md"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <Calculator className="w-4 h-4 shrink-0" />
+                Cost controlling
+              </button>
+            )}
           </div>
         )}
 
@@ -1397,6 +1413,8 @@ function App() {
               <>Pernocte</>
             ) : mainTab === "matriculas" && isAdminOrHccDesk(userRole) ? (
               <>Matrículas</>
+            ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
+              <>Cost controlling</>
             ) : (
               <>
                 Vuelos
@@ -1448,6 +1466,8 @@ function App() {
             onSaveModel={handleSaveFleetModel}
             onAdd={handleAddFleetReg}
           />
+        ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
+          <CostControllingView />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             {mainTab === "tablero" && isHccDeskRole(userRole) && flightsForSelectedDate.length > 0 ? (
