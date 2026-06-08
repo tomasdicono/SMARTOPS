@@ -9,7 +9,7 @@ import {
     normalizeHitosData,
     normalizeMvtData,
 } from "./flightDataNormalize";
-import { buildFlightRtdbUpdate } from "./flightRtdbPatch";
+import { buildFlightRtdbUpdate, mergeFlightPatch } from "./flightRtdbPatch";
 /** Prefiere el registro con más campos de programación (evita que un patch parcial pise el vuelo). */
 function flightRecordRichness(f: Flight): number {
     return [f.date, f.flt, f.std, f.dep, f.arr, f.reg].filter((s) => String(s ?? "").trim() !== "").length;
@@ -109,7 +109,9 @@ export async function saveFlight(flight: Flight): Promise<void> {
     const snap = await get(flightDbRef(id));
     const existing = snap.val();
     if (existing != null && typeof existing === "object") {
-        const merged = mergeFlightRecords(coerceFlightFromDb(existing as Flight), f);
+        const existingFlight = coerceFlightFromDb(existing as Flight);
+        /** Unir MVT/Hitos sin perder datos; el guardado entrante gana en campos de programación (reg, ETD, ruta, etc.). */
+        const merged = mergeFlightPatch(mergeFlightRecords(existingFlight, f), f);
         await set(flightDbRef(id), forFirebaseDb(merged));
     } else {
         await set(flightDbRef(id), forFirebaseDb(f));

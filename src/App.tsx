@@ -934,6 +934,8 @@ function App() {
     }
     try {
       await Promise.all(updates);
+      setFlights(next);
+      setSelectedFlight((prev) => (prev ? next.find((x) => x.id === prev.id) ?? prev : prev));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(
