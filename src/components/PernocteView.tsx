@@ -47,9 +47,11 @@ export function PernocteView({
      * Si no hay borrador para esa matrícula, se muestra el valor guardado en `pernocteByReg`.
      */
     const [precargaQDraft, setPrecargaQDraft] = useState<Record<string, string | undefined>>({});
+    const [posicionDraft, setPosicionDraft] = useState<Record<string, string | undefined>>({});
 
     useEffect(() => {
         setPrecargaQDraft({});
+        setPosicionDraft({});
     }, [filterDate]);
 
     return (
@@ -90,12 +92,13 @@ export function PernocteView({
                 </div>
             ) : (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-md ring-1 ring-slate-200/80">
-                    <table className="w-full text-sm min-w-[820px]">
+                    <table className="w-full text-sm min-w-[920px]">
                         <thead>
                             <tr className="bg-slate-900 text-left text-[11px] font-black uppercase tracking-wider text-white">
                                 <th className="px-4 py-3 whitespace-nowrap">Matrícula</th>
                                 <th className="px-4 py-3 whitespace-nowrap">ATO</th>
                                 <th className="px-4 py-3 whitespace-nowrap min-w-[9rem]">Salida</th>
+                                <th className="px-4 py-3 whitespace-nowrap w-16 text-center">Posición</th>
                                 <th className="px-4 py-3 text-center whitespace-nowrap">Limpieza</th>
                                 <th className="px-4 py-3 whitespace-nowrap min-w-[8rem]">Precarga Q</th>
                                 <th className="px-4 py-3 text-center whitespace-nowrap">Precarga</th>
@@ -128,6 +131,24 @@ export function PernocteView({
                                             ) : (
                                                 <span className="text-slate-400 font-semibold">—</span>
                                             )}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <input
+                                                type="text"
+                                                maxLength={4}
+                                                value={
+                                                    posicionDraft[reg] !== undefined
+                                                        ? posicionDraft[reg]!
+                                                        : row.posicion
+                                                }
+                                                onChange={(e) => {
+                                                    const v = e.target.value.slice(0, 4);
+                                                    setPosicionDraft((prev) => ({ ...prev, [reg]: v }));
+                                                    onPatchRow(reg, { posicion: v });
+                                                }}
+                                                className="w-14 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-center font-mono text-sm font-bold tabular-nums text-slate-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                                                aria-label={`Posición ${reg}`}
+                                            />
                                         </td>
                                         <td className="px-4 py-3 text-center">
                                             <input

@@ -129,7 +129,7 @@ export function pernocteRowRequiresPrecarga(ato: string): boolean {
 }
 
 export function defaultPernocteRow(): PernocteRowState {
-    return { limpieza: false, precargaQ: "", precarga: false };
+    return { limpieza: false, precargaQ: "", precarga: false, posicion: "" };
 }
 
 export function coercePernocteRow(raw: unknown): PernocteRowState {
@@ -139,5 +139,6 @@ export function coercePernocteRow(raw: unknown): PernocteRowState {
         limpieza: !!o.limpieza,
         precargaQ: String(o.precargaQ ?? "").replace(/\D/g, ""),
         precarga: !!o.precarga,
+        posicion: String(o.posicion ?? "").trim(),
     };
 }

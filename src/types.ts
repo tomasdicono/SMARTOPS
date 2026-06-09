@@ -176,6 +176,8 @@ export interface PernocteRowState {
     limpieza: boolean;
     precargaQ: string;
     precarga: boolean;
+    /** Posición de estacionamiento / pernocte (texto libre). */
+    posicion: string;
 }
 
 /** Checklist ANEXO A por vuelo (Firebase: limpiezaChecklist/{flightId}) — compartido Limpieza y HCC. */
