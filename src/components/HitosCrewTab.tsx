@@ -207,6 +207,11 @@ export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: P
                         >
                             <div className="flex-1 min-w-0">
                                 <div className="font-bold text-slate-800 text-lg">{name}</div>
+                                {name === "Llegada crew" && (
+                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                        Horario de ingreso de crew al avión
+                                    </div>
+                                )}
                                 {targetInfo && (
                                     <div className="text-xs text-muted-foreground mt-0.5 font-bold">
                                         Objetivo según carta tripulación
