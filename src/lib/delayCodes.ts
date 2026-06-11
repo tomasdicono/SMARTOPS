@@ -25,6 +25,7 @@ export const DELAY_CODE_OPTIONS: DelayCodeOption[] = [
     { code: "23", label: "LATE ACCEPTANCE" },
     { code: "30", label: "REACTIONARY AIRPORT (EXTERNO)" },
     { code: "31", label: "AIRCRAFT DOCUMENTATION LATE/INACCURATE" },
+    { code: "32", label: "LOADING, UNLOADING, BULKY/SPECIAL LOAD, CABIN LOAD, LACK OF LOADING STAFF" },
     { code: "33", label: "LOADING EQUIPMENT" },
     { code: "34", label: "SERVICING EQUIPMENT" },
     { code: "35", label: "AIRCRAFT CLEANING" },
