@@ -16,6 +16,7 @@ export const CREW_LABEL_TO_GANTT_MILESTONE: Record<string, string> = {
 
 /** Texto aclaratorio bajo el nombre del hito en la pestaña Hitos. */
 export const HITO_MILESTONE_HINTS: Record<string, string> = {
+    "Llegada crew": "Horario de ingreso de crew al avión",
     "Inicio Embarque": "Primer pax sube al avión",
     "Fin embarque": "Último pax sube al avión",
 };
