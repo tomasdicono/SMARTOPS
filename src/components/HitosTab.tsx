@@ -14,6 +14,7 @@ import {
     isRequiredOperationalHito,
     isVisibleOperationalHito,
     parseToMins,
+    sortMilestonesChronologically,
 } from "../lib/hitosReference";
 import {
     hhmmDurationMinutes,
@@ -158,6 +159,16 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
         if (data.gpuNotUsed) return null;
         return hhmmDurationMinutes(data.gpuStart, data.gpuEnd, { maxMinutes: MAX_GPU_DURATION_MINUTES });
     }, [data.gpuStart, data.gpuEnd, data.gpuNotUsed]);
+
+    const visibleMilestones = useMemo(() => {
+        if (!selectedChart) return [];
+        return sortMilestonesChronologically(
+            selectedChart.milestones.filter((m) => isVisibleOperationalHito(m, flight)),
+            flight,
+            data,
+            selectedChart,
+        );
+    }, [selectedChart, flight, data]);
 
     const embarqueDurationPreview = useMemo(() => {
         const { start, end } = getEmbarqueTimesFromHitosEntries(data.entries);
@@ -345,7 +356,7 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                         </p>
                     ) : null}
                     <div className="space-y-4 flex-1">
-                        {selectedChart.milestones.filter((m) => isVisibleOperationalHito(m, flight)).map((m, idx) => {
+                        {visibleMilestones.map((m, idx) => {
                             const targetMins = getMilestoneTargetMinutes(flight, data, selectedChart, m);
                             const target = targetMins != null ? formatMins(targetMins) : "—";
                             const val = data.entries[m.name] || "";

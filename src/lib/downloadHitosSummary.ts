@@ -12,6 +12,7 @@ import {
     CREW_STORAGE_KEYS,
     getMilestoneTargetMinutes,
     isActiveMilestone,
+    sortMilestonesChronologically,
 } from "./hitosReference";
 
 /** PEA y duración total GPU para el resumen descargable (hitos operacionales). */
@@ -158,7 +159,13 @@ function buildHitosSummaryPayload(flight: Flight): HitosSummaryPayload {
             };
         } else {
             const rows: HitosSummaryRow[] = [];
-            for (const m of chart.milestones.filter((x) => isActiveMilestone(x))) {
+            const sortedMilestones = sortMilestonesChronologically(
+                chart.milestones.filter((x) => isActiveMilestone(x)),
+                flight,
+                h,
+                chart,
+            );
+            for (const m of sortedMilestones) {
                 const targetMins = getMilestoneTargetMinutes(flight, h, chart, m);
                 const esperado = targetMins != null ? formatMins(targetMins) : "—";
                 const val = h.entries[m.name] || "";

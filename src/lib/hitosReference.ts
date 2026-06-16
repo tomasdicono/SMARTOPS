@@ -99,6 +99,48 @@ function ataMinutesFromHitos(data: HitosData): number | null {
     return parseToMins(digits.padStart(4, "0").slice(-4));
 }
 
+/** Minutos para ordenar hitos; usa hora objetivo o estimación si falta ATA. */
+function getMilestoneSortMinutes(
+    flight: Flight,
+    data: HitosData,
+    chart: GanttChart,
+    m: MilestoneDef,
+): number {
+    const target = getMilestoneTargetMinutes(flight, data, chart, m);
+    if (target != null) return target;
+
+    if (m.ataOffsetMinutes != null || m.afterDisembarkStartMinutes != null) {
+        const ataDigits = String(data.ata ?? "").replace(/\D/g, "");
+        const ataMins =
+            ataDigits.length >= 3
+                ? parseToMins(ataDigits.padStart(4, "0").slice(-4))
+                : refMinutesForHitos(flight, data, chart) - chart.tatMinutes;
+        if (m.ataOffsetMinutes != null) return ataMins + m.ataOffsetMinutes;
+        return ataMins + 2 + (m.afterDisembarkStartMinutes ?? 0);
+    }
+    if (m.offsetMinutes != null) {
+        return refMinutesForHitos(flight, data, chart) - m.offsetMinutes;
+    }
+    return 24 * 60 * 2;
+}
+
+/** Hitos activos en orden cronológico según hora esperada de ocurrencia. */
+export function sortMilestonesChronologically(
+    milestones: MilestoneDef[],
+    flight: Flight,
+    data: HitosData,
+    chart: GanttChart,
+): MilestoneDef[] {
+    const indexed = milestones.map((m, i) => ({ m, i }));
+    indexed.sort((a, b) => {
+        const ta = getMilestoneSortMinutes(flight, data, chart, a.m);
+        const tb = getMilestoneSortMinutes(flight, data, chart, b.m);
+        if (ta !== tb) return ta - tb;
+        return a.i - b.i;
+    });
+    return indexed.map((x) => x.m);
+}
+
 /** Hora objetivo de un hito (T− desde salida o ATA+offset según carta). */
 export function getMilestoneTargetMinutes(
     flight: Flight,
