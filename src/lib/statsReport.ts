@@ -9,6 +9,7 @@ import {
     getBags,
     getMvtPaxOnly,
     hasMvtAtdForOtp,
+    hasMvtAtdForStatsFilter,
     hasMvtSent,
     listAlternoFlightsForDay,
     listQrfFlightsForDay,
@@ -25,7 +26,30 @@ import {
     type RouteAfectacionStatsRow,
 } from "./controlHelpers";
 import { isJesFlightNumber, getAirlinePrefix } from "./flightHelpers";
-import { formatMinutesToHHMM } from "./mvtTime";
+import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
+
+const SIMULTANEITY_AIRPORTS = ["AEP", "EZE"] as const;
+const SIMULTANEITY_WINDOW_MINUTES = 60;
+const SIMULTANEITY_10_PCT_MIN = 4;
+const SIMULTANEITY_30_PCT_MIN = 6;
+
+export interface SimultaneityDayRow {
+    dateIso: string;
+    dateLabel: string;
+    count: number;
+}
+
+export interface SimultaneityTierStats {
+    threshold: number;
+    totalCases: number;
+    days: SimultaneityDayRow[];
+}
+
+export interface SimultaneityAirportStats {
+    airport: string;
+    tier10: SimultaneityTierStats;
+    tier30: SimultaneityTierStats;
+}
 
 export interface StatsReportBoardingRow {
     label: string;
@@ -74,6 +98,8 @@ export interface StatsReportData {
     qrfFlights: QrfStatusDiaRow[];
     alternoFlights: AlternoStatusDiaRow[];
     routeAfectaciones: RouteAfectacionStatsRow[];
+    /** Simultaneidad de salidas por ATD (solo filtro AEP / EZE). */
+    simultaneities: SimultaneityAirportStats[] | null;
 }
 
 const BOARDING_FILTERS: { filter: BoardingStatsFilter; label: string }[] = [
@@ -124,6 +150,93 @@ function formatOtpDayColumnLabel(isoYmd: string): string {
     return d.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
 }
 
+function formatSimultaneityDayLabel(isoYmd: string): string {
+    const d = new Date(`${isoYmd}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return isoYmd;
+    return d.toLocaleDateString("es-AR", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+    });
+}
+
+/** Cuenta ventanas de 60 min con al menos `threshold` salidas (ATD), sin solapar el mismo pico. */
+function countSimultaneityEvents(sortedAtdMinutes: number[], threshold: number): number {
+    const n = sortedAtdMinutes.length;
+    if (n < threshold) return 0;
+    let events = 0;
+    let i = 0;
+    while (i < n) {
+        let j = i;
+        while (j < n && sortedAtdMinutes[j] - sortedAtdMinutes[i] <= SIMULTANEITY_WINDOW_MINUTES) {
+            j += 1;
+        }
+        if (j - i >= threshold) {
+            events += 1;
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    return events;
+}
+
+function computeSimultaneityTier(
+    flights: Flight[],
+    airport: string,
+    threshold: number,
+): SimultaneityTierStats {
+    const byDay = new Map<string, number[]>();
+    for (const f of flights) {
+        if (f.cancelled) continue;
+        if (String(f.dep ?? "").trim().toUpperCase() !== airport) continue;
+        if (!hasMvtAtdForStatsFilter(f)) continue;
+        const dateIso = flightDateToIso(f);
+        if (!dateIso) continue;
+        const atdMins = parseTimeToMinutes(f.mvtData!.atd!);
+        const prev = byDay.get(dateIso);
+        if (prev) prev.push(atdMins);
+        else byDay.set(dateIso, [atdMins]);
+    }
+
+    const days: SimultaneityDayRow[] = [];
+    let totalCases = 0;
+    for (const [dateIso, times] of byDay) {
+        times.sort((a, b) => a - b);
+        const count = countSimultaneityEvents(times, threshold);
+        if (count > 0) {
+            days.push({
+                dateIso,
+                dateLabel: formatSimultaneityDayLabel(dateIso),
+                count,
+            });
+            totalCases += count;
+        }
+    }
+    days.sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+    return { threshold, totalCases, days };
+}
+
+function resolveSimultaneityAirports(selectedAirports: readonly string[]): string[] {
+    const selected = new Set(selectedAirports.map((a) => String(a).trim().toUpperCase()).filter(Boolean));
+    if (selected.size === 0) return [];
+    return SIMULTANEITY_AIRPORTS.filter((ap) => selected.has(ap));
+}
+
+function computeSimultaneities(
+    flights: Flight[],
+    selectedAirports: readonly string[],
+): SimultaneityAirportStats[] | null {
+    const airports = resolveSimultaneityAirports(selectedAirports);
+    if (airports.length === 0) return null;
+    return airports.map((airport) => ({
+        airport,
+        tier10: computeSimultaneityTier(flights, airport, SIMULTANEITY_10_PCT_MIN),
+        tier30: computeSimultaneityTier(flights, airport, SIMULTANEITY_30_PCT_MIN),
+    }));
+}
+
 function computeOtpDailyColumns(
     flights: Flight[],
     isoFrom: string,
@@ -163,6 +276,7 @@ export function buildStatsReportData(params: {
     periodLabel: string;
     airportLabel: string;
     atdTimeLabel: string;
+    selectedAirports?: readonly string[];
 }): StatsReportData {
     const {
         flights,
@@ -173,6 +287,7 @@ export function buildStatsReportData(params: {
         periodLabel,
         airportLabel,
         atdTimeLabel,
+        selectedAirports = [],
     } = params;
     const operational = flights.filter((f) => !f.cancelled);
     const mvtSent = operational.filter(hasMvtSent);
@@ -232,6 +347,7 @@ export function buildStatsReportData(params: {
         qrfFlights: listQrfFlightsForDay(eventFlights),
         alternoFlights: listAlternoFlightsForDay(eventFlights),
         routeAfectaciones,
+        simultaneities: computeSimultaneities(operational, selectedAirports),
     };
 }
 
@@ -279,6 +395,60 @@ function renderEventTable(headers: string[], rows: string[][]): string {
         )
         .join("");
     return `<div class="evt-wrap"><table class="evt-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function renderSimultaneityTierBlock(tier: SimultaneityTierStats, title: string, description: string): string {
+    const dayRows =
+        tier.days.length === 0
+            ? ""
+            : tier.days
+                  .map(
+                      (d) =>
+                          `<tr><td>${escapeHtml(d.dateLabel)}</td><td class="mono center">${d.count}</td></tr>`,
+                  )
+                  .join("");
+    const table =
+        tier.days.length === 0
+            ? '<p class="empty">Sin casos en el período.</p>'
+            : `<div class="evt-wrap"><table class="evt-table simult-table">
+        <thead><tr><th>Día</th><th>Casos</th></tr></thead>
+        <tbody>${dayRows}</tbody>
+      </table></div>`;
+    return `
+    <div class="simult-tier">
+      <h3 class="evt-title">${escapeHtml(title)}</h3>
+      <p class="sub">${escapeHtml(description)}</p>
+      <p class="simult-total"><strong>Total:</strong> ${tier.totalCases} caso${tier.totalCases !== 1 ? "s" : ""}</p>
+      ${table}
+    </div>`;
+}
+
+function renderSimultaneitiesSection(data: StatsReportData): string {
+    if (!data.simultaneities?.length) return "";
+    const blocks = data.simultaneities
+        .map(
+            (ap) => `
+      <div class="simult-airport">
+        <h3 class="simult-ap-title">${escapeHtml(ap.airport)}</h3>
+        ${renderSimultaneityTierBlock(
+            ap.tier10,
+            "Simultaneidad al 10%",
+            `Salidas con ATD: ${SIMULTANEITY_10_PCT_MIN} o más vuelos en una ventana de ${SIMULTANEITY_WINDOW_MINUTES} minutos.`,
+        )}
+        ${renderSimultaneityTierBlock(
+            ap.tier30,
+            "Simultaneidad al 30%",
+            `Salidas con ATD: ${SIMULTANEITY_30_PCT_MIN} o más vuelos en una ventana de ${SIMULTANEITY_WINDOW_MINUTES} minutos.`,
+        )}
+      </div>`,
+        )
+        .join("");
+    return `
+    <section class="section">
+      <h2>Simultaneidades</h2>
+      <p class="sub">Picos de salidas por hora de ATD del MVT en el aeropuerto de origen seleccionado.</p>
+      ${blocks}
+    </section>`;
 }
 
 function renderOperationalEventsSection(data: StatsReportData): string {
@@ -542,6 +712,13 @@ function buildStatsReportHtml(data: StatsReportData): string {
     .evt-table th { text-align: left; padding: 6px 8px; background: #f1f5f9; font-size: .65rem; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; color: var(--navy); border-bottom: 1px solid var(--border); }
     .evt-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
     .evt-table tr:nth-child(even) td { background: #fafafa; }
+    .simult-airport { margin-bottom: 20px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
+    .simult-airport:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .simult-ap-title { margin: 0 0 12px; font-size: .95rem; font-weight: 900; color: var(--navy); }
+    .simult-tier { margin-bottom: 16px; }
+    .simult-total { margin: 0 0 8px; font-size: .85rem; font-weight: 700; color: var(--text); }
+    .simult-table { min-width: 280px; max-width: 420px; }
+    .center { text-align: center; }
     footer { text-align: center; font-size: .7rem; color: var(--muted); margin-top: 24px; }
     @media print {
       body { background: #fff; padding: 12px; }
@@ -619,6 +796,8 @@ function buildStatsReportHtml(data: StatsReportData): string {
       <p class="sub">Participación de cada código en demoras MVT del filtro (top 12).</p>
       ${delayBars}
     </section>
+
+    ${renderSimultaneitiesSection(data)}
 
     ${renderOperationalEventsSection(data)}
 

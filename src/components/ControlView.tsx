@@ -321,6 +321,7 @@ export function ControlView({
                 atdTimeLabel: statsAtdTimeLabel,
                 statsDateFrom,
                 statsDateTo,
+                selectedAirports: controlAirports,
             }),
         );
     };
