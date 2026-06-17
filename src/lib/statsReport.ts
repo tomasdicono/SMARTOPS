@@ -421,6 +421,7 @@ function renderEventTable(headers: string[], rows: string[][]): string {
 }
 
 function renderSimultaneityTierBlock(tier: SimultaneityTierStats, title: string, description: string): string {
+    const totalFlights = tier.cases.reduce((s, c) => s + c.flightCount, 0);
     const caseRows =
         tier.cases.length === 0
             ? ""
@@ -430,12 +431,17 @@ function renderSimultaneityTierBlock(tier: SimultaneityTierStats, title: string,
                           `<tr><td>${escapeHtml(c.dateLabel)}</td><td class="mono">${escapeHtml(c.windowStartLabel)}</td><td class="mono center">${c.flightCount}</td></tr>`,
                   )
                   .join("");
+    const totalRow =
+        tier.cases.length === 0
+            ? ""
+            : `<tfoot><tr class="simult-total-row"><td colspan="2"><strong>Total</strong></td><td class="mono center"><strong>${totalFlights}</strong></td></tr></tfoot>`;
     const table =
         tier.cases.length === 0
             ? '<p class="empty">Sin casos en el período.</p>'
             : `<div class="evt-wrap"><table class="evt-table simult-table">
         <thead><tr><th>Día</th><th>Ventana (desde)</th><th>Vuelos simultáneos</th></tr></thead>
         <tbody>${caseRows}</tbody>
+        ${totalRow}
       </table></div>`;
     return `
     <div class="simult-tier">
@@ -741,6 +747,7 @@ function buildStatsReportHtml(data: StatsReportData): string {
     .simult-tier { margin-bottom: 16px; }
     .simult-total { margin: 0 0 8px; font-size: .85rem; font-weight: 700; color: var(--text); }
     .simult-table { min-width: 280px; max-width: 420px; }
+    .simult-total-row td { background: #f1f5f9; border-top: 2px solid var(--border); font-weight: 800; }
     .center { text-align: center; }
     footer { text-align: center; font-size: .7rem; color: var(--muted); margin-top: 24px; }
     @media print {
