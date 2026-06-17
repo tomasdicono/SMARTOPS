@@ -33,16 +33,18 @@ const SIMULTANEITY_WINDOW_MINUTES = 60;
 const SIMULTANEITY_10_PCT_MIN = 4;
 const SIMULTANEITY_30_PCT_MIN = 6;
 
-export interface SimultaneityDayRow {
+export interface SimultaneityCaseRow {
     dateIso: string;
     dateLabel: string;
-    count: number;
+    /** Inicio de la ventana de 60 min (ATD). */
+    windowStartLabel: string;
+    flightCount: number;
 }
 
 export interface SimultaneityTierStats {
     threshold: number;
     totalCases: number;
-    days: SimultaneityDayRow[];
+    cases: SimultaneityCaseRow[];
 }
 
 export interface SimultaneityAirportStats {
@@ -161,11 +163,27 @@ function formatSimultaneityDayLabel(isoYmd: string): string {
     });
 }
 
-/** Cuenta ventanas de 60 min con al menos `threshold` salidas (ATD), sin solapar el mismo pico. */
-function countSimultaneityEvents(sortedAtdMinutes: number[], threshold: number): number {
+/** Máximo de salidas en cualquier ventana de 60 min dentro del tramo [start, end). */
+function maxFlightsInWindowRange(sortedAtdMinutes: number[], start: number, end: number): number {
+    let max = 0;
+    for (let i = start; i < end; i++) {
+        let j = i;
+        while (j < end && sortedAtdMinutes[j] - sortedAtdMinutes[i] <= SIMULTANEITY_WINDOW_MINUTES) {
+            j += 1;
+        }
+        max = Math.max(max, j - i);
+    }
+    return max;
+}
+
+/** Detecta casos de simultaneidad: ventanas de 60 min con al menos `threshold` salidas (ATD). */
+function findSimultaneityCases(
+    sortedAtdMinutes: number[],
+    threshold: number,
+): { windowStartMinutes: number; flightCount: number }[] {
     const n = sortedAtdMinutes.length;
-    if (n < threshold) return 0;
-    let events = 0;
+    if (n < threshold) return [];
+    const cases: { windowStartMinutes: number; flightCount: number }[] = [];
     let i = 0;
     while (i < n) {
         let j = i;
@@ -173,13 +191,16 @@ function countSimultaneityEvents(sortedAtdMinutes: number[], threshold: number):
             j += 1;
         }
         if (j - i >= threshold) {
-            events += 1;
+            cases.push({
+                windowStartMinutes: sortedAtdMinutes[i],
+                flightCount: maxFlightsInWindowRange(sortedAtdMinutes, i, j),
+            });
             i = j;
         } else {
             i += 1;
         }
     }
-    return events;
+    return cases;
 }
 
 function computeSimultaneityTier(
@@ -200,22 +221,24 @@ function computeSimultaneityTier(
         else byDay.set(dateIso, [atdMins]);
     }
 
-    const days: SimultaneityDayRow[] = [];
-    let totalCases = 0;
+    const caseRows: SimultaneityCaseRow[] = [];
     for (const [dateIso, times] of byDay) {
         times.sort((a, b) => a - b);
-        const count = countSimultaneityEvents(times, threshold);
-        if (count > 0) {
-            days.push({
+        for (const c of findSimultaneityCases(times, threshold)) {
+            caseRows.push({
                 dateIso,
                 dateLabel: formatSimultaneityDayLabel(dateIso),
-                count,
+                windowStartLabel: formatMinutesToHHMM(c.windowStartMinutes),
+                flightCount: c.flightCount,
             });
-            totalCases += count;
         }
     }
-    days.sort((a, b) => a.dateIso.localeCompare(b.dateIso));
-    return { threshold, totalCases, days };
+    caseRows.sort((a, b) => {
+        const d = a.dateIso.localeCompare(b.dateIso);
+        if (d !== 0) return d;
+        return a.windowStartLabel.localeCompare(b.windowStartLabel);
+    });
+    return { threshold, totalCases: caseRows.length, cases: caseRows };
 }
 
 function resolveSimultaneityAirports(selectedAirports: readonly string[]): string[] {
@@ -398,21 +421,21 @@ function renderEventTable(headers: string[], rows: string[][]): string {
 }
 
 function renderSimultaneityTierBlock(tier: SimultaneityTierStats, title: string, description: string): string {
-    const dayRows =
-        tier.days.length === 0
+    const caseRows =
+        tier.cases.length === 0
             ? ""
-            : tier.days
+            : tier.cases
                   .map(
-                      (d) =>
-                          `<tr><td>${escapeHtml(d.dateLabel)}</td><td class="mono center">${d.count}</td></tr>`,
+                      (c) =>
+                          `<tr><td>${escapeHtml(c.dateLabel)}</td><td class="mono">${escapeHtml(c.windowStartLabel)}</td><td class="mono center">${c.flightCount}</td></tr>`,
                   )
                   .join("");
     const table =
-        tier.days.length === 0
+        tier.cases.length === 0
             ? '<p class="empty">Sin casos en el período.</p>'
             : `<div class="evt-wrap"><table class="evt-table simult-table">
-        <thead><tr><th>Día</th><th>Casos</th></tr></thead>
-        <tbody>${dayRows}</tbody>
+        <thead><tr><th>Día</th><th>Ventana (desde)</th><th>Vuelos simultáneos</th></tr></thead>
+        <tbody>${caseRows}</tbody>
       </table></div>`;
     return `
     <div class="simult-tier">
