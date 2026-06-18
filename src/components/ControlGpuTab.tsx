@@ -3,6 +3,7 @@ import type { Flight } from "../types";
 import { getAirlinePrefix } from "../lib/flightHelpers";
 import {
     buildGpuUsageFlightRows,
+    computeAverageGpuConnectionWaitMinutes,
     computeAverageGpuUsageMinutes,
     countDaysInclusiveIso,
     filterFlightsForStats,
@@ -16,7 +17,7 @@ import {
 import { ControlAirportMultiSelect } from "./ControlAirportMultiSelect";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { formatMinutesToHHMM } from "../lib/mvtTime";
-import { ChevronDown, Globe, ListOrdered, PlugZap } from "lucide-react";
+import { ChevronDown, Clock, Globe, ListOrdered, PlugZap } from "lucide-react";
 
 interface Props {
     flights: Flight[];
@@ -130,6 +131,7 @@ export function ControlGpuTab({
     }, [flights, dateFrom, dateTo, airportFilter, selectedAirports]);
 
     const avgGpu = useMemo(() => computeAverageGpuUsageMinutes(gpuFlights), [gpuFlights]);
+    const avgGpuWait = useMemo(() => computeAverageGpuConnectionWaitMinutes(gpuFlights), [gpuFlights]);
     const topGpuRows = useMemo(() => buildGpuUsageFlightRows(gpuFlights), [gpuFlights]);
     const internationalGpuRows = useMemo(
         () => topGpuRows.filter(({ flight }) => flightTouchesInternationalGpuDestination(flight)),
@@ -183,8 +185,8 @@ export function ControlGpuTab({
                 </div>
 
                 <p className="text-[11px] text-slate-500 max-w-3xl leading-snug -mt-2">
-                    Duración GPU desde hitos operacionales (inicio → fin). Se excluyen vuelos marcados como «no se
-                    utilizó GPU» y los sin horarios válidos.
+                    Duración GPU desde hitos operacionales (inicio → fin) y tiempo de espera de conexión (ATA →
+                    inicio). Se excluyen vuelos marcados como «no se utilizó GPU» y los sin horarios válidos.
                 </p>
                 {periodLabel ? (
                     <p className="text-xs font-semibold text-slate-600 -mt-2">
@@ -204,24 +206,46 @@ export function ControlGpuTab({
                     </p>
                 ) : null}
 
-                <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white p-5">
-                    <p className="text-xs font-black uppercase text-amber-900 flex items-center gap-1.5">
-                        <PlugZap className="w-4 h-4 shrink-0" aria-hidden />
-                        Uso promedio GPU
-                    </p>
-                    <p className="text-[11px] text-amber-800/90 font-semibold mt-1">
-                        Promedio de duración (inicio → fin) en el período
-                    </p>
-                    <p className="text-4xl font-black text-amber-950 mt-3 tabular-nums">
-                        {avgGpu.avgMinutes != null
-                            ? formatMinutesToHHMM(Math.round(avgGpu.avgMinutes))
-                            : "—"}
-                    </p>
-                    <p className="text-xs text-amber-900/80 mt-2 font-semibold">
-                        {avgGpu.countWithGpu > 0
-                            ? `${avgGpu.countWithGpu} vuelo${avgGpu.countWithGpu !== 1 ? "s" : ""} con GPU informada`
-                            : "Sin vuelos con inicio y fin GPU en el período"}
-                    </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white p-5">
+                        <p className="text-xs font-black uppercase text-amber-900 flex items-center gap-1.5">
+                            <PlugZap className="w-4 h-4 shrink-0" aria-hidden />
+                            Uso promedio GPU
+                        </p>
+                        <p className="text-[11px] text-amber-800/90 font-semibold mt-1">
+                            Promedio de duración (inicio → fin) en el período
+                        </p>
+                        <p className="text-4xl font-black text-amber-950 mt-3 tabular-nums">
+                            {avgGpu.avgMinutes != null
+                                ? formatMinutesToHHMM(Math.round(avgGpu.avgMinutes))
+                                : "—"}
+                        </p>
+                        <p className="text-xs text-amber-900/80 mt-2 font-semibold">
+                            {avgGpu.countWithGpu > 0
+                                ? `${avgGpu.countWithGpu} vuelo${avgGpu.countWithGpu !== 1 ? "s" : ""} con GPU informada`
+                                : "Sin vuelos con inicio y fin GPU en el período"}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50/80 to-white p-5">
+                        <p className="text-xs font-black uppercase text-sky-900 flex items-center gap-1.5">
+                            <Clock className="w-4 h-4 shrink-0" aria-hidden />
+                            Tiempo espera de conexión
+                        </p>
+                        <p className="text-[11px] text-sky-800/90 font-semibold mt-1">
+                            Promedio desde ATA hasta inicio de uso GPU
+                        </p>
+                        <p className="text-4xl font-black text-sky-950 mt-3 tabular-nums">
+                            {avgGpuWait.avgMinutes != null
+                                ? formatMinutesToHHMM(Math.round(avgGpuWait.avgMinutes))
+                                : "—"}
+                        </p>
+                        <p className="text-xs text-sky-900/80 mt-2 font-semibold">
+                            {avgGpuWait.countWithWait > 0
+                                ? `${avgGpuWait.countWithWait} vuelo${avgGpuWait.countWithWait !== 1 ? "s" : ""} con ATA e inicio GPU informados`
+                                : "Sin vuelos con ATA e inicio GPU en el período"}
+                        </p>
+                    </div>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">

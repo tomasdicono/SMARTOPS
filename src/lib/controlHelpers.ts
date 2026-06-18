@@ -565,6 +565,34 @@ export function computeAverageGpuUsageMinutes(flights: Flight[]): {
     return { avgMinutes: sum / mins.length, countWithGpu: mins.length };
 }
 
+/** Máxima espera plausible entre ATA e inicio de uso GPU. */
+export const MAX_GPU_CONNECTION_WAIT_MINUTES = 12 * 60;
+
+/**
+ * Minutos de espera desde ATA hasta inicio de uso GPU (hitos operacionales).
+ * Requiere ATA e inicio GPU válidos; excluye «no se utilizó GPU».
+ */
+export function gpuConnectionWaitMinutesFromFlight(f: Flight): number | null {
+    const h = normalizeHitosData(f.hitosData);
+    if (h.gpuNotUsed) return null;
+    return hhmmDurationMinutes(h.ata, h.gpuStart, { maxMinutes: MAX_GPU_CONNECTION_WAIT_MINUTES });
+}
+
+/** Promedio de minutos de espera de conexión GPU (ATA → inicio) en el conjunto de vuelos. */
+export function computeAverageGpuConnectionWaitMinutes(flights: Flight[]): {
+    avgMinutes: number | null;
+    countWithWait: number;
+} {
+    const mins: number[] = [];
+    for (const f of flights) {
+        const d = gpuConnectionWaitMinutesFromFlight(f);
+        if (d != null) mins.push(d);
+    }
+    if (mins.length === 0) return { avgMinutes: null, countWithWait: 0 };
+    const sum = mins.reduce((a, b) => a + b, 0);
+    return { avgMinutes: sum / mins.length, countWithWait: mins.length };
+}
+
 /** Destinos de vuelos internacionales para estadísticas de GPU (salida o llegada). */
 export const INTERNATIONAL_GPU_DESTINATIONS = [
     "GIG",
