@@ -15,9 +15,10 @@ import {
     type StatsAirportFilter,
 } from "../lib/controlHelpers";
 import { ControlAirportMultiSelect } from "./ControlAirportMultiSelect";
+import { downloadGpuReportExcel } from "../lib/downloadGpuReport";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { formatMinutesToHHMM } from "../lib/mvtTime";
-import { ChevronDown, Clock, Globe, ListOrdered, PlugZap } from "lucide-react";
+import { ChevronDown, Clock, FileSpreadsheet, Globe, ListOrdered, PlugZap } from "lucide-react";
 
 interface Props {
     flights: Flight[];
@@ -206,7 +207,22 @@ export function ControlGpuTab({
                     </p>
                 ) : null}
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs font-black uppercase text-slate-600 tracking-wide">
+                            Indicadores GPU
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => downloadGpuReportExcel(gpuFlights, { dateFrom, dateTo })}
+                            className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2.5 text-xs font-black uppercase tracking-wide shadow-md transition-colors"
+                        >
+                            <FileSpreadsheet className="w-4 h-4 shrink-0" aria-hidden />
+                            Descargar Excel
+                        </button>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white p-5">
                         <p className="text-xs font-black uppercase text-amber-900 flex items-center gap-1.5">
                             <PlugZap className="w-4 h-4 shrink-0" aria-hidden />
@@ -246,6 +262,12 @@ export function ControlGpuTab({
                                 : "Sin vuelos con ATA e inicio GPU en el período"}
                         </p>
                     </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 leading-snug">
+                        El Excel incluye vuelos del período con cartas distintas de 1ST WAVE (fecha, vuelo, ruta,
+                        ATA, horarios GPU, espera de conexión y uso total).
+                    </p>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
