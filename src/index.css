@@ -85,4 +85,20 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Header: ocultar ícono nativo negro del date picker; se usa CalendarDays blanco encima */
+  .header-flight-date-input {
+    color-scheme: dark;
+  }
+
+  .header-flight-date-input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 0.75rem;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
 }

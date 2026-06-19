@@ -1119,15 +1119,18 @@ function App() {
           </div>
           )}
 
-          {/* Date Picker — sin overflow-hidden en el header: recorta el popup nativo del type="date". Label: clic en el ícono enfoca el input. */}
-          <label className="relative z-[60] flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-slate-700 bg-slate-800 px-3 py-2 shadow-inner min-h-[2.5rem]">
-            <CalendarDays className="h-4 w-4 shrink-0 text-cyan-400" aria-hidden />
+          {/* Date Picker — sin overflow-hidden en el header: recorta el popup nativo del type="date". */}
+          <label className="relative z-[60] flex shrink-0 cursor-pointer items-center rounded-full border border-slate-700 bg-slate-800 px-3 py-2 shadow-inner min-h-[2.5rem]">
             <input
               id="header-flight-date"
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="min-w-[10.5rem] cursor-pointer bg-transparent py-1 text-sm font-bold uppercase tracking-wider text-white [color-scheme:light] focus:outline-none md:min-w-[11rem]"
+              className="header-flight-date-input relative min-w-[10.5rem] cursor-pointer bg-transparent py-1 pr-7 text-sm font-bold uppercase tracking-wider text-white focus:outline-none md:min-w-[11rem]"
+            />
+            <CalendarDays
+              className="pointer-events-none absolute right-3 h-4 w-4 shrink-0 text-white"
+              aria-hidden
             />
           </label>
 
