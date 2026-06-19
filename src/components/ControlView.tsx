@@ -28,6 +28,9 @@ import {
     computePeaCounts,
     hasMvtSent,
     flightMatchesStatsAirports,
+    filterDayFlightsForSseeStats,
+    filterFlightsForSseeStats,
+    computeTotalSseeAssistances,
 } from "../lib/controlHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { formatDelayCodeDisplay } from "../lib/delayCodes";
@@ -67,6 +70,7 @@ import {
     CircleCheck,
     RotateCcw,
     PlugZap,
+    Accessibility,
     X,
 } from "lucide-react";
 
@@ -335,6 +339,32 @@ export function ControlView({
             alternoFlights: listAlternoFlightsForDay(dayFlights),
         };
     }, [dayFlightsAirportFiltered, dayFlights, routeAfectaciones.length]);
+
+    const statusDiaSseeFlights = useMemo(
+        () => filterDayFlightsForSseeStats(dayFlights, controlAirports),
+        [dayFlights, controlAirports],
+    );
+    const statusDiaSseeCount = useMemo(
+        () => computeTotalSseeAssistances(statusDiaSseeFlights),
+        [statusDiaSseeFlights],
+    );
+
+    const statsSseeFlights = useMemo(
+        () =>
+            filterFlightsForSseeStats(
+                flights,
+                statsDateFrom,
+                statsDateTo,
+                controlAirports,
+                statsTimeFrom,
+                statsTimeTo,
+            ),
+        [flights, statsDateFrom, statsDateTo, controlAirports, statsTimeFrom, statsTimeTo],
+    );
+    const statsSseeCount = useMemo(
+        () => computeTotalSseeAssistances(statsSseeFlights),
+        [statsSseeFlights],
+    );
 
     const [prensaModal, setPrensaModal] = useState<{ open: boolean; text: string }>({
         open: false,
@@ -804,6 +834,24 @@ export function ControlView({
                         </div>
                     </div>
 
+                    <div className="rounded-lg border border-rose-200/90 bg-rose-50/50 p-2 sm:p-2.5 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400 print:bg-white">
+                        <div className="flex flex-wrap items-center gap-1.5 justify-between mb-1">
+                            <h4 className="text-[11px] font-black uppercase tracking-wide text-rose-900 flex items-center gap-1">
+                                <Accessibility className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                Asistencias
+                            </h4>
+                            <span className="text-xl sm:text-2xl font-black tabular-nums text-rose-950 leading-tight">
+                                {statusDiaSseeCount.toLocaleString("es-AR")}
+                            </span>
+                        </div>
+                        <p className="text-[10px] text-rose-900/80 leading-snug">
+                            Servicios especiales SSEE informados en MVT
+                            {controlAirports.length > 0
+                                ? " · incluye vuelos que salen o arriban en el aeropuerto filtrado"
+                                : ""}
+                        </p>
+                    </div>
+
                     <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-2 sm:p-2.5 shadow-sm print:shadow-none print:p-1.5 print:border-slate-400 print:bg-white">
                         <div className="flex flex-wrap items-center gap-1.5 justify-between mb-1.5">
                             <h4 className="text-[11px] font-black uppercase tracking-wide text-blue-900 flex items-center gap-1">
@@ -1243,6 +1291,26 @@ export function ControlView({
                         <ControlBagsStatsCard flights={statsFlights} selectedAirports={controlAirports} />
                         <ControlCargaStatsCard flights={statsFlights} selectedAirports={controlAirports} />
                         <ControlPaxStatsCard flights={statsFlights} selectedAirports={controlAirports} />
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-rose-50/60 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Accessibility className="w-3.5 h-3.5 text-rose-700" aria-hidden />
+                                Asistencias
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                Σ servicios especiales SSEE (MVT)
+                                {controlAirports.length > 0
+                                    ? " · salidas y arribos en aeropuertos filtrados"
+                                    : ""}
+                            </p>
+                            <p className="text-3xl font-black text-rose-950 mt-2 tabular-nums">
+                                {statsSseeCount.toLocaleString("es-AR")}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {statsSseeFlights.length > 0
+                                    ? `${statsSseeFlights.length} vuelo${statsSseeFlights.length !== 1 ? "s" : ""} en el filtro`
+                                    : "Sin vuelos en el filtro"}
+                            </p>
+                        </div>
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-emerald-50/50 to-white sm:col-span-2 lg:col-span-1">
                             <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
                                 <Percent className="w-3.5 h-3.5" /> Bags / Pax

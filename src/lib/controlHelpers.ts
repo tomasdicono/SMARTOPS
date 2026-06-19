@@ -1,4 +1,4 @@
-import type { Flight, RouteAfectacionEntry } from "../types";
+import type { Flight, RouteAfectacionEntry, SSEE } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
 import { normalizeAirportCode } from "./routeAfectaciones";
 import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isAlternoActive, getFlightQrfEvents } from "./flightHelpers";
@@ -58,6 +58,27 @@ export function getScheduledPax(f: Flight): number {
 
 export function getBags(f: Flight): number {
     return parseInt(f.mvtData?.totalBags || "0", 10) || 0;
+}
+
+/** Σ cantidades SSEE con tipo y qty válidos en el MVT. */
+export function countSseeAssistances(ssee: SSEE[] | undefined): number {
+    let total = 0;
+    for (const row of ssee ?? []) {
+        const t = String(row.type ?? "").trim();
+        const q = parseInt(String(row.qty ?? "").replace(/\D/g, ""), 10) || 0;
+        if (!t || q <= 0) continue;
+        total += q;
+    }
+    return total;
+}
+
+/** Σ asistencias SSEE en un conjunto de vuelos (MVT). */
+export function computeTotalSseeAssistances(flights: Flight[]): number {
+    let total = 0;
+    for (const f of flights) {
+        total += countSseeAssistances(f.mvtData?.ssee);
+    }
+    return total;
 }
 
 export interface AvgFlightMetricGroupRow {
@@ -425,6 +446,43 @@ export function filterFlightsForStats(
         const d = flightDateToIso(f);
         return d >= lo && d <= hi && flightMatchesStatsAirports(f, airport, "depOnly");
     });
+}
+
+/**
+ * Vuelos operativos para conteo SSEE en estadísticas.
+ * Con filtro de aeropuerto incluye salidas y arribos (dep o arr); sin filtro, mismo criterio que stats (dep).
+ */
+export function filterFlightsForSseeStats(
+    flights: Flight[],
+    isoFrom: string,
+    isoTo: string,
+    airports: StatsAirportFilter = "",
+    timeFrom = "",
+    timeTo = "",
+): Flight[] {
+    const { lo, hi } = normalizeIsoDateRange(isoFrom, isoTo);
+    if (!lo || !hi) return [];
+    const hasAirportFilter = resolveStatsAirportList(airports).length > 0;
+    const airportMode = hasAirportFilter ? "depOrArr" : "depOnly";
+    return flights.filter((f) => {
+        if (f.cancelled) return false;
+        const d = flightDateToIso(f);
+        if (d < lo || d > hi) return false;
+        if (!flightMatchesStatsAirports(f, airports, airportMode)) return false;
+        return flightMatchesStatsAtdTimeFilter(f, timeFrom, timeTo);
+    });
+}
+
+/** Vuelos operativos del día para conteo SSEE (dep o arr si hay filtro de aeropuerto). */
+export function filterDayFlightsForSseeStats(
+    dayFlights: Flight[],
+    airports: StatsAirportFilter = "",
+): Flight[] {
+    const hasAirportFilter = resolveStatsAirportList(airports).length > 0;
+    const airportMode = hasAirportFilter ? "depOrArr" : "depOnly";
+    return dayFlights.filter(
+        (f) => !f.cancelled && flightMatchesStatsAirports(f, airports, airportMode),
+    );
 }
 
 /** @deprecated Alias de `filterFlightsForStats` (mismo criterio: origen / dep). */
