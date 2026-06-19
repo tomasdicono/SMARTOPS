@@ -64,23 +64,12 @@ function hasMvtAtd(f: Flight): boolean {
     return !!atdRaw && atdRaw.replace(/\D/g, "").length >= 3;
 }
 
-/** Demora en minutos (0 si salió a horario o antes del STD). Misma regla que MVT: ATD vs STD. */
-function computeTimelineDelayMinutes(f: Flight, nowMin: number, std: number): number {
-    if (hasMvtAtd(f)) {
-        const m = f.mvtData!;
-        const status = computeMvtDelayStatus(f.std, m.atd ?? "", m.dlyTime1 ?? "", m.dlyTime2 ?? "");
-        return status.isDelayed ? status.delayMinutes : 0;
-    }
-
-    const etdRaw = f.etd?.trim();
-    if (etdRaw) {
-        let etd = parseTimeToMinutes(etdRaw);
-        if (etd < std) etd += DAY_MIN;
-        return Math.max(0, etd - std);
-    }
-
-    if (nowMin > std) return nowMin - std;
-    return 0;
+/** Demora en minutos: solo con ATD cargado y ATD > STD (misma regla que MVT). */
+function computeTimelineDelayMinutes(f: Flight): number {
+    if (!hasMvtAtd(f)) return 0;
+    const m = f.mvtData!;
+    const status = computeMvtDelayStatus(f.std, m.atd ?? "", m.dlyTime1 ?? "", m.dlyTime2 ?? "");
+    return status.isDelayed ? status.delayMinutes : 0;
 }
 
 /** Inicio del tramo verde: ATD real si existe; si no, STD + demora. */
@@ -121,9 +110,11 @@ function clipAbsLayerToSegment(
 }
 
 function buildAbsLayers(f: Flight, nowMin: number): TimelineBarLayerAbs[] {
+    if (!hasMvtAtd(f)) return [];
+
     const std = parseHHmmToMinutes(f.std);
     const blockEnd = flightBlockEndMinutes(f.std, f.sta);
-    const delayMin = computeTimelineDelayMinutes(f, nowMin, std);
+    const delayMin = computeTimelineDelayMinutes(f);
     const opsStart = effectiveOpsStartMin(f, std, delayMin);
     const nowExt = extendedNowMinutes(nowMin, std, blockEnd);
     const layers: TimelineBarLayerAbs[] = [];
@@ -158,8 +149,7 @@ export function computeTimelineFlightPaint(
     segEnd: number,
     nowMin: number,
 ): TimelineFlightPaint {
-    const std = parseHHmmToMinutes(f.std);
-    const delayMin = computeTimelineDelayMinutes(f, nowMin, std);
+    const delayMin = computeTimelineDelayMinutes(f);
     const absLayers = buildAbsLayers(f, nowMin);
     const layers: TimelineBarLayer[] = [];
 
