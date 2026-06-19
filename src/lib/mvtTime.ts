@@ -42,6 +42,13 @@ export function formatMinutesToHHMM(mins: number): string {
     return `${isNegative ? "-" : ""}${h}:${m}`;
 }
 
+/** Campo horario MVT/programación (HHMM, HMM, HH:MM) → `HH:MM` para lectura. */
+export function formatMvtTimeDisplay(timeStr: string | undefined | null): string {
+    const raw = String(timeStr ?? "").replace(/\D/g, "");
+    if (raw.length < 2) return "—";
+    return formatMinutesToHHMM(parseTimeToMinutes(timeStr));
+}
+
 /** Tarjetas: "COD 93 - 00:01" */
 export function formatDelayLine(cod: string, timeRaw: string): string {
     const c = cod.trim();

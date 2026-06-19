@@ -7,6 +7,7 @@ import {
   canSubmitMvtAfterQrf,
   isLimpiezaRole,
   isScRole,
+  canUseBoardCardToneFilters,
   type Flight,
   type User,
   type HitosData,
@@ -55,7 +56,7 @@ import {
   type FleetModelOption,
 } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator, GanttChartSquare } from "lucide-react";
 import { AlternoIcon } from "./components/AlternoIcon";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
@@ -77,6 +78,7 @@ import { ChangePassword } from "./components/ChangePassword";
 import { UserManagement } from "./components/UserManagement";
 import { userMustChangePassword } from "./lib/userMustChangePassword";
 import { ControlView } from "./components/ControlView";
+import { ControlTimelineTab } from "./components/ControlTimelineTab";
 import { CancelFlightModal } from "./components/CancelFlightModal";
 import { QrfModal } from "./components/QrfModal";
 import { AlternoModal } from "./components/AlternoModal";
@@ -133,7 +135,7 @@ import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -159,7 +161,7 @@ function App() {
   const [loadToolsMenuOpen, setLoadToolsMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  /** HCC/AJS: filtro por color de tarjeta (vacío = mostrar todas). */
+  /** HCC/AJS/SC: filtro por color de tarjeta (vacío = mostrar todas). */
   const [cardToneFilters, setCardToneFilters] = useState<Set<FlightCardTone>>(() => new Set());
   /** pernocte[YYYY-MM-DD][matrícula] */
   const [pernocteData, setPernocteData] = useState<Record<string, Record<string, PernocteRowState>>>({});
@@ -1034,7 +1036,7 @@ function App() {
   /** Rol Limpieza: solo vuelos con bloque largo (&gt;3:30) o último JES del día (pernocte). */
   const boardFlights = useMemo(() => {
     let list = filteredFlights;
-    if (isHccDeskRole(userRole) && cardToneFilters.size > 0) {
+    if (canUseBoardCardToneFilters(userRole) && cardToneFilters.size > 0) {
       list = list.filter((f) => cardToneFilters.has(getFlightCardTone(f)));
     }
     if (!isLimpiezaRole(userRole)) return list;
@@ -1254,7 +1256,11 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6">
+      <main
+        className={`mx-auto px-4 sm:px-6 ${
+          isScRole(userRole) && mainTab === "timeline" ? "max-w-[1920px]" : "max-w-[1600px]"
+        }`}
+      >
         {isScRole(userRole) && (
           <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
             <button
@@ -1267,6 +1273,18 @@ function App() {
               }`}
             >
               Vuelos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("timeline")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "timeline"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <GanttChartSquare className="w-4 h-4 shrink-0" />
+              Línea de tiempo
             </button>
             <button
               type="button"
@@ -1402,6 +1420,7 @@ function App() {
           </div>
         )}
 
+        {!(isScRole(userRole) && mainTab === "timeline") && (
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-black text-secondary flex items-center gap-3">
             {mainTab === "documentos" && isScRole(userRole) ? (
@@ -1428,8 +1447,15 @@ function App() {
             )}
           </h2>
         </div>
+        )}
 
-        {mainTab === "documentos" && isScRole(userRole) ? (
+        {mainTab === "timeline" && isScRole(userRole) ? (
+          <ControlTimelineTab
+            standalone
+            selectedDate={selectedDate}
+            dayFlights={flightsForSelectedDate}
+          />
+        ) : mainTab === "documentos" && isScRole(userRole) ? (
           <DocumentosUtilesView />
         ) : mainTab === "diferidos" && isHccDeskRole(userRole) ? (
           <DiferidosView diferidos={diferidosMap} onSave={handleSaveDiferido} onRemove={handleRemoveDiferido} />
@@ -1473,7 +1499,7 @@ function App() {
           <CostControllingView flights={flights} />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
-            {mainTab === "tablero" && isHccDeskRole(userRole) && flightsForSelectedDate.length > 0 ? (
+            {mainTab === "tablero" && canUseBoardCardToneFilters(userRole) && flightsForSelectedDate.length > 0 ? (
               <div className="w-full max-w-3xl mb-8 text-left self-stretch">
                 <FlightCardToneFilters active={cardToneFilters} onToggle={toggleCardToneFilter} />
               </div>
@@ -1486,7 +1512,7 @@ function App() {
                 ? "No hay vuelos cargados en el sistema."
                 : filteredFlights.length === 0 && searchQuery.trim()
                   ? "No hay vuelos que coincidan con la búsqueda."
-                  : isHccDeskRole(userRole) && cardToneFilters.size > 0 && filteredFlights.length > 0
+                  : canUseBoardCardToneFilters(userRole) && cardToneFilters.size > 0 && filteredFlights.length > 0
                     ? "Ningún vuelo coincide con los filtros de color seleccionados."
                   : flightsForSelectedDate.length === 0
                     ? "Para esa fecha no hay vuelos cargados."
@@ -1533,7 +1559,7 @@ function App() {
                 ) : null}
               </div>
             ) : null}
-            {isHccDeskRole(userRole) ? (
+            {canUseBoardCardToneFilters(userRole) ? (
               <FlightCardToneFilters active={cardToneFilters} onToggle={toggleCardToneFilter} />
             ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

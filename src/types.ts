@@ -29,6 +29,11 @@ export function isScRole(role: UserRole): boolean {
     return role === "SC";
 }
 
+/** Tablero: filtro por color de tarjeta (HCC, AJS, SC). */
+export function canUseBoardCardToneFilters(role: UserRole): boolean {
+    return isHccDeskRole(role) || isScRole(role);
+}
+
 /** Tras enviar MVT u hitos, HCC y AJS pueden editar y guardar cualquier campo. */
 export function canEditMvtDelayAfterSent(role: UserRole): boolean {
     return role === "HCC" || role === "AJS";
