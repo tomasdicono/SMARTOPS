@@ -106,6 +106,7 @@ import {
   normalizeHitosData,
 } from "./lib/flightDataNormalize";
 import { RouteChangeModal } from "./components/RouteChangeModal";
+import { CasosAtcView } from "./components/CasosAtcView";
 import { GestionesModal } from "./components/GestionesModal";
 import { flightDateToIso } from "./lib/controlHelpers";
 import { coerceRouteAfectacion, normalizeAirportCode } from "./lib/routeAfectaciones";
@@ -135,7 +136,7 @@ import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -1389,6 +1390,20 @@ function App() {
                 Cost controlling
               </button>
             )}
+            {userRole === "AJS" && (
+              <button
+                type="button"
+                onClick={() => setMainTab("casosAtc")}
+                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                  mainTab === "casosAtc"
+                    ? "bg-rose-600 text-white shadow-md"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                Casos ATC
+              </button>
+            )}
           </div>
         )}
 
@@ -1497,6 +1512,8 @@ function App() {
           />
         ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
           <CostControllingView flights={flights} />
+        ) : mainTab === "casosAtc" && userRole === "AJS" ? (
+          <CasosAtcView flights={flights} />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             {mainTab === "tablero" && canUseBoardCardToneFilters(userRole) && flightsForSelectedDate.length > 0 ? (
