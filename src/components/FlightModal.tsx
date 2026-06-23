@@ -37,6 +37,7 @@ interface Props {
     onPersistHitos?: (data: import("../types").HitosData) => void;
     onSaveCrewHitos: (data: Record<string, string>) => void;
     onPersistCrewHitos?: (data: Record<string, string>) => void;
+    initialTab?: FlightModalTab;
 }
 
 export function FlightModal({
@@ -52,8 +53,10 @@ export function FlightModal({
     onPersistHitos,
     onSaveCrewHitos,
     onPersistCrewHitos,
+    initialTab,
 }: Props) {
     const [activeTab, setActiveTab] = useState<FlightModalTab>(() => {
+        if (initialTab) return initialTab;
         if (isLimpiezaRole(userRole)) return "LIMPIEZA";
         if (userRole === "CREW") return "CREW";
         return "MVT";

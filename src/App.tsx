@@ -141,6 +141,7 @@ function App() {
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
+  const [flightModalTab, setFlightModalTab] = useState<"MVT" | "HITOS" | "CREW" | "LIMPIEZA" | undefined>(undefined);
   const [cancelModalFlight, setCancelModalFlight] = useState<Flight | null>(null);
   const [qrfModalFlight, setQrfModalFlight] = useState<Flight | null>(null);
   const [alternoModalFlight, setAlternoModalFlight] = useState<Flight | null>(null);
@@ -228,6 +229,7 @@ function App() {
     setMainTab("tablero");
     setShowUserManagement(false);
     setSelectedFlight(null);
+    setFlightModalTab(undefined);
     setCancelModalFlight(null);
     setRescheduleModalFlight(null);
     setRouteModalFlight(null);
@@ -1513,7 +1515,13 @@ function App() {
         ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
           <CostControllingView flights={flights} />
         ) : mainTab === "casosAtc" && userRole === "AJS" ? (
-          <CasosAtcView flights={flights} />
+          <CasosAtcView 
+            flights={flights} 
+            onFlightSelect={(f) => {
+              setSelectedFlight(f);
+              setFlightModalTab("HITOS");
+            }} 
+          />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             {mainTab === "tablero" && canUseBoardCardToneFilters(userRole) && flightsForSelectedDate.length > 0 ? (
@@ -2181,7 +2189,11 @@ function App() {
           checklistDayFlights={flightsForSelectedDate}
           checklistSelectedIso={selectedDate}
           currentUser={currentUser}
-          onClose={() => setSelectedFlight(null)}
+          initialTab={flightModalTab}
+          onClose={() => {
+            setSelectedFlight(null);
+            setFlightModalTab(undefined);
+          }}
           onSaveMVT={(data) => handleSaveMVT(selectedFlight.id, data)}
           onPersistMvt={(data) => handlePersistMvt(selectedFlight.id, data)}
           onSaveHitos={(data) => handleSaveHitos(selectedFlight.id, data)}

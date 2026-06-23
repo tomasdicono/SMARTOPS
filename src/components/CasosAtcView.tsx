@@ -10,6 +10,7 @@ interface FlightWithDelay extends Flight {
 
 interface CasosAtcViewProps {
   flights: Flight[];
+  onFlightSelect?: (flight: Flight) => void;
 }
 
 function MultiSelect({ label, options, selected, onToggle }: { label: string, options: string[], selected: string[], onToggle: (val: string) => void }) {
@@ -58,7 +59,7 @@ function MultiSelect({ label, options, selected, onToggle }: { label: string, op
   );
 }
 
-export function CasosAtcView({ flights }: CasosAtcViewProps) {
+export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   
@@ -242,7 +243,11 @@ export function CasosAtcView({ flights }: CasosAtcViewProps) {
                   </tr>
                 ) : (
                   filteredFlights.map((f) => (
-                    <tr key={f.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={f.id} 
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => onFlightSelect && onFlightSelect(f)}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{f.date}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{f.flt}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{f.reg}</td>
