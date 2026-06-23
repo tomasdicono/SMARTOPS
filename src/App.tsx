@@ -1401,7 +1401,7 @@ function App() {
                 }`}
               >
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                Casos ATC
+                Buscador demoras
               </button>
             )}
           </div>
