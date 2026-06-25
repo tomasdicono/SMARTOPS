@@ -56,7 +56,7 @@ import {
   type FleetModelOption,
 } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator, GanttChartSquare } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator, GanttChartSquare, Wrench } from "lucide-react";
 import { AlternoIcon } from "./components/AlternoIcon";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
@@ -92,6 +92,7 @@ import { MatriculasView } from "./components/MatriculasView";
 import { CostControllingView } from "./components/CostControllingView";
 import { canAccessCostControlling } from "./lib/costControllingHelpers";
 import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
+import { StatusEquiposGRHView } from "./components/StatusEquiposGRHView";
 import {
   computePernocteRows,
   coercePernocteRow,
@@ -136,7 +137,7 @@ import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -1301,6 +1302,18 @@ function App() {
               <FolderOpen className="w-4 h-4 shrink-0" />
               Herramientas útiles
             </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("statusEquiposGRH")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "statusEquiposGRH"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              Status Equipos
+            </button>
           </div>
         )}
 
@@ -1378,7 +1391,7 @@ function App() {
               <Plane className="w-4 h-4 shrink-0" />
               Matrículas
             </button>
-            {canAccessCostControlling(userRole) && (
+            {false && canAccessCostControlling(userRole) && (
               <button
                 type="button"
                 onClick={() => setMainTab("costControlling")}
@@ -1406,6 +1419,18 @@ function App() {
                 Buscador demoras
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setMainTab("statusEquiposGRH")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "statusEquiposGRH"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              Status Equipos
+            </button>
           </div>
         )}
 
@@ -1434,6 +1459,18 @@ function App() {
               <Plane className="w-4 h-4 shrink-0" />
               Matrículas
             </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("statusEquiposGRH")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "statusEquiposGRH"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              Status Equipos
+            </button>
           </div>
         )}
 
@@ -1454,6 +1491,8 @@ function App() {
               <>Matrículas</>
             ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
               <>Cost controlling</>
+            ) : mainTab === "statusEquiposGRH" ? (
+              <>Status Equipos GRH</>
             ) : (
               <>
                 Vuelos
@@ -1522,6 +1561,8 @@ function App() {
               setFlightModalTab("HITOS");
             }} 
           />
+        ) : mainTab === "statusEquiposGRH" ? (
+          <StatusEquiposGRHView currentUser={currentUser} />
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             {mainTab === "tablero" && canUseBoardCardToneFilters(userRole) && flightsForSelectedDate.length > 0 ? (

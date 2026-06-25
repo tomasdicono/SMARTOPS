@@ -35,6 +35,10 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "statusEquiposGRH": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "fleet": {
       ".read": "auth != null",
       "$reg": {
