@@ -908,7 +908,12 @@ export function isFlightDemoradoStatusDia(f: Flight): boolean {
     if (f.etd?.trim()) return true;
     const atd = f.mvtData?.atd;
     if (!atd || String(atd).replace(/\D/g, "").length < 2) return false;
-    return parseTimeToMinutes(atd) > parseTimeToMinutes(f.std);
+    const stdMinutes = parseTimeToMinutes(f.std);
+    let atdMinutes = parseTimeToMinutes(atd);
+    if (stdMinutes >= 1200 && atdMinutes <= 240) {
+        atdMinutes += 1440;
+    }
+    return atdMinutes > stdMinutes;
 }
 
 /** Demora operativa registrada en MVT (código + tiempo). */
@@ -946,7 +951,12 @@ export function hasMvtAtdForOtp(f: Flight): boolean {
 export function otpDelayMinutes(f: Flight): number | null {
     if (!hasMvtAtdForOtp(f)) return null;
     const atd = f.mvtData!.atd!;
-    return parseTimeToMinutes(atd) - parseTimeToMinutes(f.std);
+    const stdMinutes = parseTimeToMinutes(f.std);
+    let atdMinutes = parseTimeToMinutes(atd);
+    if (stdMinutes >= 1200 && atdMinutes <= 240) {
+        atdMinutes += 1440;
+    }
+    return atdMinutes - stdMinutes;
 }
 
 /**

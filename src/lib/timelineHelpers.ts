@@ -74,7 +74,13 @@ function computeTimelineDelayMinutes(f: Flight): number {
 
 /** Inicio del tramo verde: ATD real si existe; si no, STD + demora. */
 function effectiveOpsStartMin(f: Flight, std: number, delayMin: number): number {
-    if (hasMvtAtd(f)) return parseTimeToMinutes(f.mvtData!.atd!);
+    if (hasMvtAtd(f)) {
+        let atdMins = parseTimeToMinutes(f.mvtData!.atd!);
+        if (std >= 1200 && atdMins <= 240) {
+            atdMins += 1440;
+        }
+        return atdMins;
+    }
     if (delayMin > 0) return std + delayMin;
     return std;
 }

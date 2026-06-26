@@ -114,7 +114,13 @@ export function computeMvtDelayStatus(
     dlyTime2: string,
 ): MvtDelayStatus {
     const stdMinutes = parseTimeToMinutes(std);
-    const atdMinutes = parseTimeToMinutes(atd);
+    let atdMinutes = parseTimeToMinutes(atd);
+    
+    // Detección automática de cruce de medianoche
+    if (stdMinutes >= 1200 && atdMinutes <= 240) {
+        atdMinutes += 1440;
+    }
+
     const atdStr = String(atd ?? "");
     const isDelayed = atdStr.replace(/\D/g, "").length >= 3 && atdMinutes > stdMinutes;
     const delayMinutes = isDelayed ? atdMinutes - stdMinutes : 0;
