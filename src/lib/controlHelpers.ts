@@ -895,7 +895,8 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
         }
         
         const valMins = operationalMilestoneRealMins(h.entries, names);
-        if (valMins == null) {
+        const isPlaceholder = rawSearch === "0000" || rawSearch === "00:00";
+        if (valMins == null || isPlaceholder) {
             if (hasCod18) cod18Flights.push({ flight: f, onTime: null, valMins: null });
             continue;
         }
