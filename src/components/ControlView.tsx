@@ -23,6 +23,7 @@ import {
     computeAverageGpuUsageMinutes,
     computeInicioEmbarqueCompliance,
     computeLlegadaCrewCompliance,
+    computeBusquedasBagCompliance,
     computePeaCounts,
     hasMvtSent,
     flightMatchesStatsAirports,
@@ -68,6 +69,7 @@ import {
     PlugZap,
     Accessibility,
     X,
+    Luggage,
 } from "lucide-react";
 
 interface Props {
@@ -107,6 +109,7 @@ export function ControlView({
         flt: string;
         reason: string;
     } | null>(null);
+    const [showCod18Modal, setShowCod18Modal] = useState(false);
     useEffect(() => {
         setStatsDateFrom(selectedDate);
         setStatsDateTo(selectedDate);
@@ -221,6 +224,10 @@ export function ControlView({
     );
     const llegadaCrewCompliance = useMemo(
         () => computeLlegadaCrewCompliance(statsFlights),
+        [statsFlights],
+    );
+    const busquedasBagCompliance = useMemo(
+        () => computeBusquedasBagCompliance(statsFlights),
         [statsFlights],
     );
     const statsFlightsMvtSent = useMemo(() => statsFlights.filter(hasMvtSent), [statsFlights]);
@@ -1168,6 +1175,28 @@ export function ControlView({
                                     : "Sin vuelos con Llegada crew cargada y carta Gantt en el filtro"}
                             </p>
                         </div>
+                        <div 
+                            className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-fuchsia-50/60 to-white cursor-pointer hover:shadow-md transition-shadow"
+                            onClick={() => setShowCod18Modal(true)}
+                        >
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Luggage className="w-3.5 h-3.5 text-fuchsia-700" aria-hidden />
+                                Búsquedas de equipaje
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                % a tiempo · Inicio búsqueda de equipaje
+                            </p>
+                            <p className="text-3xl font-black text-fuchsia-950 mt-2 tabular-nums">
+                                {busquedasBagCompliance.onTimePct != null
+                                    ? `${busquedasBagCompliance.onTimePct.toFixed(1)}%`
+                                    : "—"}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {busquedasBagCompliance.evaluatedCount > 0
+                                    ? `${busquedasBagCompliance.onTimeCount} de ${busquedasBagCompliance.evaluatedCount} vuelo${busquedasBagCompliance.evaluatedCount !== 1 ? "s" : ""} a tiempo`
+                                    : "Sin vuelos con búsqueda de equipaje cargada en el filtro"}
+                            </p>
+                        </div>
                         <ControlBoardingStatsPanel flights={statsFlights} />
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-violet-50/50 to-white">
                             <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
@@ -1392,6 +1421,94 @@ export function ControlView({
                 }}
             />
         ) : null}
+        
+        {showCod18Modal && (
+            <div
+                className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) setShowCod18Modal(false);
+                }}
+            >
+                <div
+                    className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200/80"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-fuchsia-50 to-white">
+                        <Luggage className="w-5 h-5 text-fuchsia-600 shrink-0 mt-0.5" aria-hidden />
+                        <div className="min-w-0">
+                            <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">
+                                Vuelos con demora COD 18 (Búsqueda de equipaje)
+                            </h2>
+                            <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                                Muestra todos los casos con demora COD 18 y si la búsqueda se inició o no a tiempo. (AEP contabiliza a tiempo si T-20)
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowCod18Modal(false)}
+                            className="ml-auto inline-flex items-center justify-center w-8 h-8 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <div className="p-0 flex-1 min-h-0 overflow-auto">
+                        {busquedasBagCompliance.cod18Flights.length === 0 ? (
+                            <p className="text-center text-slate-500 py-8 text-sm">No hay vuelos con demora COD 18 en este período.</p>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead className="sticky top-0 bg-fuchsia-50/90 backdrop-blur border-b border-fuchsia-100">
+                                    <tr className="text-left text-xs font-black uppercase tracking-wider text-fuchsia-900">
+                                        <th className="px-4 py-3">Vuelo</th>
+                                        <th className="px-4 py-3">Ruta</th>
+                                        <th className="px-4 py-3">STD</th>
+                                        <th className="px-4 py-3">Mat.</th>
+                                        <th className="px-4 py-3">Demoras (MVT)</th>
+                                        <th className="px-4 py-3">Inicio búsqueda</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-fuchsia-50">
+                                    {busquedasBagCompliance.cod18Flights.map((info, i) => (
+                                        <tr key={info.flight.id + "-" + i} className="hover:bg-fuchsia-50/30">
+                                            <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">
+                                                {getAirlinePrefix(info.flight.flt)}{info.flight.flt}
+                                            </td>
+                                            <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
+                                                {info.flight.dep}-{info.flight.arr}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap">
+                                                {info.flight.std || "—"}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
+                                                {info.flight.reg || "—"}
+                                            </td>
+                                            <td className="px-4 py-3 text-xs">
+                                                {info.flight.mvtData?.dlyCod1 && (
+                                                    <div>{info.flight.mvtData.dlyCod1} ({info.flight.mvtData.dlyTime1}m)</div>
+                                                )}
+                                                {info.flight.mvtData?.dlyCod2 && (
+                                                    <div>{info.flight.mvtData.dlyCod2} ({info.flight.mvtData.dlyTime2}m)</div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 font-semibold whitespace-nowrap">
+                                                {info.onTime === true ? (
+                                                    <span className="text-emerald-700 flex items-center gap-1.5"><CircleCheck className="w-3.5 h-3.5"/> A tiempo</span>
+                                                ) : info.onTime === false ? (
+                                                    <span className="text-rose-700 flex items-center gap-1.5"><X className="w-3.5 h-3.5"/> Demorado</span>
+                                                ) : (
+                                                    <span className="text-slate-400 italic">No registrado</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
         </>
     );
 }

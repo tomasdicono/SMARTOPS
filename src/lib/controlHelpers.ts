@@ -839,6 +839,72 @@ export function computeLlegadaCrewCompliance(flights: Flight[]): MilestoneCompli
     };
 }
 
+export interface Cod18FlightInfo {
+    flight: Flight;
+    onTime: boolean | null;
+}
+
+export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneComplianceStats & { cod18Flights: Cod18FlightInfo[] } {
+    const names = ["Inicio búsqueda de equipaje"];
+    let onTimeCount = 0;
+    let evaluatedCount = 0;
+    const cod18Flights: Cod18FlightInfo[] = [];
+
+    for (const f of flights) {
+        const hasCod18 = f.mvtData?.dlyCod1 === "18" || f.mvtData?.dlyCod2 === "18";
+        const h = normalizeHitosData(f.hitosData);
+        if (!h.ganttChartName) {
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            continue;
+        }
+        
+        const chart = GANTT_CHARTS.find((c) => c.name === h.ganttChartName);
+        if (!chart) {
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            continue;
+        }
+        
+        const def = chart.milestones.find((m) => names.some((n) => m.name.toLowerCase() === n.toLowerCase()));
+        if (!def) {
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            continue;
+        }
+        
+        let offset = def.offsetMinutes;
+        if (f.dep.toUpperCase() === "AEP") {
+            offset = 20;
+        }
+        
+        if (offset === null) {
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            continue;
+        }
+        
+        const valMins = operationalMilestoneRealMins(h.entries, names);
+        if (valMins == null) {
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            continue;
+        }
+        
+        const targetMins = refMinutesForHitos(f, h, chart) - offset;
+        evaluatedCount += 1;
+        const onTime = isMilestoneOnTime(valMins, targetMins);
+        if (onTime) onTimeCount += 1;
+        
+        if (hasCod18) {
+            cod18Flights.push({ flight: f, onTime });
+        }
+    }
+    
+    return {
+        onTimePct: evaluatedCount > 0 ? (onTimeCount / evaluatedCount) * 100 : null,
+        onTimeCount,
+        evaluatedCount,
+        cod18Flights,
+    };
+}
+
+
 /** Cantidad de vuelos con PEA manga / remota en hitos (lista ya filtrada por el llamador). */
 export function computePeaCounts(flights: Flight[]): { manga: number; remota: number } {
     let manga = 0;
