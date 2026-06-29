@@ -1460,6 +1460,7 @@ export function ControlView({
                             <table className="w-full text-sm">
                                 <thead className="sticky top-0 bg-fuchsia-50/90 backdrop-blur border-b border-fuchsia-100">
                                     <tr className="text-left text-xs font-black uppercase tracking-wider text-fuchsia-900">
+                                        <th className="px-4 py-3">Fecha</th>
                                         <th className="px-4 py-3">Vuelo</th>
                                         <th className="px-4 py-3">Ruta</th>
                                         <th className="px-4 py-3">STD</th>
@@ -1471,6 +1472,9 @@ export function ControlView({
                                 <tbody className="divide-y divide-fuchsia-50">
                                     {busquedasBagCompliance.cod18Flights.map((info, i) => (
                                         <tr key={info.flight.id + "-" + i} className="hover:bg-fuchsia-50/30">
+                                            <td className="px-4 py-3 font-mono text-slate-700 whitespace-nowrap">
+                                                {info.flight.date}
+                                            </td>
                                             <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">
                                                 {getAirlinePrefix(info.flight.flt)}{info.flight.flt}
                                             </td>
