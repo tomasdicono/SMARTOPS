@@ -1178,26 +1178,47 @@ export function ControlView({
                             </p>
                         </div>
                         <div 
-                            className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-fuchsia-50/60 to-white cursor-pointer hover:shadow-md transition-shadow"
+                            className="rounded-xl border border-slate-200 bg-gradient-to-br from-fuchsia-50/60 to-white cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden"
                             onClick={() => setShowCod18Modal(true)}
                         >
-                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
-                                <Luggage className="w-3.5 h-3.5 text-fuchsia-700" aria-hidden />
-                                Búsquedas de equipaje
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                                % a tiempo · Inicio búsqueda de equipaje
-                            </p>
-                            <p className="text-3xl font-black text-fuchsia-950 mt-2 tabular-nums">
-                                {busquedasBagCompliance.onTimePct != null
-                                    ? `${busquedasBagCompliance.onTimePct.toFixed(1)}%`
-                                    : "—"}
-                            </p>
-                            <p className="text-xs text-slate-600 mt-1">
-                                {busquedasBagCompliance.evaluatedCount > 0
-                                    ? `${busquedasBagCompliance.onTimeCount} de ${busquedasBagCompliance.evaluatedCount} vuelo${busquedasBagCompliance.evaluatedCount !== 1 ? "s" : ""} a tiempo`
-                                    : "Sin vuelos con búsqueda de equipaje cargada en el filtro"}
-                            </p>
+                            <div className="p-3 border-b border-fuchsia-100/50">
+                                <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                    <Luggage className="w-3.5 h-3.5 text-fuchsia-700" aria-hidden />
+                                    Búsquedas de equipaje
+                                </p>
+                            </div>
+                            <div className="flex divide-x divide-fuchsia-100/50 flex-1">
+                                <div className="p-3 flex-1 flex flex-col justify-center">
+                                    <p className="text-[10px] text-slate-500 font-bold mb-1 leading-tight">
+                                        CUMPLIMIENTO<br/>A TIEMPO
+                                    </p>
+                                    <p className="text-2xl font-black text-fuchsia-950 tabular-nums">
+                                        {busquedasBagCompliance.onTimePct != null
+                                            ? `${busquedasBagCompliance.onTimePct.toFixed(1)}%`
+                                            : "—"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-600 mt-1 leading-tight">
+                                        {busquedasBagCompliance.evaluatedCount > 0
+                                            ? `${busquedasBagCompliance.onTimeCount} de ${busquedasBagCompliance.evaluatedCount} ok`
+                                            : "Sin evaluar"}
+                                    </p>
+                                </div>
+                                <div className="p-3 flex-1 flex flex-col justify-center bg-white/30">
+                                    <p className="text-[10px] text-slate-500 font-bold mb-1 leading-tight">
+                                        FRECUENCIA DE<br/>BÚSQUEDAS
+                                    </p>
+                                    <p className="text-2xl font-black text-fuchsia-950 tabular-nums">
+                                        {busquedasBagCompliance.totalOperated > 0
+                                            ? `${((busquedasBagCompliance.totalSearches / busquedasBagCompliance.totalOperated) * 100).toFixed(1)}%`
+                                            : "—"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-600 mt-1 leading-tight">
+                                        {busquedasBagCompliance.totalOperated > 0
+                                            ? `${busquedasBagCompliance.totalSearches} de ${busquedasBagCompliance.totalOperated} vuelos`
+                                            : "Sin vuelos"}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                         <ControlBoardingStatsPanel flights={statsFlights} />
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-violet-50/50 to-white">

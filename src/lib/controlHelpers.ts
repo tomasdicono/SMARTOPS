@@ -846,15 +846,27 @@ export interface Cod18FlightInfo {
     valMins: number | null;
 }
 
-export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneComplianceStats & { cod18Flights: Cod18FlightInfo[] } {
+export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneComplianceStats & { 
+    cod18Flights: Cod18FlightInfo[];
+    totalSearches: number;
+    totalOperated: number;
+} {
     const names = ["Inicio búsqueda de equipaje"];
     let onTimeCount = 0;
     let evaluatedCount = 0;
+    let totalSearches = 0;
+    const totalOperated = flights.length;
     const cod18Flights: Cod18FlightInfo[] = [];
 
     for (const f of flights) {
         const hasCod18 = f.mvtData?.dlyCod1 === "18" || f.mvtData?.dlyCod2 === "18";
         const h = normalizeHitosData(f.hitosData);
+        
+        const rawSearch = hitosEntryHhmm(h.entries, "Inicio búsqueda de equipaje");
+        if (rawSearch && rawSearch !== "0000" && rawSearch !== "00:00") {
+            totalSearches += 1;
+        }
+
         if (!h.ganttChartName) {
             if (hasCod18) cod18Flights.push({ flight: f, onTime: null, valMins: null });
             continue;
@@ -903,6 +915,8 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
         onTimeCount,
         evaluatedCount,
         cod18Flights,
+        totalSearches,
+        totalOperated,
     };
 }
 
