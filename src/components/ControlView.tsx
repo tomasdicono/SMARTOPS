@@ -1477,8 +1477,13 @@ export function ControlView({
                                             <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
                                                 {info.flight.dep}-{info.flight.arr}
                                             </td>
-                                            <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap">
-                                                {info.flight.std || "—"}
+                                            <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap flex items-center gap-2">
+                                                <span>{info.flight.std || "—"}</span>
+                                                {info.valMins != null && (
+                                                    <span className="text-fuchsia-700 font-bold bg-fuchsia-100 px-1.5 py-0.5 rounded text-xs" title="Hora inicio búsqueda">
+                                                        {formatMinutesToHHMM(info.valMins)}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
                                                 {info.flight.reg || "—"}

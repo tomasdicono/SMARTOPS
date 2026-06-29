@@ -842,6 +842,7 @@ export function computeLlegadaCrewCompliance(flights: Flight[]): MilestoneCompli
 export interface Cod18FlightInfo {
     flight: Flight;
     onTime: boolean | null;
+    valMins: number | null;
 }
 
 export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneComplianceStats & { cod18Flights: Cod18FlightInfo[] } {
@@ -854,19 +855,19 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
         const hasCod18 = f.mvtData?.dlyCod1 === "18" || f.mvtData?.dlyCod2 === "18";
         const h = normalizeHitosData(f.hitosData);
         if (!h.ganttChartName) {
-            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null, valMins: null });
             continue;
         }
         
         const chart = GANTT_CHARTS.find((c) => c.name === h.ganttChartName);
         if (!chart) {
-            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null, valMins: null });
             continue;
         }
         
         const def = chart.milestones.find((m) => names.some((n) => m.name.toLowerCase() === n.toLowerCase()));
         if (!def) {
-            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null, valMins: null });
             continue;
         }
         
@@ -876,13 +877,13 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
         }
         
         if (offset === null) {
-            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null, valMins: null });
             continue;
         }
         
         const valMins = operationalMilestoneRealMins(h.entries, names);
         if (valMins == null) {
-            if (hasCod18) cod18Flights.push({ flight: f, onTime: null });
+            if (hasCod18) cod18Flights.push({ flight: f, onTime: null, valMins: null });
             continue;
         }
         
@@ -892,7 +893,7 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
         if (onTime) onTimeCount += 1;
         
         if (hasCod18) {
-            cod18Flights.push({ flight: f, onTime });
+            cod18Flights.push({ flight: f, onTime, valMins });
         }
     }
     
