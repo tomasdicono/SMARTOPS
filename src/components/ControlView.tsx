@@ -24,6 +24,7 @@ import {
     computeInicioEmbarqueCompliance,
     computeLlegadaCrewCompliance,
     computeBusquedasBagCompliance,
+    downloadCod18Excel,
     computePeaCounts,
     hasMvtSent,
     flightMatchesStatsAirports,
@@ -70,6 +71,7 @@ import {
     Accessibility,
     X,
     Luggage,
+    Download,
 } from "lucide-react";
 
 interface Props {
@@ -1445,13 +1447,25 @@ export function ControlView({
                                 Muestra todos los casos con demora COD 18 y si la búsqueda se inició o no a tiempo. (AEP contabiliza a tiempo si T-20)
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => setShowCod18Modal(false)}
-                            className="ml-auto inline-flex items-center justify-center w-8 h-8 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                        <div className="ml-auto flex items-center gap-2">
+                            {busquedasBagCompliance.cod18Flights.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => downloadCod18Excel(busquedasBagCompliance.cod18Flights, statsRangeLabel || statsDateFrom)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-fuchsia-100 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-fuchsia-900 shadow-sm hover:bg-fuchsia-200 transition-colors"
+                                >
+                                    <Download className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                                    Descargar Excel
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setShowCod18Modal(false)}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
                     <div className="p-0 flex-1 min-h-0 overflow-auto">
                         {busquedasBagCompliance.cod18Flights.length === 0 ? (

@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import type { Flight, RouteAfectacionEntry, SSEE } from "../types";
 import { formatDelayCodeDisplay } from "./delayCodes";
 import { normalizeAirportCode } from "./routeAfectaciones";
@@ -905,6 +906,64 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
     };
 }
 
+export function downloadCod18Excel(cod18Flights: Cod18FlightInfo[], dateLabel: string): void {
+    const HEADERS = [
+        "Fecha",
+        "Vuelo",
+        "Origen",
+        "Destino",
+        "STD",
+        "Matrícula",
+        "DLY 1",
+        "DLY 2",
+        "Inicio búsqueda a tiempo",
+        "Hora inicio búsqueda",
+    ] as const;
+
+    const rows = cod18Flights.map((info) => {
+        const dly1 = info.flight.mvtData?.dlyCod1 ? `${info.flight.mvtData.dlyCod1} (${info.flight.mvtData.dlyTime1}m)` : "";
+        const dly2 = info.flight.mvtData?.dlyCod2 ? `${info.flight.mvtData.dlyCod2} (${info.flight.mvtData.dlyTime2}m)` : "";
+        let status = "No registrado";
+        if (info.onTime === true) status = "A tiempo";
+        else if (info.onTime === false) status = "Demorado";
+
+        let timeStr = "";
+        if (info.valMins != null) {
+            timeStr = formatMinutesToHHMM(info.valMins);
+        }
+
+        return [
+            info.flight.date || "",
+            `${getAirlinePrefix(info.flight.flt)}${info.flight.flt}`,
+            info.flight.dep || "",
+            info.flight.arr || "",
+            info.flight.std || "",
+            info.flight.reg || "",
+            dly1,
+            dly2,
+            status,
+            timeStr,
+        ];
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([HEADERS.slice(), ...rows]);
+    ws["!cols"] = [
+        { wch: 12 }, // Fecha
+        { wch: 10 }, // Vuelo
+        { wch: 8 },  // Origen
+        { wch: 8 },  // Destino
+        { wch: 8 },  // STD
+        { wch: 10 }, // Matrícula
+        { wch: 12 }, // DLY 1
+        { wch: 12 }, // DLY 2
+        { wch: 24 }, // Inicio búsqueda a tiempo
+        { wch: 20 }, // Hora inicio búsqueda
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Búsquedas Equipaje COD 18");
+    XLSX.writeFile(wb, `busquedas_equipaje_cod18_${dateLabel.replace(/[^\w.-]+/g, "_")}.xlsx`);
+}
 
 /** Cantidad de vuelos con PEA manga / remota en hitos (lista ya filtrada por el llamador). */
 export function computePeaCounts(flights: Flight[]): { manga: number; remota: number } {
