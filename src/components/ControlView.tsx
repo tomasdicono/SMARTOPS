@@ -229,8 +229,8 @@ export function ControlView({
         [statsFlights],
     );
     const busquedasBagCompliance = useMemo(
-        () => computeBusquedasBagCompliance(statsFlights),
-        [statsFlights],
+        () => computeBusquedasBagCompliance(statsFlights, controlAirports),
+        [statsFlights, controlAirports],
     );
     const statsFlightsMvtSent = useMemo(() => statsFlights.filter(hasMvtSent), [statsFlights]);
     const statsMvtSentTotal = statsFlightsMvtSent.length;
@@ -1455,7 +1455,7 @@ export function ControlView({
                 }}
             >
                 <div
-                    className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200/80"
+                    className="w-[95vw] max-w-7xl h-[85vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200/80"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-fuchsia-50 to-white">
@@ -1488,67 +1488,107 @@ export function ControlView({
                             </button>
                         </div>
                     </div>
-                    <div className="p-0 flex-1 min-h-0 overflow-auto">
-                        {busquedasBagCompliance.cod18Flights.length === 0 ? (
-                            <p className="text-center text-slate-500 py-8 text-sm">No hay vuelos con demora COD 18 en este período.</p>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead className="sticky top-0 bg-fuchsia-50/90 backdrop-blur border-b border-fuchsia-100">
-                                    <tr className="text-left text-xs font-black uppercase tracking-wider text-fuchsia-900">
-                                        <th className="px-4 py-3">Fecha</th>
-                                        <th className="px-4 py-3">Vuelo</th>
-                                        <th className="px-4 py-3">Ruta</th>
-                                        <th className="px-4 py-3">STD</th>
-                                        <th className="px-4 py-3">Mat.</th>
-                                        <th className="px-4 py-3">Demoras (MVT)</th>
-                                        <th className="px-4 py-3">Inicio búsqueda</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-fuchsia-50">
-                                    {busquedasBagCompliance.cod18Flights.map((info, i) => (
-                                        <tr key={info.flight.id + "-" + i} className="hover:bg-fuchsia-50/30">
-                                            <td className="px-4 py-3 font-mono text-slate-700 whitespace-nowrap">
-                                                {info.flight.date}
-                                            </td>
-                                            <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">
-                                                {getAirlinePrefix(info.flight.flt)}{info.flight.flt}
-                                            </td>
-                                            <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
-                                                {info.flight.dep}-{info.flight.arr}
-                                            </td>
-                                            <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap flex items-center gap-2">
-                                                <span>{info.flight.std || "—"}</span>
-                                                {info.valMins != null && (
-                                                    <span className="text-fuchsia-700 font-bold bg-fuchsia-100 px-1.5 py-0.5 rounded text-xs" title="Hora inicio búsqueda">
-                                                        {formatMinutesToHHMM(info.valMins)}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
-                                                {info.flight.reg || "—"}
-                                            </td>
-                                            <td className="px-4 py-3 text-xs">
-                                                {info.flight.mvtData?.dlyCod1 && (
-                                                    <div>{info.flight.mvtData.dlyCod1} ({info.flight.mvtData.dlyTime1}m)</div>
-                                                )}
-                                                {info.flight.mvtData?.dlyCod2 && (
-                                                    <div>{info.flight.mvtData.dlyCod2} ({info.flight.mvtData.dlyTime2}m)</div>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 font-semibold whitespace-nowrap">
-                                                {info.onTime === true ? (
-                                                    <span className="text-emerald-700 flex items-center gap-1.5"><CircleCheck className="w-3.5 h-3.5"/> A tiempo</span>
-                                                ) : info.onTime === false ? (
-                                                    <span className="text-rose-700 flex items-center gap-1.5"><X className="w-3.5 h-3.5"/> Demorado</span>
-                                                ) : (
-                                                    <span className="text-slate-400 italic">No registrado</span>
-                                                )}
-                                            </td>
+                    <div className="p-0 flex-1 min-h-0 flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-slate-100 overflow-hidden">
+                        <div className="flex-1 overflow-auto">
+                            {busquedasBagCompliance.cod18Flights.length === 0 ? (
+                                <p className="text-center text-slate-500 py-8 text-sm">No hay vuelos con demora COD 18 en este período.</p>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead className="sticky top-0 bg-fuchsia-50/90 backdrop-blur border-b border-fuchsia-100">
+                                        <tr className="text-left text-xs font-black uppercase tracking-wider text-fuchsia-900">
+                                            <th className="px-4 py-3">Fecha</th>
+                                            <th className="px-4 py-3">Vuelo</th>
+                                            <th className="px-4 py-3">Ruta</th>
+                                            <th className="px-4 py-3">STD</th>
+                                            <th className="px-4 py-3">Mat.</th>
+                                            <th className="px-4 py-3">Demoras (MVT)</th>
+                                            <th className="px-4 py-3">Inicio búsqueda</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
+                                    </thead>
+                                    <tbody className="divide-y divide-fuchsia-50">
+                                        {busquedasBagCompliance.cod18Flights.map((info, i) => (
+                                            <tr key={info.flight.id + "-" + i} className="hover:bg-fuchsia-50/30">
+                                                <td className="px-4 py-3 font-mono text-slate-700 whitespace-nowrap">
+                                                    {info.flight.date}
+                                                </td>
+                                                <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">
+                                                    {getAirlinePrefix(info.flight.flt)}{info.flight.flt}
+                                                </td>
+                                                <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
+                                                    {info.flight.dep}-{info.flight.arr}
+                                                </td>
+                                                <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap flex items-center gap-2">
+                                                    <span>{info.flight.std || "—"}</span>
+                                                    {info.valMins != null && (
+                                                        <span className="text-fuchsia-700 font-bold bg-fuchsia-100 px-1.5 py-0.5 rounded text-xs" title="Hora inicio búsqueda">
+                                                            {formatMinutesToHHMM(info.valMins)}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
+                                                    {info.flight.reg || "—"}
+                                                </td>
+                                                <td className="px-4 py-3 text-xs">
+                                                    {info.flight.mvtData?.dlyCod1 && (
+                                                        <div>{info.flight.mvtData.dlyCod1} ({info.flight.mvtData.dlyTime1}m)</div>
+                                                    )}
+                                                    {info.flight.mvtData?.dlyCod2 && (
+                                                        <div>{info.flight.mvtData.dlyCod2} ({info.flight.mvtData.dlyTime2}m)</div>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 font-semibold whitespace-nowrap">
+                                                    {info.onTime === true ? (
+                                                        <span className="text-emerald-700 flex items-center gap-1.5"><CircleCheck className="w-3.5 h-3.5"/> A tiempo</span>
+                                                    ) : info.onTime === false ? (
+                                                        <span className="text-rose-700 flex items-center gap-1.5"><X className="w-3.5 h-3.5"/> Demorado</span>
+                                                    ) : (
+                                                        <span className="text-slate-400 italic">No registrado</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="w-full lg:w-[480px] xl:w-[550px] flex-shrink-0 bg-slate-50/30 overflow-auto border-t lg:border-t-0 border-slate-100">
+                            <div className="p-3 bg-slate-100/50 border-b border-slate-200 sticky top-0 backdrop-blur z-10">
+                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">
+                                    Ranking por {controlAirports.length === 0 ? "Ruta" : "Destino"}
+                                </h3>
+                                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">Activaciones de búsqueda y promedios demora COD 18</p>
+                            </div>
+                            {busquedasBagCompliance.rankingByAirport.length === 0 ? (
+                                <p className="text-center text-slate-500 py-8 text-sm">Sin datos para el ranking.</p>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-slate-50/80 border-b border-slate-100">
+                                        <tr className="text-left text-xs font-black uppercase tracking-wider text-slate-500">
+                                            <th className="px-3 py-2">{controlAirports.length === 0 ? "Ruta" : "Destino"}</th>
+                                            <th className="px-3 py-2 text-right">Activaciones</th>
+                                            <th className="px-3 py-2 text-right">% Vuelos</th>
+                                            <th className="px-3 py-2 text-right">Prom. COD 18</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {busquedasBagCompliance.rankingByAirport.map((r, i) => (
+                                            <tr key={r.label} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap flex items-center gap-1.5">
+                                                    <span className="text-slate-400 text-[10px] w-3 text-right">{i + 1}.</span> {r.label}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-mono text-fuchsia-700 font-bold">{r.searchActivations}</td>
+                                                <td className="px-3 py-2 text-right font-mono text-fuchsia-700 font-bold">
+                                                    {r.totalFlights > 0 ? ((r.searchActivations / r.totalFlights) * 100).toFixed(1) + "%" : "—"}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-mono text-rose-700">
+                                                    {r.cod18Count > 0 ? (r.cod18TotalMins / r.cod18Count).toFixed(1) + "m" : "—"}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

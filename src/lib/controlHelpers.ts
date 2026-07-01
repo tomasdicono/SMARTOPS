@@ -846,10 +846,17 @@ export interface Cod18FlightInfo {
     valMins: number | null;
 }
 
-export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneComplianceStats & { 
+export function computeBusquedasBagCompliance(flights: Flight[], controlAirports: string[] = []): MilestoneComplianceStats & { 
     cod18Flights: Cod18FlightInfo[];
     totalSearches: number;
     totalOperated: number;
+    rankingByAirport: {
+        label: string;
+        searchActivations: number;
+        totalFlights: number;
+        cod18Count: number;
+        cod18TotalMins: number;
+    }[];
 } {
     const names = ["Inicio búsqueda de equipaje"];
     let onTimeCount = 0;
@@ -857,14 +864,31 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
     let totalSearches = 0;
     const totalOperated = flights.length;
     const cod18Flights: Cod18FlightInfo[] = [];
+    const groupStats = new Map<string, { searchActivations: number; totalFlights: number; cod18Count: number; cod18TotalMins: number }>();
 
     for (const f of flights) {
         const hasCod18 = f.mvtData?.dlyCod1 === "18" || f.mvtData?.dlyCod2 === "18";
         const h = normalizeHitosData(f.hitosData);
         
+        const groupKey = controlAirports.length === 0 ? `${f.dep}-${f.arr}` : f.arr;
+        
+        if (!groupStats.has(groupKey)) {
+            groupStats.set(groupKey, { searchActivations: 0, totalFlights: 0, cod18Count: 0, cod18TotalMins: 0 });
+        }
+        const st = groupStats.get(groupKey)!;
+        st.totalFlights += 1;
+        
         const rawSearch = hitosEntryHhmm(h.entries, "Inicio búsqueda de equipaje");
         if (rawSearch && rawSearch !== "0000" && rawSearch !== "00:00") {
             totalSearches += 1;
+            st.searchActivations += 1;
+        }
+        
+        if (hasCod18) {
+            st.cod18Count += 1;
+            const t1 = f.mvtData?.dlyCod1 === "18" ? Number(f.mvtData?.dlyTime1) || 0 : 0;
+            const t2 = f.mvtData?.dlyCod2 === "18" ? Number(f.mvtData?.dlyTime2) || 0 : 0;
+            st.cod18TotalMins += t1 + t2;
         }
 
         if (!h.ganttChartName) {
@@ -911,6 +935,11 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
         }
     }
     
+    const rankingByAirport = Array.from(groupStats.entries())
+        .map(([label, data]) => ({ label, ...data }))
+        .sort((a, b) => b.searchActivations - a.searchActivations || b.cod18Count - a.cod18Count)
+        .filter((a) => a.searchActivations > 0 || a.cod18Count > 0);
+
     return {
         onTimePct: evaluatedCount > 0 ? (onTimeCount / evaluatedCount) * 100 : null,
         onTimeCount,
@@ -918,6 +947,7 @@ export function computeBusquedasBagCompliance(flights: Flight[]): MilestoneCompl
         cod18Flights,
         totalSearches,
         totalOperated,
+        rankingByAirport,
     };
 }
 
