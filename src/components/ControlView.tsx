@@ -219,6 +219,24 @@ export function ControlView({
     const totalBags = useMemo(() => statsFlights.reduce((s, f) => s + getBags(f), 0), [statsFlights]);
     const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
+
+    const interAirports = useMemo(() => ["SCL", "NAT", "REC", "LIM", "FLN", "GIG"], []);
+    const interFlights = useMemo(
+        () => statsFlights.filter((f) => interAirports.includes(f.dep) || interAirports.includes(f.arr)),
+        [statsFlights, interAirports],
+    );
+    const domFlights = useMemo(
+        () => statsFlights.filter((f) => !interAirports.includes(f.dep) && !interAirports.includes(f.arr)),
+        [statsFlights, interAirports],
+    );
+
+    const totalBagsInter = useMemo(() => interFlights.reduce((s, f) => s + getBags(f), 0), [interFlights]);
+    const totalPaxInter = useMemo(() => interFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [interFlights]);
+    const bagsPerPaxPctInter = totalPaxInter > 0 ? (totalBagsInter / totalPaxInter) * 100 : null;
+
+    const totalBagsDom = useMemo(() => domFlights.reduce((s, f) => s + getBags(f), 0), [domFlights]);
+    const totalPaxDom = useMemo(() => domFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [domFlights]);
+    const bagsPerPaxPctDom = totalPaxDom > 0 ? (totalBagsDom / totalPaxDom) * 100 : null;
     const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(statsFlights), [statsFlights]);
     const inicioEmbarqueCompliance = useMemo(
         () => computeInicioEmbarqueCompliance(statsFlights),
@@ -1111,14 +1129,34 @@ export function ControlView({
                                     : "Sin vuelos en el filtro"}
                             </p>
                         </div>
-                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-emerald-50/50 to-white sm:col-span-2 lg:col-span-1">
-                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
-                                <Percent className="w-3.5 h-3.5" /> Bags / Pax
-                            </p>
-                            <p className="text-3xl font-black text-emerald-800 mt-2">
-                                {bagsPerPaxPct != null ? `${bagsPerPaxPct.toFixed(2)}%` : "—"}
-                            </p>
-                            <p className="text-xs text-slate-600 mt-1">Porcentaje: bags sobre pasajeros (mismo filtro)</p>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-emerald-50/50 to-white sm:col-span-2 lg:col-span-1 flex flex-col justify-between">
+                            <div>
+                                <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                    <Percent className="w-3.5 h-3.5" /> Bags / Pax
+                                </p>
+                                <div className="mt-2 flex items-baseline gap-2">
+                                    <span className="text-4xl font-black text-emerald-800 tabular-nums">
+                                        {bagsPerPaxPct != null ? `${bagsPerPaxPct.toFixed(2)}%` : "—"}
+                                    </span>
+                                    <span className="text-xs font-bold text-emerald-800/60 uppercase">Total</span>
+                                </div>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-3 pt-3 border-t border-emerald-100">
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Inter</p>
+                                    <p className="text-2xl font-black text-emerald-700 tabular-nums">
+                                        {bagsPerPaxPctInter != null ? `${bagsPerPaxPctInter.toFixed(2)}%` : "—"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">SCL/NAT/REC/LIM/FLN/GIG</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Dom</p>
+                                    <p className="text-2xl font-black text-emerald-700 tabular-nums">
+                                        {bagsPerPaxPctDom != null ? `${bagsPerPaxPctDom.toFixed(2)}%` : "—"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Vuelos domésticos</p>
+                                </div>
+                            </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-amber-50/40 to-white">
                             <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
