@@ -482,7 +482,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
             {flight.mvtData?.mvtSentAt ? (
                 <div className="text-center text-xs font-semibold text-muted-foreground pt-6 mt-2 border-t border-border space-y-1">
                     <p>
-                        MVT enviado:{" "}
+                        MVT enviado{flight.mvtData.mvtSentByName ? ` por ${flight.mvtData.mvtSentByName}` : ""}:{" "}
                         <span className="text-foreground tabular-nums">
                             {new Date(flight.mvtData.mvtSentAt).toLocaleString("es-AR", {
                                 dateStyle: "short",

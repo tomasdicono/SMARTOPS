@@ -562,6 +562,10 @@ function App() {
         return;
       }
       payload.mvtSentAt = new Date().toISOString();
+      if (userRole === "SC" && currentUser) {
+        payload.mvtSentByUid = currentUser.id;
+        payload.mvtSentByName = currentUser.name;
+      }
       const f = existingFlight;
       const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
       try {
@@ -601,6 +605,10 @@ function App() {
         return;
       }
       payload.mvtSentAt = new Date().toISOString();
+      if (userRole === "SC" && currentUser) {
+        payload.mvtSentByUid = currentUser.id;
+        payload.mvtSentByName = currentUser.name;
+      }
     }
 
     const f = existingFlight;
@@ -640,6 +648,10 @@ function App() {
   const handleSaveHitos = async (id: string, hitosData: HitosData) => {
     const payload = normalizeHitosData(hitosData);
     payload.hitosSentAt = new Date().toISOString();
+    if (userRole === "SC" && currentUser) {
+      payload.hitosSentByUid = currentUser.id;
+      payload.hitosSentByName = currentUser.name;
+    }
     const f = flights.find((x) => x.id === id);
     const subtitle = f ? `${getAirlinePrefix(f.flt)}${f.flt} · ${f.reg} · ${f.dep}→${f.arr}` : undefined;
     try {

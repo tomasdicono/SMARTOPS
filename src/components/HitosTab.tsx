@@ -434,6 +434,20 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                             </button>
                         </div>
                     )}
+                    
+                    {flight.hitosData?.hitosSentAt ? (
+                        <div className="text-center text-xs font-semibold text-muted-foreground pt-6 mt-4 border-t border-slate-100 space-y-1">
+                            <p>
+                                Hitos enviados{flight.hitosData.hitosSentByName ? ` por ${flight.hitosData.hitosSentByName}` : ""}:{" "}
+                                <span className="text-foreground tabular-nums">
+                                    {new Date(flight.hitosData.hitosSentAt).toLocaleString("es-AR", {
+                                        dateStyle: "short",
+                                        timeStyle: "medium",
+                                    })}
+                                </span>
+                            </p>
+                        </div>
+                    ) : null}
                 </div>
             ) : (
                 <div className="flex flex-col items-center justify-center flex-1 min-h-0 text-muted-foreground p-8 opacity-60">

@@ -69,6 +69,8 @@ export interface HitosData {
     entries: Record<string, string>; // Milestone name -> real execution time
     /** ISO 8601 — envío validado desde la pestaña Hitos (no el auto-guardado de borrador). */
     hitosSentAt?: string;
+    hitosSentByUid?: string;
+    hitosSentByName?: string;
     /** Inicio uso GPU (HHMM, 4 dígitos). */
     gpuStart?: string;
     /** Fin uso GPU (HHMM). */
@@ -116,6 +118,8 @@ export interface Flight {
         supervisor: string;
         /** ISO 8601 — primera vez que se envió el MVT */
         mvtSentAt?: string;
+        mvtSentByUid?: string;
+        mvtSentByName?: string;
         /** ISO 8601 — última corrección del MVT por un usuario HCC tras el envío */
         mvtEditedByHccAt?: string;
     };
