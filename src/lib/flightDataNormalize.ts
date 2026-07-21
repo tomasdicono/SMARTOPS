@@ -127,6 +127,8 @@ export function mergeHitosDataForPersist(prev: HitosData, incoming: HitosData): 
         gpuEnd: pickNonEmptyString(inc.gpuEnd, p.gpuEnd),
         gpuNotUsed: inc.gpuNotUsed || p.gpuNotUsed,
         peaPosition: inc.peaPosition || p.peaPosition,
+        limpiezaRealizada: typeof inc.limpiezaRealizada === "boolean" ? inc.limpiezaRealizada : p.limpiezaRealizada,
+        limpiezaTipo: inc.limpiezaTipo || p.limpiezaTipo,
     };
     if (inc.hitosSentAt?.trim()) out.hitosSentAt = inc.hitosSentAt;
     else if (p.hitosSentAt?.trim()) out.hitosSentAt = p.hitosSentAt;
@@ -162,6 +164,8 @@ export function emptyHitosData(): HitosData {
         gpuEnd: "",
         gpuNotUsed: false,
         peaPosition: "",
+        limpiezaRealizada: false,
+        limpiezaTipo: "",
     };
 }
 
@@ -182,6 +186,9 @@ export function normalizeHitosData(raw?: Partial<HitosData> | null): HitosData {
     const peaPosition: PeaPosition =
         peaRaw === "remota" || peaRaw === "manga" ? peaRaw : "";
 
+    const limpiezaTipoRaw = raw.limpiezaTipo;
+    const limpiezaTipo = limpiezaTipoRaw === "crew" || limpiezaTipoRaw === "planificada" ? limpiezaTipoRaw : "";
+
     const out: HitosData = {
         ganttChartName: typeof raw.ganttChartName === "string" ? raw.ganttChartName : "",
         ata: typeof raw.ata === "string" ? raw.ata : "",
@@ -190,6 +197,8 @@ export function normalizeHitosData(raw?: Partial<HitosData> | null): HitosData {
         gpuEnd: typeof raw.gpuEnd === "string" ? raw.gpuEnd : "",
         gpuNotUsed: typeof raw.gpuNotUsed === "boolean" ? raw.gpuNotUsed : false,
         peaPosition,
+        limpiezaRealizada: typeof raw.limpiezaRealizada === "boolean" ? raw.limpiezaRealizada : false,
+        limpiezaTipo,
     };
     if (raw.hitosSentAt != null && String(raw.hitosSentAt).trim() !== "") {
         out.hitosSentAt = String(raw.hitosSentAt);

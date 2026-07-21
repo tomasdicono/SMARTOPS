@@ -275,6 +275,46 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                             </label>
                         </div>
                     </div>
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                            Limpieza
+                        </p>
+                        <div className="flex flex-col gap-3">
+                            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!data.limpiezaRealizada}
+                                    onChange={(e) => setData(p => ({ ...p, limpiezaRealizada: e.target.checked, limpiezaTipo: e.target.checked ? p.limpiezaTipo : "" }))}
+                                    className="rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                                Limpieza realizada
+                            </label>
+                            {data.limpiezaRealizada && (
+                                <div className="flex flex-wrap gap-4 sm:gap-6 pl-6" role="radiogroup" aria-label="Tipo Limpieza">
+                                    <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name={`limpieza-${flight.id}`}
+                                            checked={(data.limpiezaTipo ?? "") === "crew"}
+                                            onChange={() => setData((p) => ({ ...p, limpiezaTipo: "crew" }))}
+                                            className="border-slate-300 text-primary focus:ring-primary"
+                                        />
+                                        Requerida por crew
+                                    </label>
+                                    <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name={`limpieza-${flight.id}`}
+                                            checked={(data.limpiezaTipo ?? "") === "planificada"}
+                                            onChange={() => setData((p) => ({ ...p, limpiezaTipo: "planificada" }))}
+                                            className="border-slate-300 text-primary focus:ring-primary"
+                                        />
+                                        Planificada
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

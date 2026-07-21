@@ -105,6 +105,12 @@ export function buildFlightRtdbUpdate(
         if (Object.prototype.hasOwnProperty.call(raw, "peaPosition")) {
             updates["hitosData/peaPosition"] = merged.peaPosition;
         }
+        if (Object.prototype.hasOwnProperty.call(raw, "limpiezaRealizada")) {
+            updates["hitosData/limpiezaRealizada"] = merged.limpiezaRealizada;
+        }
+        if (Object.prototype.hasOwnProperty.call(raw, "limpiezaTipo")) {
+            updates["hitosData/limpiezaTipo"] = merged.limpiezaTipo;
+        }
         if (Object.prototype.hasOwnProperty.call(raw, "hitosSentAt") || merged.hitosSentAt) {
             if (merged.hitosSentAt) updates["hitosData/hitosSentAt"] = merged.hitosSentAt;
         }
