@@ -105,8 +105,8 @@ export function buildFlightRtdbUpdate(
         if (Object.prototype.hasOwnProperty.call(raw, "peaPosition")) {
             updates["hitosData/peaPosition"] = merged.peaPosition;
         }
-        if (Object.prototype.hasOwnProperty.call(raw, "limpiezaRealizada")) {
-            updates["hitosData/limpiezaRealizada"] = merged.limpiezaRealizada;
+        if (Object.prototype.hasOwnProperty.call(raw, "limpiezaStatus")) {
+            updates["hitosData/limpiezaStatus"] = merged.limpiezaStatus;
         }
         if (Object.prototype.hasOwnProperty.call(raw, "limpiezaTipo")) {
             updates["hitosData/limpiezaTipo"] = merged.limpiezaTipo;

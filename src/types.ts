@@ -79,7 +79,7 @@ export interface HitosData {
     gpuNotUsed?: boolean;
     /** PEA: remota o manga. */
     peaPosition?: PeaPosition;
-    limpiezaRealizada?: boolean;
+    limpiezaStatus?: "si" | "no" | "";
     limpiezaTipo?: "crew" | "planificada" | "";
 }
 

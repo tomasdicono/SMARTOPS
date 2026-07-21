@@ -141,6 +141,16 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
             }
         }
 
+        if (!data.limpiezaStatus) {
+            setRevisarMsg("Debe indicar si se realizó limpieza (Sí o No).");
+            return;
+        }
+
+        if (data.limpiezaStatus === "si" && !data.limpiezaTipo) {
+            setRevisarMsg("Debe seleccionar si la limpieza fue requerida por crew o planificada.");
+            return;
+        }
+
         const { start: embStart, end: embEnd } = getEmbarqueTimesFromHitosEntries(data.entries);
         const embWarn = validateHhmmEndNotBeforeStart(embStart, embEnd, {
             hitoLabel: "Fin embarque",
@@ -277,20 +287,33 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                     </div>
                     <div>
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                            Limpieza
+                            Limpieza <span className="text-red-500">*</span>
                         </p>
                         <div className="flex flex-col gap-3">
-                            <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={!!data.limpiezaRealizada}
-                                    onChange={(e) => setData(p => ({ ...p, limpiezaRealizada: e.target.checked, limpiezaTipo: e.target.checked ? p.limpiezaTipo : "" }))}
-                                    className="rounded border-slate-300 text-primary focus:ring-primary"
-                                />
-                                Limpieza realizada
-                            </label>
-                            {data.limpiezaRealizada && (
-                                <div className="flex flex-wrap gap-4 sm:gap-6 pl-6" role="radiogroup" aria-label="Tipo Limpieza">
+                            <div className="flex flex-wrap gap-4 sm:gap-6" role="radiogroup" aria-label="Limpieza Status">
+                                <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name={`limpieza-status-${flight.id}`}
+                                        checked={(data.limpiezaStatus ?? "") === "si"}
+                                        onChange={() => setData((p) => ({ ...p, limpiezaStatus: "si" }))}
+                                        className="border-slate-300 text-primary focus:ring-primary"
+                                    />
+                                    Sí se realizó limpieza
+                                </label>
+                                <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name={`limpieza-status-${flight.id}`}
+                                        checked={(data.limpiezaStatus ?? "") === "no"}
+                                        onChange={() => setData((p) => ({ ...p, limpiezaStatus: "no", limpiezaTipo: "" }))}
+                                        className="border-slate-300 text-primary focus:ring-primary"
+                                    />
+                                    No se realizó
+                                </label>
+                            </div>
+                            {data.limpiezaStatus === "si" && (
+                                <div className="flex flex-wrap gap-4 sm:gap-6 pl-6 mt-1 border-l-2 border-slate-100" role="radiogroup" aria-label="Tipo Limpieza">
                                     <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
                                         <input
                                             type="radio"

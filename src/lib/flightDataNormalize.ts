@@ -127,7 +127,7 @@ export function mergeHitosDataForPersist(prev: HitosData, incoming: HitosData): 
         gpuEnd: pickNonEmptyString(inc.gpuEnd, p.gpuEnd),
         gpuNotUsed: inc.gpuNotUsed || p.gpuNotUsed,
         peaPosition: inc.peaPosition || p.peaPosition,
-        limpiezaRealizada: typeof inc.limpiezaRealizada === "boolean" ? inc.limpiezaRealizada : p.limpiezaRealizada,
+        limpiezaStatus: inc.limpiezaStatus || p.limpiezaStatus,
         limpiezaTipo: inc.limpiezaTipo || p.limpiezaTipo,
     };
     if (inc.hitosSentAt?.trim()) out.hitosSentAt = inc.hitosSentAt;
@@ -164,7 +164,7 @@ export function emptyHitosData(): HitosData {
         gpuEnd: "",
         gpuNotUsed: false,
         peaPosition: "",
-        limpiezaRealizada: false,
+        limpiezaStatus: "",
         limpiezaTipo: "",
     };
 }
@@ -186,6 +186,9 @@ export function normalizeHitosData(raw?: Partial<HitosData> | null): HitosData {
     const peaPosition: PeaPosition =
         peaRaw === "remota" || peaRaw === "manga" ? peaRaw : "";
 
+    const limpiezaStatusRaw = raw.limpiezaStatus;
+    const limpiezaStatus = limpiezaStatusRaw === "si" || limpiezaStatusRaw === "no" ? limpiezaStatusRaw : "";
+
     const limpiezaTipoRaw = raw.limpiezaTipo;
     const limpiezaTipo = limpiezaTipoRaw === "crew" || limpiezaTipoRaw === "planificada" ? limpiezaTipoRaw : "";
 
@@ -197,7 +200,7 @@ export function normalizeHitosData(raw?: Partial<HitosData> | null): HitosData {
         gpuEnd: typeof raw.gpuEnd === "string" ? raw.gpuEnd : "",
         gpuNotUsed: typeof raw.gpuNotUsed === "boolean" ? raw.gpuNotUsed : false,
         peaPosition,
-        limpiezaRealizada: typeof raw.limpiezaRealizada === "boolean" ? raw.limpiezaRealizada : false,
+        limpiezaStatus,
         limpiezaTipo,
     };
     if (raw.hitosSentAt != null && String(raw.hitosSentAt).trim() !== "") {
