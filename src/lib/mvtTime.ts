@@ -117,7 +117,8 @@ export function computeMvtDelayStatus(
     let atdMinutes = parseTimeToMinutes(atd);
     
     // Detección automática de cruce de medianoche
-    if (stdMinutes >= 1200 && atdMinutes <= 240) {
+    // Si ATD es menor a STD por un margen amplio (ej. 4 horas), asumimos que cruzó al día siguiente
+    if (atdMinutes < stdMinutes - 240) {
         atdMinutes += 1440;
     }
 
