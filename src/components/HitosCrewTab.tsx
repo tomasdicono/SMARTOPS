@@ -186,8 +186,11 @@ export function HitosCrewTab({ flight, readOnly, onSave, onPersistCrewHitos }: P
                     let statusColor = "bg-slate-100 text-slate-400 border-transparent";
                     let statusText = "Pendiente";
                     if (val.length >= 3 && targetInfo) {
-                        const valMins = parseToMins(val.padStart(4, "0"));
+                        let valMins = parseToMins(val.padStart(4, "0"));
                         const targetMins = targetInfo.targetMins;
+                        if (valMins < targetMins && targetMins - valMins > 12 * 60) {
+                            valMins += 24 * 60;
+                        }
                         if (valMins > targetMins && valMins - targetMins < 600) {
                             statusColor = "bg-red-50 text-red-600 border-red-200";
                             statusText = "Retraso";

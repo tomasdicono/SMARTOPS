@@ -191,16 +191,22 @@ export function refMinutesForHitos(flight: Flight, data: HitosData, chart: (type
     return refMinutes;
 }
 
-/** Misma regla que HitosTab / HitosCrewTab: retraso si real > objetivo y la diferencia &lt; 10 h. */
 export function isMilestoneOnTime(valMins: number, targetMins: number): boolean {
-    if (valMins > targetMins && valMins - targetMins < 600) return false;
+    let adjustedVal = valMins;
+    if (adjustedVal < targetMins && targetMins - adjustedVal > 12 * 60) {
+        adjustedVal += 24 * 60;
+    }
+    if (adjustedVal > targetMins && adjustedVal - targetMins < 600) return false;
     return true;
 }
 
-/** Misma regla que HitosTab para Retraso vs A tiempo */
 export function demoraOperacional(valMins: number, targetMins: number): string {
-    if (valMins > targetMins && valMins - targetMins < 600) {
-        return `+${valMins - targetMins} min`;
+    let adjustedVal = valMins;
+    if (adjustedVal < targetMins && targetMins - adjustedVal > 12 * 60) {
+        adjustedVal += 24 * 60;
+    }
+    if (adjustedVal > targetMins && adjustedVal - targetMins < 600) {
+        return `+${adjustedVal - targetMins} min`;
     }
     return "A tiempo";
 }

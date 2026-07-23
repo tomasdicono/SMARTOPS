@@ -428,7 +428,10 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                             let statusText = "Pendiente";
 
                             if (val.length >= 3 && targetMins != null) {
-                                const valMins = parseToMins(val.padStart(4, "0"));
+                                let valMins = parseToMins(val.padStart(4, "0"));
+                                if (valMins < targetMins && targetMins - valMins > 12 * 60) {
+                                    valMins += 24 * 60;
+                                }
                                 if (valMins > targetMins && valMins - targetMins < 600) {
                                     statusColor = "bg-red-50 text-red-600 border-red-200";
                                     statusText = "Retraso";
