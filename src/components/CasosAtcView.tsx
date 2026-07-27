@@ -5,6 +5,7 @@ import { type Flight } from "../types";
 import { parseTimeToMinutes, formatMinutesToHHMM, formatMvtTimeDisplay } from "../lib/mvtTime";
 import { getAirlinePrefix } from "../lib/flightHelpers";
 import { formatDelayCell, delayTimeCellClassName, totalDelayMinutes } from "../lib/dailyReportHelpers";
+import { downloadDailyOtpPdf } from "../lib/dailyOtpPdf";
 
 interface FlightWithDelay extends Flight {
   _filteredDelayMins: number;
@@ -167,31 +168,9 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
     }).sort((a, b) => a.std.localeCompare(b.std));
   }, [flights, otpDate]);
 
-  const handleDownloadOtpExcel = () => {
+  const handleDownloadOtpPdf = () => {
     if (otpFlights.length === 0 || !otpDate) return;
-
-    const data = otpFlights.map((f) => ({
-      "DLY TTL": formatMinutesToHHMM(totalDelayMinutes(f)),
-      "FLT Number": `${getAirlinePrefix(f.flt)}${f.flt}`,
-      "STD": f.std || "—",
-      "ATD": f.mvtData?.atd ? formatMinutesToHHMM(parseTimeToMinutes(f.mvtData.atd)) : "—",
-      "From": f.dep,
-      "To": f.arr,
-      "Reg": f.reg,
-      "Min 1": formatDelayCell(f.mvtData?.dlyTime1),
-      "1° Code": f.mvtData?.dlyCod1 || "—",
-      "Min 2": formatDelayCell(f.mvtData?.dlyTime2),
-      "2° Code": f.mvtData?.dlyCod2 || "—",
-      "Observaciones": f.dailyReportObs || "—",
-      "Plan de acción": planDeAccionMap[f.id] || "",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Daily OTP");
-    
-    const dateFormatted = otpDate.split("-").reverse().join("-");
-    XLSX.writeFile(workbook, `Daily Otp_${dateFormatted}_AR.xlsx`);
+    downloadDailyOtpPdf(otpFlights, otpDate, planDeAccionMap);
   };
 
   const handleDownloadExcel = () => {
@@ -367,12 +346,12 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
                  />
                </div>
                <button
-                 onClick={handleDownloadOtpExcel}
+                 onClick={handleDownloadOtpPdf}
                  disabled={otpFlights.length === 0}
                  className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                >
                  <Download size={20} />
-                 <span className="font-medium">Descargar Excel</span>
+                 <span className="font-medium">Descargar PDF</span>
                </button>
             </div>
             
@@ -432,18 +411,18 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
                                   {formatDelayCell(m.dlyTime2)}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-800">{m.dlyCod2 || "—"}</td>
-                              <td className="px-4 py-3 w-[250px]">
+                              <td className="px-4 py-3 w-[400px]">
                                   <textarea
                                       readOnly
                                       value={f.dailyReportObs || ""}
-                                      rows={2}
+                                      rows={3}
                                       className="w-full text-xs border border-gray-200 rounded-lg p-1.5 bg-gray-50 text-gray-500 resize-none cursor-default focus:outline-none"
                                   />
                               </td>
-                              <td className="px-4 py-3 w-[250px]">
+                              <td className="px-4 py-3 w-[300px]">
                                   <textarea
                                       value={planDeAccionMap[f.id] || ""}
-                                      rows={2}
+                                      rows={3}
                                       placeholder="Plan de acción…"
                                       onChange={(e) => setPlanDeAccionMap(prev => ({ ...prev, [f.id]: e.target.value }))}
                                       className="w-full text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
