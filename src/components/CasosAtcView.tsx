@@ -13,7 +13,6 @@ interface FlightWithDelay extends Flight {
 interface CasosAtcViewProps {
   flights: Flight[];
   onFlightSelect?: (flight: Flight) => void;
-  onUpdateDailyReportObs?: (flightId: string, text: string) => void;
 }
 
 function MultiSelect({ label, options, selected, onToggle }: { label: string, options: string[], selected: string[], onToggle: (val: string) => void }) {
@@ -62,7 +61,7 @@ function MultiSelect({ label, options, selected, onToggle }: { label: string, op
   );
 }
 
-export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }: CasosAtcViewProps) {
+export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
   const [activeTab, setActiveTab] = useState<"buscador" | "dailyOtp">("buscador");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -144,24 +143,6 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }
       return { ...f, _filteredDelayMins: mins } as FlightWithDelay;
     }).sort((a, b) => a.date.localeCompare(b.date) || a.std.localeCompare(b.std));
   }, [flights, startDate, endDate, selectedAirports, selectedCodes]);
-
-  const obsTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  useEffect(() => {
-      return () => {
-          Object.values(obsTimers.current).forEach(clearTimeout);
-      };
-  }, []);
-
-  const scheduleObs = (id: string, text: string) => {
-      if (obsTimers.current[id]) clearTimeout(obsTimers.current[id]);
-      obsTimers.current[id] = setTimeout(() => {
-          if (onUpdateDailyReportObs) {
-              onUpdateDailyReportObs(id, text);
-          }
-          delete obsTimers.current[id];
-      }, 600);
-  };
 
   const OTP_CODES = ["3", "8", "12", "14", "15", "34", "85", "18", "36", "38", "11", "39", "33", "86", "87", "99", "35", "19", "58", "75"];
 
