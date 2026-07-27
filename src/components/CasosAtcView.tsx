@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Download, ChevronDown, Check } from "lucide-react";
 import * as XLSX from "xlsx";
 import { type Flight } from "../types";
