@@ -67,6 +67,7 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [otpDate, setOtpDate] = useState("");
+  const [planDeAccionMap, setPlanDeAccionMap] = useState<Record<string, string>>({});
   
   const [selectedAirports, setSelectedAirports] = useState<string[]>([]);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
@@ -184,6 +185,33 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }
       return false;
     }).sort((a, b) => a.std.localeCompare(b.std));
   }, [flights, otpDate]);
+
+  const handleDownloadOtpExcel = () => {
+    if (otpFlights.length === 0 || !otpDate) return;
+
+    const data = otpFlights.map((f) => ({
+      "DLY TTL": formatMinutesToHHMM(totalDelayMinutes(f)),
+      "FLT Number": `${getAirlinePrefix(f.flt)}${f.flt}`,
+      "STD": f.std || "—",
+      "ATD": f.mvtData?.atd ? formatMinutesToHHMM(parseTimeToMinutes(f.mvtData.atd)) : "—",
+      "From": f.dep,
+      "To": f.arr,
+      "Reg": f.reg,
+      "Min 1": formatDelayCell(f.mvtData?.dlyTime1),
+      "1° Code": f.mvtData?.dlyCod1 || "—",
+      "Min 2": formatDelayCell(f.mvtData?.dlyTime2),
+      "2° Code": f.mvtData?.dlyCod2 || "—",
+      "Observaciones": f.dailyReportObs || "—",
+      "Plan de acción": planDeAccionMap[f.id] || "",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Daily OTP");
+    
+    const dateFormatted = otpDate.split("-").reverse().join("-");
+    XLSX.writeFile(workbook, `Daily Otp_${dateFormatted}_AR.xlsx`);
+  };
 
   const handleDownloadExcel = () => {
     if (filteredFlights.length === 0) return;
@@ -347,14 +375,24 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }
 
         {activeTab === "dailyOtp" && (
           <>
-            <div className="bg-white p-4 rounded-xl shadow-sm">
-               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de OTP</label>
-               <input
-                 type="date"
-                 value={otpDate}
-                 onChange={(e) => setOtpDate(e.target.value)}
-                 className="w-full sm:w-auto rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 border min-h-[42px]"
-               />
+            <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de OTP</label>
+                 <input
+                   type="date"
+                   value={otpDate}
+                   onChange={(e) => setOtpDate(e.target.value)}
+                   className="w-full sm:w-auto rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 border min-h-[42px]"
+                 />
+               </div>
+               <button
+                 onClick={handleDownloadOtpExcel}
+                 disabled={otpFlights.length === 0}
+                 className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                 <Download size={20} />
+                 <span className="font-medium">Descargar Excel</span>
+               </button>
             </div>
             
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -374,12 +412,13 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">2° Code</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Observaciones</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan de acción</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {otpFlights.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={13} className="px-6 py-8 text-center text-gray-500">
                           {!otpDate 
                             ? "Seleccioná una fecha para ver los vuelos OTP." 
                             : "No se encontraron vuelos OTP para esta fecha."}
@@ -414,10 +453,18 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }
                               <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-800">{m.dlyCod2 || "—"}</td>
                               <td className="px-4 py-3 w-[250px]">
                                   <textarea
-                                      defaultValue={f.dailyReportObs || ""}
+                                      readOnly
+                                      value={f.dailyReportObs || ""}
                                       rows={2}
-                                      placeholder="Observaciones…"
-                                      onChange={(e) => scheduleObs(f.id, e.target.value)}
+                                      className="w-full text-xs border border-gray-200 rounded-lg p-1.5 bg-gray-50 text-gray-500 resize-none cursor-default focus:outline-none"
+                                  />
+                              </td>
+                              <td className="px-4 py-3 w-[250px]">
+                                  <textarea
+                                      value={planDeAccionMap[f.id] || ""}
+                                      rows={2}
+                                      placeholder="Plan de acción…"
+                                      onChange={(e) => setPlanDeAccionMap(prev => ({ ...prev, [f.id]: e.target.value }))}
                                       className="w-full text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
                                   />
                               </td>
