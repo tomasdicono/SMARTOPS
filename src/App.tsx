@@ -1568,6 +1568,7 @@ function App() {
         ) : mainTab === "casosAtc" && userRole === "AJS" ? (
           <CasosAtcView 
             flights={flights} 
+            onUpdateDailyReportObs={handleUpdateDailyReportObs}
             onFlightSelect={(f) => {
               setSelectedFlight(f);
               setFlightModalTab("HITOS");

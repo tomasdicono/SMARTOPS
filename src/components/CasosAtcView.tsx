@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Download, ChevronDown, Check } from "lucide-react";
 import * as XLSX from "xlsx";
 import { type Flight } from "../types";
@@ -13,6 +13,7 @@ interface FlightWithDelay extends Flight {
 interface CasosAtcViewProps {
   flights: Flight[];
   onFlightSelect?: (flight: Flight) => void;
+  onUpdateDailyReportObs?: (flightId: string, text: string) => void;
 }
 
 function MultiSelect({ label, options, selected, onToggle }: { label: string, options: string[], selected: string[], onToggle: (val: string) => void }) {
@@ -61,7 +62,7 @@ function MultiSelect({ label, options, selected, onToggle }: { label: string, op
   );
 }
 
-export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
+export function CasosAtcView({ flights, onFlightSelect, onUpdateDailyReportObs }: CasosAtcViewProps) {
   const [activeTab, setActiveTab] = useState<"buscador" | "dailyOtp">("buscador");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -142,6 +143,24 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
       return { ...f, _filteredDelayMins: mins } as FlightWithDelay;
     }).sort((a, b) => a.date.localeCompare(b.date) || a.std.localeCompare(b.std));
   }, [flights, startDate, endDate, selectedAirports, selectedCodes]);
+
+  const obsTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+      return () => {
+          Object.values(obsTimers.current).forEach(clearTimeout);
+      };
+  }, []);
+
+  const scheduleObs = (id: string, text: string) => {
+      if (obsTimers.current[id]) clearTimeout(obsTimers.current[id]);
+      obsTimers.current[id] = setTimeout(() => {
+          if (onUpdateDailyReportObs) {
+              onUpdateDailyReportObs(id, text);
+          }
+          delete obsTimers.current[id];
+      }, 600);
+  };
 
   const OTP_CODES = ["3", "8", "12", "14", "15", "34", "85", "18", "36", "38", "11", "39", "33", "86", "87", "99", "35", "19", "58", "75"];
 
@@ -354,12 +373,13 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">1° Code</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">2° Code</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Observaciones</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {otpFlights.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={12} className="px-6 py-8 text-center text-gray-500">
                           {!otpDate 
                             ? "Seleccioná una fecha para ver los vuelos OTP." 
                             : "No se encontraron vuelos OTP para esta fecha."}
@@ -392,6 +412,15 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
                                   {formatDelayCell(m.dlyTime2)}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-800">{m.dlyCod2 || "—"}</td>
+                              <td className="px-4 py-3 w-[250px]">
+                                  <textarea
+                                      defaultValue={f.dailyReportObs || ""}
+                                      rows={2}
+                                      placeholder="Observaciones…"
+                                      onChange={(e) => scheduleObs(f.id, e.target.value)}
+                                      className="w-full text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
+                                  />
+                              </td>
                           </tr>
                         );
                       })
