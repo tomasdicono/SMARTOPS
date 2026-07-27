@@ -51,14 +51,20 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
                     note = `Matrícula en sistema (${flight.reg}) ≠ ORIGINAL del pegado (${expect})`;
                 }
             }
-            const previewFlight = flight
-                ? applyGestionesRowToFlight(flight, row, {
-                      syncStdSta,
-                      defaultRescheduleReason: row.raw.etd?.trim()
-                          ? motivoTrimmed
-                          : defaultReasonForPreview,
-                  })
-                : null;
+            let previewFlight: Flight | null = null;
+            if (flight) {
+                try {
+                    previewFlight = applyGestionesRowToFlight(flight, row, {
+                        syncStdSta,
+                        defaultRescheduleReason: row.raw.etd?.trim()
+                            ? motivoTrimmed || "(Falta motivo)"
+                            : defaultReasonForPreview,
+                    });
+                } catch (err) {
+                    note = note ? `${note} · ` : "";
+                    note += err instanceof Error ? err.message : String(err);
+                }
+            }
             return { row, flight, iso, note, previewFlight };
         });
     }, [parsed, flights, syncStdSta, motivoTrimmed, defaultReasonForPreview]);
