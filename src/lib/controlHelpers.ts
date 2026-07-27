@@ -951,7 +951,17 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
     };
 }
 
-export function downloadCod18Excel(cod18Flights: Cod18FlightInfo[], dateLabel: string): void {
+export function downloadCod18Excel(
+    cod18Flights: Cod18FlightInfo[], 
+    dateLabel: string,
+    rankingByAirport?: {
+        label: string;
+        searchActivations: number;
+        totalFlights: number;
+        cod18Count: number;
+        cod18TotalMins: number;
+    }[]
+): void {
     const HEADERS = [
         "Fecha",
         "Vuelo",
@@ -1007,6 +1017,35 @@ export function downloadCod18Excel(cod18Flights: Cod18FlightInfo[], dateLabel: s
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Búsquedas Equipaje COD 18");
+
+    if (rankingByAirport && rankingByAirport.length > 0) {
+        const rankingHeaders = [
+            "Estación",
+            "Búsquedas Activadas",
+            "Vuelos Totales",
+            "Demoras COD 18 (Q)",
+            "Minutos COD 18",
+        ] as const;
+        
+        const rankingRows = rankingByAirport.map((r) => [
+            r.label,
+            r.searchActivations,
+            r.totalFlights,
+            r.cod18Count,
+            r.cod18TotalMins,
+        ]);
+
+        const wsRanking = XLSX.utils.aoa_to_sheet([rankingHeaders.slice(), ...rankingRows]);
+        wsRanking["!cols"] = [
+            { wch: 12 },
+            { wch: 22 },
+            { wch: 18 },
+            { wch: 22 },
+            { wch: 18 },
+        ];
+        XLSX.utils.book_append_sheet(wb, wsRanking, "Ranking");
+    }
+
     XLSX.writeFile(wb, `busquedas_equipaje_cod18_${dateLabel.replace(/[^\w.-]+/g, "_")}.xlsx`);
 }
 

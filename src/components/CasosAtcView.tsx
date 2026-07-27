@@ -3,6 +3,8 @@ import { Download, ChevronDown, Check } from "lucide-react";
 import * as XLSX from "xlsx";
 import { type Flight } from "../types";
 import { parseTimeToMinutes, formatMinutesToHHMM, formatMvtTimeDisplay } from "../lib/mvtTime";
+import { getAirlinePrefix } from "../lib/flightHelpers";
+import { formatDelayCell, delayTimeCellClassName, totalDelayMinutes } from "../lib/dailyReportHelpers";
 
 interface FlightWithDelay extends Flight {
   _filteredDelayMins: number;
@@ -60,8 +62,10 @@ function MultiSelect({ label, options, selected, onToggle }: { label: string, op
 }
 
 export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
+  const [activeTab, setActiveTab] = useState<"buscador" | "dailyOtp">("buscador");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [otpDate, setOtpDate] = useState("");
   
   const [selectedAirports, setSelectedAirports] = useState<string[]>([]);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
@@ -139,6 +143,29 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
     }).sort((a, b) => a.date.localeCompare(b.date) || a.std.localeCompare(b.std));
   }, [flights, startDate, endDate, selectedAirports, selectedCodes]);
 
+  const OTP_CODES = ["3", "8", "12", "14", "15", "34", "85", "18", "36", "38", "11", "39", "33", "86", "87", "99", "35", "19", "58", "75"];
+
+  const otpFlights = useMemo(() => {
+    if (!otpDate) return [];
+    return flights.filter(f => {
+      const [day, month, year] = f.date.split("-");
+      const flightIso = `${year}-${month}-${day}`;
+      if (flightIso !== otpDate) return false;
+
+      const d1 = f.mvtData?.dlyCod1;
+      const d2 = f.mvtData?.dlyCod2;
+      const t1 = parseTimeToMinutes(f.mvtData?.dlyTime1);
+      const t2 = parseTimeToMinutes(f.mvtData?.dlyTime2);
+
+      if (d1 && OTP_CODES.includes(d1)) return true;
+      if (d2 && OTP_CODES.includes(d2)) return true;
+      if (d1 === "66" && t1 > 10) return true;
+      if (d2 === "66" && t2 > 10) return true;
+
+      return false;
+    }).sort((a, b) => a.std.localeCompare(b.std));
+  }, [flights, otpDate]);
+
   const handleDownloadExcel = () => {
     if (filteredFlights.length === 0) return;
 
@@ -170,19 +197,35 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl shadow-sm">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Buscador demoras</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Seleccioná un rango de fechas y filtros para buscar demoras.
-            </p>
+            <div className="flex gap-4 mt-3 border-b border-gray-200">
+              <button
+                className={`pb-2 px-1 text-sm font-medium ${activeTab === 'buscador' ? 'border-b-2 border-emerald-600 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('buscador')}
+              >
+                Buscador Demoras
+              </button>
+              <button
+                className={`pb-2 px-1 text-sm font-medium ${activeTab === 'dailyOtp' ? 'border-b-2 border-emerald-600 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('dailyOtp')}
+              >
+                Daily OTP
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handleDownloadExcel}
-            disabled={filteredFlights.length === 0}
-            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download size={20} />
-            <span className="font-medium">Descargar Excel</span>
-          </button>
+          {activeTab === "buscador" && (
+            <button
+              onClick={handleDownloadExcel}
+              disabled={filteredFlights.length === 0}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download size={20} />
+              <span className="font-medium">Descargar Excel</span>
+            </button>
+          )}
         </div>
+
+        {activeTab === "buscador" && (
+          <>
 
         <div className="bg-white p-4 rounded-xl shadow-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
           <div className="flex-1">
@@ -280,6 +323,85 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
             </table>
           </div>
         </div>
+        </>
+        )}
+
+        {activeTab === "dailyOtp" && (
+          <>
+            <div className="bg-white p-4 rounded-xl shadow-sm">
+               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de OTP</label>
+               <input
+                 type="date"
+                 value={otpDate}
+                 onChange={(e) => setOtpDate(e.target.value)}
+                 className="w-full sm:w-auto rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 border min-h-[42px]"
+               />
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DLY TTL</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FLT Number</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STD</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ATD</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reg</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">1° Code</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">2° Code</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {otpFlights.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="px-6 py-8 text-center text-gray-500">
+                          {!otpDate 
+                            ? "Seleccioná una fecha para ver los vuelos OTP." 
+                            : "No se encontraron vuelos OTP para esta fecha."}
+                        </td>
+                      </tr>
+                    ) : (
+                      otpFlights.map((f) => {
+                        const m = f.mvtData!;
+                        const ttl = totalDelayMinutes(f);
+                        const atdStr = m.atd ? formatMinutesToHHMM(parseTimeToMinutes(m.atd)) : "—";
+                        return (
+                          <tr key={f.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap font-mono font-bold text-amber-800 text-sm">
+                                  {formatMinutesToHHMM(ttl)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap font-black text-sm text-gray-900">
+                                  <span className="text-gray-500 font-bold">{getAirlinePrefix(f.flt)}</span>
+                                  {f.flt}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap font-mono text-sm text-gray-500">{f.std || "—"}</td>
+                              <td className="px-4 py-3 whitespace-nowrap font-mono text-sm text-gray-900">{atdStr}</td>
+                              <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-900">{f.dep}</td>
+                              <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-900">{f.arr}</td>
+                              <td className="px-4 py-3 whitespace-nowrap font-mono text-sm text-gray-500">{f.reg}</td>
+                              <td className={`whitespace-nowrap text-sm ${delayTimeCellClassName(m.dlyTime1)}`}>
+                                  {formatDelayCell(m.dlyTime1)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-800">{m.dlyCod1 || "—"}</td>
+                              <td className={`whitespace-nowrap text-sm ${delayTimeCellClassName(m.dlyTime2)}`}>
+                                  {formatDelayCell(m.dlyTime2)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-800">{m.dlyCod2 || "—"}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

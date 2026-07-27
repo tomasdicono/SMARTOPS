@@ -1510,7 +1510,7 @@ export function ControlView({
                             {busquedasBagCompliance.cod18Flights.length > 0 && (
                                 <button
                                     type="button"
-                                    onClick={() => downloadCod18Excel(busquedasBagCompliance.cod18Flights, statsRangeLabel || statsDateFrom)}
+                                    onClick={() => downloadCod18Excel(busquedasBagCompliance.cod18Flights, statsRangeLabel || statsDateFrom, busquedasBagCompliance.rankingByAirport)}
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-fuchsia-100 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-fuchsia-900 shadow-sm hover:bg-fuchsia-200 transition-colors"
                                 >
                                     <Download className="w-3.5 h-3.5 shrink-0" aria-hidden />
