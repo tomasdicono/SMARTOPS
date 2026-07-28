@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Download, ChevronDown, Check } from "lucide-react";
 import * as XLSX from "xlsx";
 import { type Flight } from "../types";
@@ -63,7 +63,7 @@ function MultiSelect({ label, options, selected, onToggle }: { label: string, op
   );
 }
 
-export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
+export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: CasosAtcViewProps) {
   const [activeTab, setActiveTab] = useState<"buscador" | "dailyOtp">("buscador");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
