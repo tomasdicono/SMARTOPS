@@ -14,6 +14,7 @@ interface FlightWithDelay extends Flight {
 interface CasosAtcViewProps {
   flights: Flight[];
   onFlightSelect?: (flight: Flight) => void;
+  onUpdatePlanDeAccion?: (flightId: string, text: string) => void;
 }
 
 function MultiSelect({ label, options, selected, onToggle }: { label: string, options: string[], selected: string[], onToggle: (val: string) => void }) {
@@ -67,7 +68,30 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [otpDate, setOtpDate] = useState("");
-  const [planDeAccionMap, setPlanDeAccionMap] = useState<Record<string, string>>({});
+  
+  const planRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const planTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(planTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  const flushPlan = (id: string, text: string) => {
+      if (planTimers.current[id]) {
+          clearTimeout(planTimers.current[id]);
+          delete planTimers.current[id];
+      }
+      onUpdatePlanDeAccion?.(id, text);
+  };
+
+  const schedulePlan = (id: string, text: string) => {
+      if (planTimers.current[id]) clearTimeout(planTimers.current[id]);
+      planTimers.current[id] = setTimeout(() => {
+          flushPlan(id, text);
+      }, 600);
+  };
   
   const [selectedAirports, setSelectedAirports] = useState<string[]>([]);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
@@ -170,7 +194,13 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
 
   const handleDownloadOtpPdf = () => {
     if (otpFlights.length === 0 || !otpDate) return;
-    downloadDailyOtpPdf(otpFlights, otpDate, planDeAccionMap);
+    const currentPlanMap: Record<string, string> = {};
+    otpFlights.forEach(f => {
+        const el = planRefs.current[f.id];
+        const text = el ? el.value : (f.planDeAccion || "");
+        if (text) currentPlanMap[f.id] = text;
+    });
+    downloadDailyOtpPdf(otpFlights, otpDate, currentPlanMap);
   };
 
   const handleDownloadExcel = () => {
@@ -421,10 +451,15 @@ export function CasosAtcView({ flights, onFlightSelect }: CasosAtcViewProps) {
                               </td>
                               <td className="px-4 py-3 w-[300px]">
                                   <textarea
-                                      value={planDeAccionMap[f.id] || ""}
+                                      key={`plan-${f.id}`}
+                                      ref={(el) => {
+                                          planRefs.current[f.id] = el;
+                                      }}
+                                      defaultValue={f.planDeAccion || ""}
                                       rows={3}
                                       placeholder="Plan de acción…"
-                                      onChange={(e) => setPlanDeAccionMap(prev => ({ ...prev, [f.id]: e.target.value }))}
+                                      onChange={(e) => schedulePlan(f.id, e.target.value)}
+                                      onBlur={(e) => flushPlan(f.id, e.target.value)}
                                       className="w-full text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
                                   />
                               </td>

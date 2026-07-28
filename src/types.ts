@@ -143,6 +143,9 @@ export interface Flight {
     /** Notas libres en Reporte Diario (HCC / AJS). */
     dailyReportObs?: string;
 
+    /** Plan de acción (AJS) para vuelos demorados. */
+    planDeAccion?: string;
+
     /** QRF: avión regresó a posición; SC debe reenviar MVT (STD/ETD de programación sin cambio). */
     qrfActive?: boolean;
     qrfReason?: string;

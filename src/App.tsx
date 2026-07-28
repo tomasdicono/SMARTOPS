@@ -118,6 +118,7 @@ import {
   dailyReportOtpSaveErrorMessage,
   type DailyReportOtp,
 } from "./lib/dailyReportOtp";
+import { pdfData } from "./restorePdfData";
 import { forFirebaseDb } from "./lib/forFirebaseDb";
 import {
     findFlightForGestiones,
@@ -1377,6 +1378,23 @@ function App() {
               <Moon className="w-4 h-4 shrink-0" />
               Pernocte
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                let count = 0;
+                pdfData.forEach(async (pd) => {
+                  const found = flights.find((f) => f.date === "2026-07-27" && f.flt === pd.flt);
+                  if (found) {
+                    count++;
+                    await updateFlight(found.id, { planDeAccion: pd.text }).catch(console.error);
+                  }
+                });
+                alert(`Restaurados ${count} vuelos desde el PDF para el 27/07`);
+              }}
+              className="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all bg-amber-500 text-slate-900 shadow-md hover:bg-amber-400"
+            >
+              Restaurar PDF
+            </button>
             {isHccDeskRole(userRole) && (
               <button
                 type="button"
@@ -1571,7 +1589,14 @@ function App() {
             onFlightSelect={(f) => {
               setSelectedFlight(f);
               setFlightModalTab("HITOS");
-            }} 
+            }}
+            onUpdatePlanDeAccion={async (id, text) => {
+              try {
+                await updateFlight(id, { planDeAccion: text });
+              } catch (e) {
+                console.error("No se pudo guardar plan de acción:", e);
+              }
+            }}
           />
         ) : mainTab === "statusEquiposGRH" ? (
           <StatusEquiposGRHView currentUser={currentUser} />
