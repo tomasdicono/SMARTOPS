@@ -37,7 +37,7 @@ export interface RemoveDuplicateFlightsResult {
  */
 /** Actualiza programación sobre un vuelo existente sin borrar MVT / Hitos. */
 export function mergeScheduleIntoExistingFlight(existing: Flight, incoming: Flight): Flight {
-    return coerceFlightFromDb({
+    const merged = {
         ...existing,
         date: incoming.date,
         route: incoming.route,
@@ -49,7 +49,17 @@ export function mergeScheduleIntoExistingFlight(existing: Flight, incoming: Flig
         sta: incoming.sta,
         pax: incoming.pax,
         etd: incoming.etd?.trim() ? incoming.etd : existing.etd,
-    });
+    };
+
+    const incomingEta = incoming.mvtData?.eta?.trim();
+    if (incomingEta) {
+        merged.mvtData = {
+            ...(existing.mvtData || {}),
+            eta: incomingEta,
+        } as any;
+    }
+
+    return coerceFlightFromDb(merged);
 }
 
 /**

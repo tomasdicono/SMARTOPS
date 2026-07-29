@@ -1021,6 +1021,30 @@ function App() {
     return selectedDate ? flightIso === selectedDate : true;
   });
 
+  const handleDeleteFlightsForSelectedDate = async () => {
+    if (flightsForSelectedDate.length === 0) {
+      alert("No hay vuelos para eliminar en el día seleccionado.");
+      return;
+    }
+    const dateFormatted = flightsForSelectedDate[0].date;
+    if (!window.confirm(`¿Estás seguro de que querés eliminar todos los vuelos (${flightsForSelectedDate.length}) cargados para el día ${dateFormatted}? Esta acción no se puede deshacer y borrará toda la información operativa del día.`)) {
+      return;
+    }
+    try {
+      const ids = flightsForSelectedDate.map(f => f.id);
+      await removeFlightsByIds(ids);
+      setSelectedFlight(null);
+      setCancelModalFlight(null);
+      setRescheduleModalFlight(null);
+      setRouteModalFlight(null);
+      setAlternoModalFlight(null);
+      setShowParser(false);
+      alert(`Se eliminaron los ${ids.length} vuelos del día.`);
+    } catch {
+      alert("No se pudieron eliminar los vuelos del día. Revisá tu conexión.");
+    }
+  };
+
   /** Tablero: fecha + buscador de tarjetas (independiente del buscador del modal MVT) */
   const filteredFlights = flightsForSelectedDate.filter((f) => {
     const sq = searchQuery.trim().toUpperCase();
@@ -2171,6 +2195,7 @@ function App() {
         <ScheduleParser
           onLoadFlights={handleLoadFlights}
           onClose={() => setShowParser(false)}
+          onDeleteFlightsForDate={handleDeleteFlightsForSelectedDate}
         />
       )}
 

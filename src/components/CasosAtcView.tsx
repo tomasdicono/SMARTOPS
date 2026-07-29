@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef, useEffect } from "react";
-import { Download, ChevronDown, Check } from "lucide-react";
+import { useState, useMemo, useRef, useEffect, Fragment } from "react";
+import { Download, ChevronDown, Check, Clock } from "lucide-react";
 import * as XLSX from "xlsx";
 import { type Flight } from "../types";
 import { parseTimeToMinutes, formatMinutesToHHMM, formatMvtTimeDisplay } from "../lib/mvtTime";
@@ -63,11 +63,102 @@ function MultiSelect({ label, options, selected, onToggle }: { label: string, op
   );
 }
 
+const HITO_ABBREVIATIONS: Record<string, string> = {
+  "Inicio Abastecimiento de Combustible": "Ini Comb",
+  "Fin Abastecimiento de Combustible": "Fin Comb",
+  "Inicio Descarga de Bodegas": "Ini Desc",
+  "Fin Descarga de Bodegas": "Fin Desc",
+  "Inicio Cargue de Bodegas": "Ini Carg",
+  "Fin Cargue de Bodegas": "Fin Carg",
+  "Llegada crew": "Lleg Crew",
+  "Apertura puerta principal": "Ap. Puerta",
+  "Apertura puerta bodega": "Ap. Bodega",
+  "Cierre de puerta de bodega": "Cierre puerta bodega",
+  "Cierre puerta principal": "Cierre de puerta principal",
+  "Calzos (Chocks)": "Calzos",
+  "Remoción de Calzos (Chocks off)": "Chocks Off",
+  "Inicio Embarque": "Inicio Embarque",
+  "Fin embarque": "Fin embarque",
+  "Inicio de desembarque": "Ini Desemb",
+  "Fin de desembarque": "Fin Desemb",
+};
+
+const HITO_ORDER = [
+  "ATA",
+  "Ap. Bodega",
+  "Ap. Puerta",
+  "Ini Desemb",
+  "Fin Desemb",
+  "Inicio Embarque",
+  "Fin embarque",
+  "Cierre de puerta principal",
+  "Ini Desc",
+  "Fin Desc",
+  "Ini Carg",
+  "Fin Carg",
+  "Cierre puerta bodega",
+  "Ini Comb",
+  "Fin Comb",
+];
+
+function getFlightMilestones(f: Flight): { name: string; value: string }[] {
+  const list: { name: string; value: string }[] = [];
+  
+  if (f.hitosData?.ata?.trim()) {
+    list.push({ name: "ATA", value: f.hitosData.ata.trim() });
+  }
+  
+  if (f.hitosData?.entries) {
+    Object.entries(f.hitosData.entries).forEach(([name, val]) => {
+      if (val && String(val).trim()) {
+        const abbrev = HITO_ABBREVIATIONS[name] || name;
+        list.push({ name: abbrev, value: String(val).trim() });
+      }
+    });
+  }
+
+  if (f.hitosData?.gpuStart?.trim() && !f.hitosData.gpuNotUsed) {
+    list.push({ name: "GPU Start", value: f.hitosData.gpuStart.trim() });
+  }
+  if (f.hitosData?.gpuEnd?.trim() && !f.hitosData.gpuNotUsed) {
+    list.push({ name: "GPU End", value: f.hitosData.gpuEnd.trim() });
+  }
+
+  if (f.hitosCrewData) {
+    Object.entries(f.hitosCrewData).forEach(([name, val]) => {
+      if (name.startsWith("__")) return;
+      if (val && String(val).trim()) {
+        const abbrev = HITO_ABBREVIATIONS[name] || name;
+        list.push({ name: abbrev, value: String(val).trim() });
+      }
+    });
+  }
+
+  // Ordenar según HITO_ORDER
+  list.sort((a, b) => {
+    let idxA = HITO_ORDER.indexOf(a.name);
+    let idxB = HITO_ORDER.indexOf(b.name);
+    if (idxA === -1) idxA = 999;
+    if (idxB === -1) idxB = 999;
+    return idxA - idxB;
+  });
+
+  return list;
+}
+
 export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: CasosAtcViewProps) {
   const [activeTab, setActiveTab] = useState<"buscador" | "dailyOtp">("buscador");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [otpDate, setOtpDate] = useState("");
+  const [expandedFlightIds, setExpandedFlightIds] = useState<Record<string, boolean>>({});
+  
+  const toggleFlightExpanded = (flightId: string) => {
+    setExpandedFlightIds(prev => ({
+      ...prev,
+      [flightId]: !prev[flightId]
+    }));
+  };
   
   const planRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const planTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -169,7 +260,7 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
     }).sort((a, b) => a.date.localeCompare(b.date) || a.std.localeCompare(b.std));
   }, [flights, startDate, endDate, selectedAirports, selectedCodes]);
 
-  const OTP_CODES = ["3", "8", "12", "14", "15", "34", "85", "18", "36", "38", "11", "39", "33", "86", "87", "99", "35", "19", "58", "75"];
+  const OTP_CODES = ["3", "8", "12", "14", "15", "34", "85", "18", "36", "11", "39", "33", "86", "87", "99", "35", "19", "58", "75"];
 
   const otpFlights = useMemo(() => {
     if (!otpDate) return [];
@@ -183,13 +274,16 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
       const t1 = parseTimeToMinutes(f.mvtData?.dlyTime1);
       const t2 = parseTimeToMinutes(f.mvtData?.dlyTime2);
 
+      // Excluir vuelos con COD 38
+      if (d1 === "38" || d2 === "38") return false;
+
       if (d1 && OTP_CODES.includes(d1)) return true;
       if (d2 && OTP_CODES.includes(d2)) return true;
       if (d1 === "66" && t1 > 10) return true;
       if (d2 === "66" && t2 > 10) return true;
 
       return false;
-    }).sort((a, b) => a.std.localeCompare(b.std));
+    }).sort((a, b) => a.dep.localeCompare(b.dep) || a.std.localeCompare(b.std));
   }, [flights, otpDate]);
 
   const handleDownloadOtpPdf = () => {
@@ -419,14 +513,27 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
                         const m = f.mvtData!;
                         const ttl = totalDelayMinutes(f);
                         const atdStr = m.atd ? formatMinutesToHHMM(parseTimeToMinutes(m.atd)) : "—";
+                        const milestones = getFlightMilestones(f);
+                        const isExpanded = !!expandedFlightIds[f.id];
+
                         return (
-                          <tr key={f.id} className="hover:bg-gray-50">
+                          <Fragment key={f.id}>
+                            <tr 
+                              onClick={() => toggleFlightExpanded(f.id)}
+                              className="hover:bg-gray-50 cursor-pointer transition-colors"
+                            >
                               <td className="px-4 py-3 whitespace-nowrap font-mono font-bold text-amber-800 text-sm">
                                   {formatMinutesToHHMM(ttl)}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap font-black text-sm text-gray-900">
-                                  <span className="text-gray-500 font-bold">{getAirlinePrefix(f.flt)}</span>
-                                  {f.flt}
+                                  <div className="flex items-center gap-1.5">
+                                      <ChevronDown 
+                                        size={14} 
+                                        className={`text-gray-400 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+                                      />
+                                      <span className="text-gray-500 font-bold">{getAirlinePrefix(f.flt)}</span>
+                                      <span>{f.flt}</span>
+                                  </div>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap font-mono text-sm text-gray-500">{f.std || "—"}</td>
                               <td className="px-4 py-3 whitespace-nowrap font-mono text-sm text-gray-900">{atdStr}</td>
@@ -441,7 +548,7 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
                                   {formatDelayCell(m.dlyTime2)}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap font-bold text-sm text-gray-800">{m.dlyCod2 || "—"}</td>
-                              <td className="px-4 py-3 w-[400px]">
+                              <td className="px-4 py-3 w-[400px]" onClick={(e) => e.stopPropagation()}>
                                   <textarea
                                       readOnly
                                       value={f.dailyReportObs || ""}
@@ -449,7 +556,7 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
                                       className="w-full text-xs border border-gray-200 rounded-lg p-1.5 bg-gray-50 text-gray-500 resize-none cursor-default focus:outline-none"
                                   />
                               </td>
-                              <td className="px-4 py-3 w-[300px]">
+                              <td className="px-4 py-3 w-[300px]" onClick={(e) => e.stopPropagation()}>
                                   <textarea
                                       key={`plan-${f.id}`}
                                       ref={(el) => {
@@ -463,7 +570,32 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
                                       className="w-full text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
                                   />
                               </td>
-                          </tr>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-slate-50/50 dark:bg-slate-900/10">
+                                <td colSpan={13} className="px-4 py-2 border-t border-b border-gray-100">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-bold text-gray-400 flex items-center gap-1 uppercase tracking-wider text-[10px] mr-1">
+                                      <Clock size={12} className="text-gray-400" /> Hitos cargados:
+                                    </span>
+                                    {milestones.length === 0 ? (
+                                      <span className="text-xs text-gray-500 italic">No hay hitos registrados para este vuelo.</span>
+                                    ) : (
+                                      milestones.map((h, idx) => (
+                                        <span 
+                                          key={idx} 
+                                          className="inline-flex items-center gap-1 bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded text-[11px] font-semibold shadow-sm"
+                                        >
+                                          <span className="text-gray-500 font-medium">{h.name}:</span>
+                                          <span className="text-emerald-700 font-bold font-mono">{h.value}</span>
+                                        </span>
+                                      ))
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         );
                       })
                     )}
