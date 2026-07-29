@@ -25,6 +25,7 @@ const FLIGHT_SCALAR_KEYS = [
     "rescheduleReason",
     "previousStd",
     "dailyReportObs",
+    "planDeAccion",
     "qrfActive",
     "qrfReason",
     "alternoArr",

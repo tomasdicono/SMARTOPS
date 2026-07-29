@@ -49,6 +49,7 @@ function mergeFlightRecords(a: Flight, b: Flight): Flight {
         cancelled: thinner.cancelled ?? richer.cancelled,
         cancellationReason: pickNonEmptyStr(thinner.cancellationReason, richer.cancellationReason),
         dailyReportObs: pickNonEmptyStr(thinner.dailyReportObs, richer.dailyReportObs),
+        planDeAccion: pickNonEmptyStr(thinner.planDeAccion, richer.planDeAccion),
         etd: pickNonEmptyStr(thinner.etd, richer.etd),
         rescheduleReason: pickNonEmptyStr(thinner.rescheduleReason, richer.rescheduleReason),
         qrfActive: isQrfActive(b) || isQrfActive(a) ? true : undefined,

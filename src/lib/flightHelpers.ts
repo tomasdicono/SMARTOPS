@@ -155,6 +155,9 @@ export function coerceFlightFromDb(f: Flight): Flight {
     if (f.dailyReportObs != null) {
         base.dailyReportObs = String(f.dailyReportObs);
     }
+    if (f.planDeAccion != null) {
+        base.planDeAccion = String(f.planDeAccion);
+    }
     if (readQrfActiveFlag((f as { qrfActive?: unknown }).qrfActive)) {
         base.qrfActive = true;
     } else {
