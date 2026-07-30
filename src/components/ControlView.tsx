@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import type { Flight, RouteAfectacionEntry } from "../types";
+import type { Flight, RouteAfectacionEntry, UserRole } from "../types";
 import { getAirlinePrefix, getHitosDepartureTime } from "../lib/flightHelpers";
 import { getAircraftInfo } from "../lib/fleetData";
 import {
@@ -45,6 +45,7 @@ import { ControlCargaStatsCard } from "./ControlCargaStatsCard";
 import { ControlPaxStatsCard } from "./ControlPaxStatsCard";
 import { AlternoIcon } from "./AlternoIcon";
 import { ControlTimelineTab } from "./ControlTimelineTab";
+import { ControlDashboardAjsTab } from "./ControlDashboardAjsTab";
 import { RemoveQrfConfirmModal } from "./RemoveQrfConfirmModal";
 import {
     BarChart3,
@@ -72,6 +73,7 @@ import {
     X,
     Luggage,
     Download,
+    LayoutDashboard,
 } from "lucide-react";
 
 interface Props {
@@ -83,12 +85,13 @@ interface Props {
     /** Todos los cambios de ruta por fecha (informe de estadísticas multi-día). */
     routeAfectacionesByDate?: Record<string, RouteAfectacionEntry[]>;
     onRemoveQrfEvent?: (flightId: string, eventIndex: number) => void | Promise<void>;
+    userRole?: UserRole;
 }
 
 /** Pestaña «Línea de tiempo» en Control operacional. */
 const SHOW_TIMELINE_TAB = true;
 
-type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel" | "usage" | "gpu";
+type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel" | "usage" | "gpu" | "dashboard";
 
 export function ControlView({
     flights,
@@ -96,6 +99,7 @@ export function ControlView({
     routeAfectaciones = [],
     routeAfectacionesByDate = {},
     onRemoveQrfEvent,
+    userRole,
 }: Props) {
     const [subTab, setSubTab] = useState<ControlSubTab>("statusDia");
     const [statsDateFrom, setStatsDateFrom] = useState(selectedDate);
@@ -441,11 +445,29 @@ export function ControlView({
                         Línea de tiempo
                     </button>
                     )}
+                    {userRole === "AJS" && (
+                        <button
+                            type="button"
+                            onClick={() => setSubTab("dashboard")}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                                subTab === "dashboard"
+                                    ? "bg-purple-600 text-white shadow-md"
+                                    : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
+                            }`}
+                        >
+                            <LayoutDashboard className="w-4 h-4 shrink-0" />
+                            Dashboard de seguimiento
+                        </button>
+                    )}
                 </div>
 
                 {/* ——— Línea de tiempo ——— */}
                 {SHOW_TIMELINE_TAB && subTab === "timeline" && (
                     <ControlTimelineTab selectedDate={selectedDate} dayFlights={dayFlights} />
+                )}
+
+                {subTab === "dashboard" && (
+                    <ControlDashboardAjsTab flights={flights} />
                 )}
 
                 {subTab === "obvk" && (

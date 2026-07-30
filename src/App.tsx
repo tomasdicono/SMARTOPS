@@ -678,6 +678,22 @@ function App() {
     }
   };
 
+  const handleUpdateDelayCode = async (id: string, dlyCod1: string, dlyCod2: string) => {
+    const flight = flights.find((f) => f.id === id);
+    if (!flight || !flight.mvtData) return;
+    try {
+      await updateFlight(id, {
+        mvtData: {
+          ...flight.mvtData,
+          dlyCod1,
+          dlyCod2,
+        },
+      });
+    } catch (e) {
+      console.error("No se pudieron guardar los códigos de demora:", e);
+    }
+  };
+
   const handleSaveDailyReportOtp = async (
     otp: DailyReportOtp,
     opts?: { notifyOnError?: boolean }
@@ -1558,6 +1574,7 @@ function App() {
             routeAfectaciones={routeAfectaciones}
             routeAfectacionesByDate={routeAfectacionesByDate}
             onRemoveQrfEvent={handleRemoveQrfEvent}
+            userRole={userRole}
           />
         ) : mainTab === "reporte" && isHccDeskRole(userRole) ? (
           <DailyReportView
@@ -1565,6 +1582,7 @@ function App() {
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             onUpdateDailyReportObs={handleUpdateDailyReportObs}
+            onUpdateDelayCode={handleUpdateDelayCode}
             canEditObs={isHccDeskRole(userRole)}
             reportUserName={currentUser?.name ?? ""}
             routeAfectaciones={routeAfectaciones}
@@ -1598,7 +1616,9 @@ function App() {
             }}
             onUpdatePlanDeAccion={async (id, text) => {
               try {
+                console.log("App.tsx llamando a updateFlight con id=", id, "text=", text);
                 await updateFlight(id, { planDeAccion: text });
+                console.log("App.tsx updateFlight exitoso para id=", id);
               } catch (e) {
                 console.error("No se pudo guardar plan de acción:", e);
               }

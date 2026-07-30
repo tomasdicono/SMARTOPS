@@ -134,6 +134,7 @@ export async function updateFlight(flightId: string, patch: Partial<Flight>): Pr
             : null;
 
     const updates = buildFlightRtdbUpdate(patch, existing);
+    console.log("flightsDb.ts updateFlight updates=", updates);
     if (Object.keys(updates).length === 0) return;
 
     await update(flightDbRef(id), updates);

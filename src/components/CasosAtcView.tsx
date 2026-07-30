@@ -565,8 +565,14 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
                                       defaultValue={f.planDeAccion || ""}
                                       rows={3}
                                       placeholder="Plan de acción…"
-                                      onChange={(e) => schedulePlan(f.id, e.target.value)}
-                                      onBlur={(e) => flushPlan(f.id, e.target.value)}
+                                      onChange={(e) => {
+                                          console.log("Typing plan de accion para", f.id, e.target.value);
+                                          schedulePlan(f.id, e.target.value);
+                                      }}
+                                      onBlur={(e) => {
+                                          console.log("Blur plan de accion para", f.id, e.target.value);
+                                          flushPlan(f.id, e.target.value);
+                                      }}
                                       className="w-full text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
                                   />
                               </td>
