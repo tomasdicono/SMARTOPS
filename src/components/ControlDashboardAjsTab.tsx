@@ -131,7 +131,7 @@ export function ControlDashboardAjsTab({ flights }: Props) {
         
         // Header Row 2: Codes
         const row2 = [""];
-        monthsToShow.forEach(m => {
+        monthsToShow.forEach(() => {
             TARGET_CODES.forEach(c => row2.push(c));
         });
         aoa.push(row2);
@@ -152,7 +152,7 @@ export function ControlDashboardAjsTab({ flights }: Props) {
         // Merges for Months row
         wsMatrix['!merges'] = [];
         let colIndex = 1;
-        monthsToShow.forEach(m => {
+        monthsToShow.forEach(() => {
             wsMatrix['!merges']!.push({
                 s: { r: 0, c: colIndex },
                 e: { r: 0, c: colIndex + TARGET_CODES.length - 1 }
