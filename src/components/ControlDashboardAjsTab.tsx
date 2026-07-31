@@ -212,19 +212,16 @@ export function ControlDashboardAjsTab({ flights }: Props) {
             const c1 = c1Raw ? parseInt(c1Raw, 10).toString() : null;
             const c2 = c2Raw ? parseInt(c2Raw, 10).toString() : null;
             
-            let delayMins = "";
-            if (c1 === selectedCell.code) {
-                delayMins = f.mvtData?.dlyTime1 || "";
-            } else if (c2 === selectedCell.code) {
-                delayMins = f.mvtData?.dlyTime2 || "";
-            }
+            const dly1 = f.mvtData?.dlyCod1 ? `COD ${f.mvtData.dlyCod1} (${f.mvtData.dlyTime1 || 0}m)` : "";
+            const dly2 = f.mvtData?.dlyCod2 ? `COD ${f.mvtData.dlyCod2} (${f.mvtData.dlyTime2 || 0}m)` : "";
+            const demoras = [dly1, dly2].filter(Boolean).join(" | ");
 
             return {
                 Fecha: flightDateToIso(f),
                 Vuelo: `${getAirlinePrefix(f.flt)}${f.flt}`,
                 Ruta: `${f.dep}-${f.arr}`,
                 STD: f.std,
-                Demora: `${delayMins} min`,
+                Demoras: demoras,
                 Comentario: f.dailyReportObs || ""
             };
         });
@@ -384,25 +381,15 @@ export function ControlDashboardAjsTab({ flights }: Props) {
                                                 <th className="px-4 py-2.5 border-b border-slate-200">Vuelo</th>
                                                 <th className="px-4 py-2.5 border-b border-slate-200">Ruta</th>
                                                 <th className="px-4 py-2.5 border-b border-slate-200">STD</th>
-                                                <th className="px-4 py-2.5 border-b border-slate-200">Demora</th>
+                                                <th className="px-4 py-2.5 border-b border-slate-200">Demoras</th>
                                                 <th className="px-4 py-2.5 border-b border-slate-200">Comentarios</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {modalFlights.map(f => {
                                                 const isoDate = flightDateToIso(f);
-                                                // Find which delay code matched and show the minutes
-                                                const c1Raw = f.mvtData?.dlyCod1?.trim();
-                                                const c2Raw = f.mvtData?.dlyCod2?.trim();
-                                                const c1 = c1Raw ? parseInt(c1Raw, 10).toString() : null;
-                                                const c2 = c2Raw ? parseInt(c2Raw, 10).toString() : null;
-                                                
-                                                let delayMins = "";
-                                                if (c1 === selectedCell.code) {
-                                                    delayMins = f.mvtData?.dlyTime1 || "";
-                                                } else if (c2 === selectedCell.code) {
-                                                    delayMins = f.mvtData?.dlyTime2 || "";
-                                                }
+                                                const hasDly1 = !!f.mvtData?.dlyCod1;
+                                                const hasDly2 = !!f.mvtData?.dlyCod2;
 
                                                 return (
                                                     <tr key={f.id} className="hover:bg-slate-50/80 transition-colors">
@@ -410,7 +397,18 @@ export function ControlDashboardAjsTab({ flights }: Props) {
                                                         <td className="px-4 py-2 font-black text-slate-900">{getAirlinePrefix(f.flt)}{f.flt}</td>
                                                         <td className="px-4 py-2 font-semibold text-slate-700">{f.dep}-{f.arr}</td>
                                                         <td className="px-4 py-2 font-mono font-medium text-slate-600">{f.std}</td>
-                                                        <td className="px-4 py-2 font-bold text-red-700 whitespace-nowrap">{delayMins} min</td>
+                                                        <td className="px-4 py-2 whitespace-nowrap">
+                                                            {hasDly1 && (
+                                                                <div className="font-bold text-red-700">
+                                                                    COD {f.mvtData?.dlyCod1} <span className="text-slate-500 font-medium">({f.mvtData?.dlyTime1}m)</span>
+                                                                </div>
+                                                            )}
+                                                            {hasDly2 && (
+                                                                <div className="font-bold text-red-700 mt-0.5">
+                                                                    COD {f.mvtData?.dlyCod2} <span className="text-slate-500 font-medium">({f.mvtData?.dlyTime2}m)</span>
+                                                                </div>
+                                                            )}
+                                                        </td>
                                                         <td className="px-4 py-2 text-slate-600 text-xs max-w-[300px]">
                                                             {f.dailyReportObs ? (
                                                                 <span>{f.dailyReportObs}</span>
