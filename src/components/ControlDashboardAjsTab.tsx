@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import type { Flight } from "../types";
 import { flightDateToIso } from "../lib/controlHelpers";
 import { getAirlinePrefix } from "../lib/flightHelpers";
-import { X } from "lucide-react";
+import { X, Download } from "lucide-react";
+import { utils, writeFile } from "xlsx";
 
 interface Props {
     flights: Flight[];
@@ -114,20 +115,116 @@ export function ControlDashboardAjsTab({ flights }: Props) {
         return allStats[year]?.[dep]?.[month]?.[code] || 0;
     };
 
+    const handleDownloadExcel = () => {
+        const wb = utils.book_new();
+        
+        // 1. Matrix Sheet
+        const aoa: any[][] = [];
+        
+        // Header Row 1: Months
+        const row1 = ["Aeropuerto"];
+        monthsToShow.forEach(m => {
+            row1.push(MONTH_NAMES[m]);
+            for (let i = 1; i < TARGET_CODES.length; i++) row1.push("");
+        });
+        aoa.push(row1);
+        
+        // Header Row 2: Codes
+        const row2 = [""];
+        monthsToShow.forEach(m => {
+            TARGET_CODES.forEach(c => row2.push(c));
+        });
+        aoa.push(row2);
+        
+        // Data Rows
+        airports.forEach(dep => {
+            const row: any[] = [dep];
+            monthsToShow.forEach(m => {
+                TARGET_CODES.forEach(c => {
+                    row.push(getCount(selectedYear, dep, m, c));
+                });
+            });
+            aoa.push(row);
+        });
+
+        const wsMatrix = utils.aoa_to_sheet(aoa);
+        
+        // Merges for Months row
+        wsMatrix['!merges'] = [];
+        let colIndex = 1;
+        monthsToShow.forEach(m => {
+            wsMatrix['!merges']!.push({
+                s: { r: 0, c: colIndex },
+                e: { r: 0, c: colIndex + TARGET_CODES.length - 1 }
+            });
+            colIndex += TARGET_CODES.length;
+        });
+
+        utils.book_append_sheet(wb, wsMatrix, `Dashboard ${selectedYear}`);
+        
+        // 2. Details Sheet (Todos los vuelos demorados del año que coincidan con TARGET_CODES)
+        const detailsData = validFlights.filter(f => {
+            const iso = flightDateToIso(f);
+            if (!iso) return false;
+            const y = parseInt(iso.substring(0, 4), 10);
+            if (y !== selectedYear) return false;
+            
+            const c1Raw = f.mvtData?.dlyCod1?.trim();
+            const c2Raw = f.mvtData?.dlyCod2?.trim();
+            const c1 = c1Raw ? parseInt(c1Raw, 10).toString() : null;
+            const c2 = c2Raw ? parseInt(c2Raw, 10).toString() : null;
+            
+            return (c1 && TARGET_CODES.includes(c1)) || (c2 && TARGET_CODES.includes(c2));
+        }).map(f => {
+            const c1Raw = f.mvtData?.dlyCod1?.trim();
+            const c2Raw = f.mvtData?.dlyCod2?.trim();
+            const c1 = c1Raw ? parseInt(c1Raw, 10).toString() : null;
+            const c2 = c2Raw ? parseInt(c2Raw, 10).toString() : null;
+            
+            return {
+                Fecha: flightDateToIso(f),
+                Vuelo: `${getAirlinePrefix(f.flt)}${f.flt}`,
+                Ruta: `${f.dep}-${f.arr}`,
+                Aeropuerto: f.dep,
+                STD: f.std,
+                "Código 1": c1 || "",
+                "Minutos 1": f.mvtData?.dlyTime1 || "",
+                "Código 2": c2 || "",
+                "Minutos 2": f.mvtData?.dlyTime2 || "",
+                "MVT Obs": f.mvtData?.observaciones || "",
+                "Reporte Obs": f.dailyReportObs || ""
+            };
+        }).sort((a,b) => a.Fecha.localeCompare(b.Fecha) || a.STD.localeCompare(b.STD));
+
+        const wsDetails = utils.json_to_sheet(detailsData);
+        utils.book_append_sheet(wb, wsDetails, `Detalle Vuelos ${selectedYear}`);
+
+        writeFile(wb, `AJS_Demoras_${selectedYear}.xlsx`);
+    };
+
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-4 bg-slate-50 border-b border-slate-200">
-                <div className="flex items-center gap-4">
-                    <label className="text-sm font-bold text-slate-700">Año:</label>
-                    <select
-                        value={selectedYear}
-                        onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-                        className="rounded-lg border-slate-300 shadow-sm text-sm"
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <label className="text-sm font-bold text-slate-700">Año:</label>
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+                            className="rounded-lg border-slate-300 shadow-sm text-sm"
+                        >
+                            {availableYears.map(y => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <button
+                        onClick={handleDownloadExcel}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-black uppercase tracking-wide rounded-xl shadow-md transition-colors"
                     >
-                        {availableYears.map(y => (
-                            <option key={y} value={y}>{y}</option>
-                        ))}
-                    </select>
+                        <Download className="w-4 h-4" />
+                        Descargar Excel
+                    </button>
                 </div>
             </div>
 
