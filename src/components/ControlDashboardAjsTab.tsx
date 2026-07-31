@@ -202,6 +202,40 @@ export function ControlDashboardAjsTab({ flights }: Props) {
         writeFile(wb, `AJS_Demoras_${selectedYear}.xlsx`);
     };
 
+    const handleDownloadModalExcel = () => {
+        if (!selectedCell || modalFlights.length === 0) return;
+        
+        const wb = utils.book_new();
+        const detailsData = modalFlights.map(f => {
+            const c1Raw = f.mvtData?.dlyCod1?.trim();
+            const c2Raw = f.mvtData?.dlyCod2?.trim();
+            const c1 = c1Raw ? parseInt(c1Raw, 10).toString() : null;
+            const c2 = c2Raw ? parseInt(c2Raw, 10).toString() : null;
+            
+            let delayMins = "";
+            if (c1 === selectedCell.code) {
+                delayMins = f.mvtData?.dlyTime1 || "";
+            } else if (c2 === selectedCell.code) {
+                delayMins = f.mvtData?.dlyTime2 || "";
+            }
+
+            return {
+                Fecha: flightDateToIso(f),
+                Vuelo: `${getAirlinePrefix(f.flt)}${f.flt}`,
+                Ruta: `${f.dep}-${f.arr}`,
+                STD: f.std,
+                Demora: `${delayMins} min`,
+                Comentario: f.dailyReportObs || ""
+            };
+        });
+
+        const wsDetails = utils.json_to_sheet(detailsData);
+        utils.book_append_sheet(wb, wsDetails, `Detalle ${selectedCell.dep} - Cod ${selectedCell.code}`);
+
+        const monthName = MONTH_NAMES[selectedCell.month];
+        writeFile(wb, `Demoras_${selectedCell.dep}_${monthName}_${selectedCell.year}_Cod${selectedCell.code}.xlsx`);
+    };
+
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-4 bg-slate-50 border-b border-slate-200">
@@ -325,9 +359,18 @@ export function ControlDashboardAjsTab({ flights }: Props) {
                                     {MONTH_NAMES[selectedCell.month]} {selectedCell.year} · Código <span className="text-red-700 font-black">{selectedCell.code}</span>
                                 </p>
                             </div>
-                            <button onClick={() => setSelectedCell(null)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={handleDownloadModalExcel}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-black uppercase tracking-wide rounded-lg transition-colors"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Descargar Excel
+                                </button>
+                                <button onClick={() => setSelectedCell(null)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
                         </div>
                         <div className="overflow-y-auto p-4 bg-slate-50/50">
                             {modalFlights.length === 0 ? (
@@ -369,14 +412,10 @@ export function ControlDashboardAjsTab({ flights }: Props) {
                                                         <td className="px-4 py-2 font-mono font-medium text-slate-600">{f.std}</td>
                                                         <td className="px-4 py-2 font-bold text-red-700 whitespace-nowrap">{delayMins} min</td>
                                                         <td className="px-4 py-2 text-slate-600 text-xs max-w-[300px]">
-                                                            {f.mvtData?.observaciones && (
-                                                                <div className="mb-1"><span className="font-bold text-slate-700">MVT:</span> {f.mvtData.observaciones}</div>
-                                                            )}
-                                                            {f.dailyReportObs && (
-                                                                <div><span className="font-bold text-slate-700">Reporte:</span> {f.dailyReportObs}</div>
-                                                            )}
-                                                            {!f.mvtData?.observaciones && !f.dailyReportObs && (
-                                                                <span className="text-slate-400 italic">Sin comentarios</span>
+                                                            {f.dailyReportObs ? (
+                                                                <span>{f.dailyReportObs}</span>
+                                                            ) : (
+                                                                <span className="text-slate-400 italic">Sin comentario</span>
                                                             )}
                                                         </td>
                                                     </tr>
