@@ -15,6 +15,7 @@ export interface MvtSendGateInput {
     reg: string | undefined | null;
     /** Corrección HCC post-envío: solo demoras, sin campos obligatorios ni PAX. */
     delayOnlyMode: boolean;
+    userRole?: import("../types").UserRole;
 }
 
 /** Única validación para habilitar envío / guardar MVT en el formulario. */
@@ -31,6 +32,11 @@ export function evaluateMvtSendGate(input: MvtSendGateInput): MvtSendGateResult 
     );
 
     if (delayOnlyMode) {
+        if (delayCheck.ok && (mvt.dlyCod1 === "66" || mvt.dlyCod2 === "66")) {
+            if (!mvt.briefingPhoto || mvt.briefingPhoto.trim() === "") {
+                return { ok: false, message: "Con el código de demora 66 es obligatorio adjuntar la foto del briefing operacional." };
+            }
+        }
         return delayCheck.ok ? { ok: true } : { ok: false, message: delayCheck.message };
     }
 
@@ -46,6 +52,12 @@ export function evaluateMvtSendGate(input: MvtSendGateInput): MvtSendGateResult 
 
     if (!delayCheck.ok) {
         return { ok: false, message: delayCheck.message };
+    }
+
+    if (mvt.dlyCod1 === "66" || mvt.dlyCod2 === "66") {
+        if (!mvt.briefingPhoto || mvt.briefingPhoto.trim() === "") {
+            return { ok: false, message: "Con el código de demora 66 es obligatorio adjuntar la foto del briefing operacional." };
+        }
     }
 
     return { ok: true };

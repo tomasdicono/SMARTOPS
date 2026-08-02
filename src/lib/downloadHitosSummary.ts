@@ -575,6 +575,13 @@ export function buildHitosSummaryHtml(flight: Flight): string {
       </div>
     </header>
     ${opSection}
+    ${flight.mvtData?.briefingPhoto ? `
+    <div class="card">
+      <h2>Briefing Operacional</h2>
+      <div style="text-align: center; margin: 12px 0;">
+        <img src="${flight.mvtData.briefingPhoto}" alt="Briefing Operacional" style="max-width: 100%; max-height: 500px; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(15,23,42,0.08); object-fit: contain;" />
+      </div>
+    </div>` : ""}
     <div class="card">
       <h2>Hitos tripulación</h2>
       <p class="sub">${escapeHtml(p.crew.subtitle)}</p>

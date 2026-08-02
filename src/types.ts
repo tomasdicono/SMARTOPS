@@ -124,6 +124,7 @@ export interface Flight {
         mvtSentByName?: string;
         /** ISO 8601 — última corrección del MVT por un usuario HCC tras el envío */
         mvtEditedByHccAt?: string;
+        briefingPhoto?: string;
     };
 
     // Custom Gantt Chart / Turnaround Performance Data

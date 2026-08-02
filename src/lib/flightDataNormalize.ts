@@ -51,6 +51,7 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
         ssee: Array.isArray(raw.ssee) ? raw.ssee : [],
         infoSup: z(raw.infoSup),
         supervisor: z(raw.supervisor),
+        briefingPhoto: z(raw.briefingPhoto),
     };
     /** No asignar la clave si no hay valor: Firebase rechaza `undefined` en propiedades anidadas. */
     if (raw.mvtSentAt != null && String(raw.mvtSentAt).trim() !== "") {
@@ -152,6 +153,7 @@ export function applyMvtDelayPatch(
         dlyCod2: patch.dlyCod2,
         dlyTime2: patch.dlyTime2,
         observaciones: patch.observaciones,
+        briefingPhoto: patch.briefingPhoto,
     };
 }
 

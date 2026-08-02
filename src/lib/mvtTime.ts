@@ -91,9 +91,18 @@ export function getMvtDelayDisplayLines(f: Flight): string[] {
     if (!m) return [];
     const { isDelayed } = computeMvtDelayStatus(f.std, m.atd, m.dlyTime1, m.dlyTime2);
     if (!isDelayed) return [];
+
+    const obs = (f.dailyReportObs?.trim() || m.observaciones?.trim() || "").trim();
+    
+    const formatLine = (cod: string) => {
+        const c = cod.trim();
+        if (!c) return "";
+        return obs ? `COD ${c} - ${obs}` : `COD ${c}`;
+    };
+
     return [
-        m.dlyCod1?.trim() ? formatDelayLine(m.dlyCod1, m.dlyTime1 || "") : "",
-        m.dlyCod2?.trim() ? formatDelayLine(m.dlyCod2, m.dlyTime2 || "") : "",
+        m.dlyCod1?.trim() ? formatLine(m.dlyCod1) : "",
+        m.dlyCod2?.trim() ? formatLine(m.dlyCod2) : "",
     ].filter(Boolean);
 }
 

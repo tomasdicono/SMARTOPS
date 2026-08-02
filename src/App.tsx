@@ -556,6 +556,7 @@ function App() {
         std: existingFlight?.std ?? "",
         reg: existingFlight?.reg,
         delayOnlyMode: false,
+        userRole,
       });
       if (!sendGate.ok) {
         alert(sendGate.message);
@@ -588,6 +589,7 @@ function App() {
         std: existingFlight?.std ?? "",
         reg: existingFlight?.reg,
         delayOnlyMode: false,
+        userRole,
       });
       if (!sendGate.ok) {
         alert(sendGate.message);
@@ -599,6 +601,7 @@ function App() {
         std: existingFlight?.std ?? "",
         reg: existingFlight?.reg,
         delayOnlyMode: false,
+        userRole,
       });
       if (!sendGate.ok) {
         alert(sendGate.message);
@@ -675,22 +678,6 @@ function App() {
       await updateFlight(id, { dailyReportObs: text });
     } catch (e) {
       console.error("No se pudo guardar observación del reporte:", e);
-    }
-  };
-
-  const handleUpdateDelayCode = async (id: string, dlyCod1: string, dlyCod2: string) => {
-    const flight = flights.find((f) => f.id === id);
-    if (!flight || !flight.mvtData) return;
-    try {
-      await updateFlight(id, {
-        mvtData: {
-          ...flight.mvtData,
-          dlyCod1,
-          dlyCod2,
-        },
-      });
-    } catch (e) {
-      console.error("No se pudieron guardar los códigos de demora:", e);
     }
   };
 
@@ -1582,7 +1569,6 @@ function App() {
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             onUpdateDailyReportObs={handleUpdateDailyReportObs}
-            onUpdateDelayCode={handleUpdateDelayCode}
             canEditObs={isHccDeskRole(userRole)}
             reportUserName={currentUser?.name ?? ""}
             routeAfectaciones={routeAfectaciones}

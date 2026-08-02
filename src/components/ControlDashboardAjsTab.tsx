@@ -207,11 +207,6 @@ export function ControlDashboardAjsTab({ flights }: Props) {
         
         const wb = utils.book_new();
         const detailsData = modalFlights.map(f => {
-            const c1Raw = f.mvtData?.dlyCod1?.trim();
-            const c2Raw = f.mvtData?.dlyCod2?.trim();
-            const c1 = c1Raw ? parseInt(c1Raw, 10).toString() : null;
-            const c2 = c2Raw ? parseInt(c2Raw, 10).toString() : null;
-            
             const dly1 = f.mvtData?.dlyCod1 ? `COD ${f.mvtData.dlyCod1} (${f.mvtData.dlyTime1 || 0}m)` : "";
             const dly2 = f.mvtData?.dlyCod2 ? `COD ${f.mvtData.dlyCod2} (${f.mvtData.dlyTime2 || 0}m)` : "";
             const demoras = [dly1, dly2].filter(Boolean).join(" | ");

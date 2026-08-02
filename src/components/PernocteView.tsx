@@ -3,10 +3,10 @@ import type { PernocteRowState } from "../types";
 import {
     coercePernocteRow,
     defaultPernocteRow,
-    pernocteRowRequiresPrecarga,
     type PernocteTableRow,
 } from "../lib/pernocteHelpers";
-import { CalendarDays, Moon } from "lucide-react";
+import { CalendarDays, Moon, FileDown } from "lucide-react";
+import { downloadPernoctePdf } from "../lib/downloadPernoctePdf";
 
 interface Props {
     /** Fecha ISO activa en el filtro (tabla + datos guardados) */
@@ -17,22 +17,13 @@ interface Props {
     onPatchRow: (reg: string, patch: Partial<PernocteRowState>) => void;
 }
 
-type AvionListoVariant = "ok" | "partial" | "pending";
+type AvionListoVariant = "ok" | "pending";
 
 function avionListoLabel(
-    limpieza: boolean,
-    precarga: boolean,
-    requiresPrecarga: boolean
+    limpieza: boolean
 ): { variant: AvionListoVariant; text: string } {
-    if (!requiresPrecarga) {
-        if (limpieza) return { variant: "ok", text: "Sí" };
-        return { variant: "pending", text: "Pendiente Limpieza" };
-    }
-    if (limpieza && precarga) return { variant: "ok", text: "Sí" };
-    if (!limpieza && !precarga) return { variant: "pending", text: "Pendiente Limpieza/Precarga" };
-    /** Solo una de las dos: aviso en amarillo */
-    if (!limpieza) return { variant: "partial", text: "Pendiente Limpieza" };
-    return { variant: "partial", text: "Pendiente Precarga" };
+    if (limpieza) return { variant: "ok", text: "Sí" };
+    return { variant: "pending", text: "Pendiente Limpieza" };
 }
 
 export function PernocteView({
@@ -72,17 +63,31 @@ export function PernocteView({
                         </p>
                     </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm shrink-0">
-                    <label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
-                        <CalendarDays className="w-4 h-4 text-indigo-600 shrink-0" aria-hidden />
-                        Fecha
-                    </label>
-                    <input
-                        type="date"
-                        value={filterDate || ""}
-                        onChange={(e) => onFilterDateChange(e.target.value)}
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 [color-scheme:light] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                    />
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm shrink-0">
+                        <label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
+                            <CalendarDays className="w-4 h-4 text-indigo-600 shrink-0" aria-hidden />
+                            Fecha
+                        </label>
+                        <input
+                            type="date"
+                            value={filterDate || ""}
+                            onChange={(e) => onFilterDateChange(e.target.value)}
+                            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 [color-scheme:light] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                        />
+                    </div>
+                    {rows.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                await downloadPernoctePdf(rows, pernocteByReg, filterDate);
+                            }}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-wide bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-colors shrink-0 animate-in fade-in duration-150"
+                        >
+                            <FileDown className="w-4 h-4 shrink-0" />
+                            Descargar PDF
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -100,7 +105,6 @@ export function PernocteView({
                                 <th className="px-4 py-3 whitespace-nowrap min-w-[9rem]">Salida</th>
                                 <th className="px-4 py-3 whitespace-nowrap w-16 text-center">Posición</th>
                                 <th className="px-4 py-3 text-center whitespace-nowrap">Limpieza</th>
-                                <th className="px-4 py-3 whitespace-nowrap min-w-[8rem]">Precarga Q</th>
                                 <th className="px-4 py-3 text-center whitespace-nowrap">Precarga</th>
                                 <th className="px-4 py-3 whitespace-nowrap min-w-[14rem]">Avión listo</th>
                             </tr>
@@ -108,8 +112,7 @@ export function PernocteView({
                         <tbody className="divide-y divide-slate-100">
                             {rows.map(({ reg, ato, salidaFlt, salidaArr }) => {
                                 const row = coercePernocteRow(pernocteByReg[reg] ?? defaultPernocteRow());
-                                const requiresPrecarga = pernocteRowRequiresPrecarga(ato);
-                                const status = avionListoLabel(row.limpieza, row.precarga, requiresPrecarga);
+                                const status = avionListoLabel(row.limpieza);
                                 const hasSalida = Boolean(salidaFlt);
                                 return (
                                     <tr key={reg} className="hover:bg-slate-50/80">
@@ -160,49 +163,28 @@ export function PernocteView({
                                             />
                                         </td>
                                         <td className="px-4 py-3">
-                                            {requiresPrecarga ? (
-                                                <input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    pattern="[0-9]*"
-                                                    value={
-                                                        precargaQDraft[reg] !== undefined
-                                                            ? precargaQDraft[reg]!
-                                                            : row.precargaQ
-                                                    }
-                                                    onChange={(e) => {
-                                                        const v = e.target.value.replace(/\D/g, "");
-                                                        setPrecargaQDraft((prev) => ({ ...prev, [reg]: v }));
-                                                        onPatchRow(reg, { precargaQ: v });
-                                                    }}
-                                                    placeholder="—"
-                                                    className="w-full max-w-[10rem] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono font-bold tabular-nums text-slate-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                                                    aria-label={`Precarga Q ${reg}`}
-                                                />
-                                            ) : (
-                                                <span className="text-slate-400 font-semibold">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            {requiresPrecarga ? (
-                                                <input
-                                                    type="checkbox"
-                                                    checked={row.precarga}
-                                                    onChange={(e) => onPatchRow(reg, { precarga: e.target.checked })}
-                                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                                    aria-label={`Precarga ${reg}`}
-                                                />
-                                            ) : (
-                                                <span className="text-slate-400 font-semibold">—</span>
-                                            )}
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                value={
+                                                    precargaQDraft[reg] !== undefined
+                                                        ? precargaQDraft[reg]!
+                                                        : row.precargaQ
+                                                }
+                                                onChange={(e) => {
+                                                    const v = e.target.value.replace(/\D/g, "");
+                                                    setPrecargaQDraft((prev) => ({ ...prev, [reg]: v }));
+                                                    onPatchRow(reg, { precargaQ: v });
+                                                }}
+                                                placeholder="—"
+                                                className="w-24 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono font-bold tabular-nums text-slate-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                                                aria-label={`Precarga ${reg}`}
+                                            />
                                         </td>
                                         <td className="px-4 py-3">
                                             {status.variant === "ok" ? (
                                                 <span className="inline-flex items-center justify-center rounded-lg border border-emerald-400 bg-emerald-100 px-3 py-1.5 text-sm font-black text-emerald-900">
-                                                    {status.text}
-                                                </span>
-                                            ) : status.variant === "partial" ? (
-                                                <span className="inline-flex items-center justify-center rounded-lg border border-amber-400 bg-amber-100 px-3 py-1.5 text-sm font-black text-amber-950">
                                                     {status.text}
                                                 </span>
                                             ) : (

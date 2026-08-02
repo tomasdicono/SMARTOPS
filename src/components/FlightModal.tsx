@@ -290,6 +290,7 @@ export function FlightModal({
                                 flight={flight}
                                 readOnly={mvtFormReadOnly}
                                 canEditFullMvtAfterSent={canEditMvtAfterSent}
+                                userRole={userRole}
                                 onSave={(data) => {
                                     onSaveMVT(data);
                                 }}

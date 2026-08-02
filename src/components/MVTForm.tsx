@@ -21,6 +21,7 @@ interface Props {
     readOnly?: boolean;
     /** MVT enviado: HCC puede editar y guardar todo el formulario. */
     canEditFullMvtAfterSent?: boolean;
+    userRole?: import("../types").UserRole;
     onSave: (mvtData: Flight["mvtData"]) => void;
     /** Persistencia en Firebase al editar (sin mvtSentAt). */
     onPersistMvt?: (mvtData: Flight["mvtData"]) => void;
@@ -127,7 +128,47 @@ const TextInput = ({
     </div>
 );
 
-export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onPersistMvt }: Props) {
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const MAX_WIDTH = 1000;
+                const MAX_HEIGHT = 1000;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                ctx?.drawImage(img, 0, 0, width, height);
+
+                const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+                resolve(dataUrl);
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+};
+
+export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, onSave, onPersistMvt }: Props) {
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
     const [isDirty, setIsDirty] = useState(false);
     const mvtSent = hasMvtSent(flight);
@@ -208,10 +249,12 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
                 std: flight.std,
                 reg: flight.reg,
                 delayOnlyMode: false,
+                userRole,
             }),
         [
             flight.std,
             flight.reg,
+            userRole,
             data.atd,
             data.off,
             data.eta,
@@ -225,6 +268,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
             data.dlyTime1,
             data.dlyCod2,
             data.dlyTime2,
+            data.briefingPhoto,
         ],
     );
     const canSendMvt = sendGate.ok;
@@ -336,6 +380,71 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, onSave, onP
                         <DelayCodeSelect label="DLY COD 2" value={data.dlyCod2} onChange={(v) => handleChange("dlyCod2", v)} disabled={fieldDisabled(true)} />
                         <NumberInput label="DLY TIME 2" value={data.dlyTime2} onChange={(v) => handleChange("dlyTime2", v)} disabled={fieldDisabled(true)} />
                     </div>
+                    {/* Foto de Briefing Operacional si se selecciona código 66 */}
+                    {(data.dlyCod1 === "66" || data.dlyCod2 === "66") && (
+                        <div className="mt-5 p-4 rounded-xl border border-red-200 bg-white shadow-sm flex flex-col gap-3 animate-in fade-in duration-300">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping animate-duration-1000"></span>
+                                    Briefing Operacional (Código 66)
+                                    <span className="text-red-500 ml-1 font-bold">* Obligatorio</span>
+                                </label>
+                            </div>
+                            
+                            {data.briefingPhoto ? (
+                                <div className="relative group max-w-sm rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                                    <img 
+                                        src={data.briefingPhoto} 
+                                        alt="Briefing Operacional" 
+                                        className="w-full h-auto max-h-60 object-contain rounded-lg"
+                                    />
+                                    {!fieldDisabled(true) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleChange("briefingPhoto", "")}
+                                            className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
+                                            title="Eliminar foto"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center border-2 border-dashed border-red-300 rounded-xl p-6 bg-slate-50 hover:bg-red-50/20 transition-colors">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        capture="environment"
+                                        id="briefing-photo-input"
+                                        disabled={fieldDisabled(true)}
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                try {
+                                                    const base64 = await compressImage(file);
+                                                    handleChange("briefingPhoto", base64);
+                                                } catch (err) {
+                                                    console.error("Error compressing image:", err);
+                                                    alert("No se pudo procesar la imagen. Intentá con otra.");
+                                                }
+                                            }
+                                        }}
+                                        className="hidden"
+                                    />
+                                    <label
+                                        htmlFor="briefing-photo-input"
+                                        className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-black uppercase tracking-wide cursor-pointer transition-colors shadow-md ${fieldDisabled(true) ? "opacity-50 pointer-events-none" : ""}`}
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Adjuntar Foto Briefing
+                                    </label>
+                                    <p className="text-xs text-slate-500 mt-2 text-center">
+                                        Subí un archivo de imagen o tomá una foto desde la cámara.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <div className="mt-4 flex flex-col gap-1.5 focus-within:text-red-600 transition-colors">
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Observaciones (Demora)</label>
                         <textarea

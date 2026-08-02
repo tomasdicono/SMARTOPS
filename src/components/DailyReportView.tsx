@@ -23,8 +23,6 @@ interface Props {
     selectedDate: string;
     onDateChange: (iso: string) => void;
     onUpdateDailyReportObs: (flightId: string, text: string) => void;
-    /** Guardar cambios en código de demora 1 y 2 */
-    onUpdateDelayCode?: (flightId: string, dlyCod1: string, dlyCod2: string) => void;
     /** HCC y AJS editan observaciones (guardado en dailyReportObs) */
     canEditObs: boolean;
     /** Nombre del usuario para el PDF (encabezado Responsable). */
@@ -44,7 +42,6 @@ export function DailyReportView({
     selectedDate,
     onDateChange,
     onUpdateDailyReportObs,
-    onUpdateDelayCode,
     canEditObs,
     reportUserName,
     routeAfectaciones = [],
@@ -282,41 +279,13 @@ export function DailyReportView({
                                             {formatDelayCell(m.dlyTime1)}
                                         </td>
                                         <td className="px-2 py-2 font-bold text-slate-800">
-                                            {canEditObs && onUpdateDelayCode ? (
-                                                <input
-                                                    type="text"
-                                                    defaultValue={m.dlyCod1 || ""}
-                                                    onBlur={(e) => {
-                                                        const newVal = e.target.value.trim();
-                                                        if (newVal !== (m.dlyCod1 || "")) {
-                                                            onUpdateDelayCode(f.id, newVal, m.dlyCod2 || "");
-                                                        }
-                                                    }}
-                                                    className="w-12 px-1 py-1 border border-transparent hover:border-slate-300 focus:border-cyan-500 rounded bg-transparent focus:bg-white focus:outline-none transition-colors"
-                                                />
-                                            ) : (
-                                                m.dlyCod1 || "—"
-                                            )}
+                                            {m.dlyCod1 || "—"}
                                         </td>
                                         <td className={delayTimeCellClassName(m.dlyTime2)}>
                                             {formatDelayCell(m.dlyTime2)}
                                         </td>
                                         <td className="px-2 py-2 font-bold text-slate-800">
-                                            {canEditObs && onUpdateDelayCode ? (
-                                                <input
-                                                    type="text"
-                                                    defaultValue={m.dlyCod2 || ""}
-                                                    onBlur={(e) => {
-                                                        const newVal = e.target.value.trim();
-                                                        if (newVal !== (m.dlyCod2 || "")) {
-                                                            onUpdateDelayCode(f.id, m.dlyCod1 || "", newVal);
-                                                        }
-                                                    }}
-                                                    className="w-12 px-1 py-1 border border-transparent hover:border-slate-300 focus:border-cyan-500 rounded bg-transparent focus:bg-white focus:outline-none transition-colors"
-                                                />
-                                            ) : (
-                                                m.dlyCod2 || "—"
-                                            )}
+                                            {m.dlyCod2 || "—"}
                                         </td>
                                         <td className="px-2 py-2 max-w-[320px]">
                                             <div className="flex gap-2 items-start">
