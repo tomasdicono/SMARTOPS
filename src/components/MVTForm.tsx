@@ -414,7 +414,6 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
                                     <input
                                         type="file"
                                         accept="image/*"
-                                        capture="environment"
                                         id="briefing-photo-input"
                                         disabled={fieldDisabled(true)}
                                         onChange={async (e) => {
