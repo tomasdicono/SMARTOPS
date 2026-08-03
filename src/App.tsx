@@ -134,6 +134,8 @@ import {
 } from "./lib/duplicateFlights";
 import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 
+const APP_VERSION = "2026.08.02.2";
+
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
@@ -184,6 +186,44 @@ function App() {
   const [hitosSavedToast, setHitosSavedToast] = useState<{ open: boolean; subtitle?: string }>({ open: false });
 
   const userRole = normalizeUserRole(currentUser?.role);
+
+  // Auto-reload on remote version mismatch to force client update
+  useEffect(() => {
+    if (!currentUser) return;
+    const versionRef = ref(db, "systemConfig/minRequiredVersion");
+    const unsubscribe = onValue(versionRef, (snapshot) => {
+      const minVersion = snapshot.val();
+      if (
+        minVersion &&
+        typeof minVersion === "string" &&
+        minVersion.trim() !== "" &&
+        minVersion !== APP_VERSION
+      ) {
+        const lastReload = sessionStorage.getItem("lastReloadTimestamp");
+        const now = Date.now();
+        if (lastReload && now - Number(lastReload) < 15000) {
+          console.error("Bucle de recarga infinita evitado para la versión:", minVersion);
+          return;
+        }
+        sessionStorage.setItem("lastReloadTimestamp", String(now));
+        console.warn(`Nueva versión detectada: ${minVersion}. Forzando actualización...`);
+        window.location.reload();
+      }
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Admin, AJS, or HCC automatically propagates the current app version to Firebase
+  useEffect(() => {
+    if (!currentUser) return;
+    const role = normalizeUserRole(currentUser.role);
+    if (role === "ADMIN" || role === "AJS" || role === "HCC") {
+      const versionRef = ref(db, "systemConfig/minRequiredVersion");
+      set(versionRef, APP_VERSION).catch((e) =>
+        console.error("Error setting app version in database:", e)
+      );
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (!mvtSentToast.open) return;

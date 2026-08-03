@@ -26,6 +26,7 @@ import {
 import { formatMinutesToHHMM } from "../lib/mvtTime";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 import { Save, AlertCircle, AlertTriangle, Clock, Zap, Lock } from "lucide-react";
+import { analyzeDelayRootCause } from "../lib/delayRootCauseDetector";
 
 interface Props {
     flight: Flight;
@@ -409,6 +410,44 @@ export function HitosTab({ flight, readOnly, canEditAfterSent, onSave, onPersist
                         <Clock className="w-5 h-5 text-primary" />
                         Control de Hitos ({selectedChart.name})
                     </h3>
+
+                    {/* Análisis de Causa Raíz (Función Experimental - Oculto de momento) */}
+                    {false && (() => {
+                        const analysis = analyzeDelayRootCause(flight, data, selectedChart!);
+                        if (!analysis.hasDelay) return null;
+                        return (
+                            <div className="mb-6 p-4 rounded-xl border border-indigo-100 bg-indigo-50/50 text-slate-800 shadow-sm animate-in fade-in duration-300">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                                        Beta
+                                    </span>
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950">
+                                        Detección de Causa Raíz de Demora
+                                    </h4>
+                                </div>
+                                <p className="text-sm font-black text-indigo-900 leading-snug">
+                                    {analysis.summary}
+                                </p>
+                                {analysis.contributingFactors.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-indigo-100/50">
+                                        <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+                                            Hitos desviados del plan (Target):
+                                        </h5>
+                                        <ul className="space-y-1">
+                                            {[analysis.primaryCause!, ...analysis.contributingFactors].map((factor, idx) => (
+                                                <li key={idx} className="text-xs font-semibold text-slate-700 flex items-start gap-1.5">
+                                                    <span className="text-indigo-600 font-black">·</span>
+                                                    <span>
+                                                        <strong className="text-slate-800">{factor.name}</strong>: {factor.description}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {embarqueDurationPreview != null ? (
                         <p className="text-[11px] font-semibold text-slate-600 mb-4 -mt-2">
