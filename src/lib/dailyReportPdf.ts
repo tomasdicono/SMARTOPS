@@ -5,7 +5,7 @@ import { getAirlinePrefix } from "./flightHelpers";
 import type { StatusDiaDaySummary } from "./controlHelpers";
 import type { DailyReportOtp } from "./dailyReportOtp";
 import { formatOtpPercentForReport } from "./dailyReportOtp";
-import { formatDelayCodeDisplay } from "./delayCodes";
+import { formatDelayCodeDisplay, getDelayCodeArea } from "./delayCodes";
 import {
     totalDelayMinutes,
     formatDelayCell,
@@ -29,8 +29,7 @@ const JS = {
     delayCellText: [153, 27, 27] as const,
 };
 
-/** Columnas «Min» (DLY TIME 1 y 2) en la tabla principal del informe. */
-const PDF_DLY_TIME_COL_INDEXES = [7, 9] as const;
+const PDF_DLY_TIME_COL_INDEXES = [7, 10] as const;
 
 async function fetchLogoAsDataUrl(): Promise<string | null> {
     try {
@@ -68,6 +67,7 @@ function buildStatusDiaPdfRows(s: StatusDiaDaySummary, manualOtp: DailyReportOtp
         ["Vuelos JES con MVT (base OTP)", s.nMvtOtp > 0 ? String(s.nMvtOtp) : "—"],
         ["OTP0", otp0Display],
         ["OTP15", otp15Display],
+        ["ATR15", s.atr15Pct != null ? `${s.atr15Pct.toFixed(1)}%` : "—"],
         [
             "Factor de ocupación programado",
             s.factorOcupacionProgramadoPct != null ? `${s.factorOcupacionProgramadoPct.toFixed(1)}%` : "—",
@@ -127,12 +127,14 @@ export async function downloadDailyReportPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     const rightX = pageW - 12;
-    doc.text(`Fecha: ${dateLabel}`, rightX, 10, { align: "right" });
-    doc.text(`Generado: ${new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}`, rightX, 16.5, {
+    doc.text(`Fecha: ${dateLabel}`, rightX, 9.5, { align: "right" });
+    doc.text(`Generado: ${new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}`, rightX, 15, {
         align: "right",
     });
     const resp = (responsibleName || "").trim() || "—";
-    doc.text(`Responsable: ${resp}`, rightX, 23, { align: "right" });
+    doc.text(`Responsable: ${resp}`, rightX, 20.5, { align: "right" });
+    const atr15Val = statusDia.atr15Pct != null ? `${statusDia.atr15Pct.toFixed(1)}%` : "—";
+    doc.text(`ATR15 (Calculado automáticamente): ${atr15Val}`, rightX, 26, { align: "right" });
 
     doc.setDrawColor(...JS.red);
     doc.setLineWidth(1.1);
@@ -149,8 +151,10 @@ export async function downloadDailyReportPdf(
             "Reg",
             "Min",
             "1° Code",
+            "Area",
             "Min",
             "2° Code",
+            "Area",
             "Observaciones",
         ],
     ];
@@ -170,8 +174,10 @@ export async function downloadDailyReportPdf(
             f.reg,
             formatDelayCell(m.dlyTime1),
             m.dlyCod1 || "—",
+            getDelayCodeArea(m.dlyCod1),
             formatDelayCell(m.dlyTime2),
             m.dlyCod2 || "—",
+            getDelayCodeArea(m.dlyCod2),
             obs || "—",
         ];
     });
@@ -202,33 +208,48 @@ export async function downloadDailyReportPdf(
         },
         alternateRowStyles: { fillColor: [...JS.rowAlt] },
         columnStyles: {
-            0: { cellWidth: 18, halign: "center" },
-            1: { cellWidth: 22 },
-            2: { cellWidth: 14, halign: "center" },
-            3: { cellWidth: 14, halign: "center" },
-            4: { cellWidth: 16, halign: "center" },
-            5: { cellWidth: 16, halign: "center" },
-            6: { cellWidth: 18 },
-            7: { cellWidth: 14, halign: "center" },
-            8: { cellWidth: 16, halign: "center" },
-            9: { cellWidth: 14, halign: "center" },
-            10: { cellWidth: 16, halign: "center" },
-            11: { cellWidth: "auto" },
+            0: { cellWidth: 12, halign: "center" },
+            1: { cellWidth: 16 },
+            2: { cellWidth: 12, halign: "center" },
+            3: { cellWidth: 12, halign: "center" },
+            4: { cellWidth: 12, halign: "center" },
+            5: { cellWidth: 12, halign: "center" },
+            6: { cellWidth: 12, halign: "center" },
+            7: { cellWidth: 10, halign: "center" },
+            8: { cellWidth: 14, halign: "center" },
+            9: { cellWidth: 23, halign: "center" },
+            10: { cellWidth: 10, halign: "center" },
+            11: { cellWidth: 14, halign: "center" },
+            12: { cellWidth: 23, halign: "center" },
+            13: { cellWidth: "auto" },
         },
         margin: { left: 10, right: 10 },
         didParseCell: (data) => {
             if (data.section !== "body") return;
-            if (data.column.index !== PDF_DLY_TIME_COL_INDEXES[0] && data.column.index !== PDF_DLY_TIME_COL_INDEXES[1]) {
-                return;
+            
+            // Min coloring
+            if (data.column.index === PDF_DLY_TIME_COL_INDEXES[0] || data.column.index === PDF_DLY_TIME_COL_INDEXES[1]) {
+                const f = rows[data.row.index];
+                const m = f?.mvtData;
+                if (m) {
+                    const raw = data.column.index === PDF_DLY_TIME_COL_INDEXES[0] ? m.dlyTime1 : m.dlyTime2;
+                    if (isDelayTimeAtLeast15Minutes(raw)) {
+                        data.cell.styles.fillColor = [...JS.delayCellBg];
+                        data.cell.styles.textColor = [...JS.delayCellText];
+                        data.cell.styles.fontStyle = "bold";
+                    }
+                }
             }
-            const f = rows[data.row.index];
-            const m = f?.mvtData;
-            if (!m) return;
-            const raw = data.column.index === 7 ? m.dlyTime1 : m.dlyTime2;
-            if (!isDelayTimeAtLeast15Minutes(raw)) return;
-            data.cell.styles.fillColor = [...JS.delayCellBg];
-            data.cell.styles.textColor = [...JS.delayCellText];
-            data.cell.styles.fontStyle = "bold";
+            
+            // Area coloring if AIRPORT
+            if (data.column.index === 9 || data.column.index === 12) {
+                const text = String(data.cell.raw || "").trim();
+                if (text.toUpperCase() === "AIRPORT") {
+                    data.cell.styles.fillColor = [...JS.delayCellBg];
+                    data.cell.styles.textColor = [...JS.delayCellText];
+                    data.cell.styles.fontStyle = "bold";
+                }
+            }
         },
     });
 

@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import type { Flight, RouteAfectacionEntry, SSEE } from "../types";
-import { formatDelayCodeDisplay } from "./delayCodes";
+import { formatDelayCodeDisplay, getDelayCodeArea } from "./delayCodes";
 import { normalizeAirportCode } from "./routeAfectaciones";
 import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isAlternoActive, getFlightQrfEvents } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
@@ -1273,6 +1273,7 @@ export interface StatusDiaDaySummary {
     countVuelosOperados: number;
     otp0Pct: number | null;
     otp15Pct: number | null;
+    atr15Pct: number | null;
     countAfectacionesRuta: number;
     /** Σ PAX programación / Σ asientos (vuelos operativos con matrícula en flota). */
     factorOcupacionProgramadoPct: number | null;
@@ -1419,6 +1420,30 @@ export function computeStatusDiaDaySummary(
     const otp0Pct = nMvtOtp > 0 ? (otp0Count / nMvtOtp) * 100 : null;
     const otp15Pct = nMvtOtp > 0 ? (otp15Count / nMvtOtp) * 100 : null;
 
+    let atr15Count = 0;
+    for (const f of conMvtOtp) {
+        const m = f.mvtData;
+        if (!m) {
+            atr15Count += 1;
+            continue;
+        }
+        let complies = true;
+        if (m.dlyCod1 && getDelayCodeArea(m.dlyCod1).toUpperCase() === "AIRPORT") {
+            if (parseTimeToMinutes(m.dlyTime1) >= 15) {
+                complies = false;
+            }
+        }
+        if (m.dlyCod2 && getDelayCodeArea(m.dlyCod2).toUpperCase() === "AIRPORT") {
+            if (parseTimeToMinutes(m.dlyTime2) >= 15) {
+                complies = false;
+            }
+        }
+        if (complies) {
+            atr15Count += 1;
+        }
+    }
+    const atr15Pct = nMvtOtp > 0 ? (atr15Count / nMvtOtp) * 100 : null;
+
     let seatsOcc = 0;
     let paxProgramadosSum = 0;
     let seatsMvtEnviados = 0;
@@ -1456,6 +1481,7 @@ export function computeStatusDiaDaySummary(
         countVuelosOperados,
         otp0Pct,
         otp15Pct,
+        atr15Pct,
         countAfectacionesRuta: routeAfectacionesCount,
         factorOcupacionProgramadoPct,
         factorOcupacionRealPct,

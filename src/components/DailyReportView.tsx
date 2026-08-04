@@ -16,6 +16,7 @@ import {
 } from "../lib/dailyReportOtp";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { downloadDailyReportPdf } from "../lib/dailyReportPdf";
+import { getDelayCodeArea } from "../lib/delayCodes";
 import { FileDown, CalendarDays, Copy, Check } from "lucide-react";
 
 interface Props {
@@ -35,6 +36,18 @@ interface Props {
         opts?: { notifyOnError?: boolean }
     ) => Promise<boolean>;
     canEditOtp: boolean;
+}
+
+function getAtr15ColorClass(pct: number | null): string {
+    if (pct == null) return "border-slate-200 text-slate-500 bg-slate-50";
+    const val = Number(pct.toFixed(1));
+    if (val > 95.5) {
+        return "border-emerald-200 text-emerald-700 bg-emerald-50";
+    } else if (val === 95.5) {
+        return "border-amber-200 text-amber-700 bg-amber-50";
+    } else {
+        return "border-red-200 text-red-700 bg-red-50";
+    }
 }
 
 export function DailyReportView({
@@ -188,6 +201,12 @@ export function DailyReportView({
                             aria-describedby="otp-hint"
                         />
                     </div>
+                    <div>
+                        <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">ATR15 (Auto)</label>
+                        <div className={`w-[min(100%,7rem)] border rounded-xl px-3 py-2 text-sm font-bold text-center select-none ${getAtr15ColorClass(statusDia.atr15Pct)}`} title="Cumplimiento del total de vuelos con participación de códigos de Airport < 15 min">
+                            {statusDia.atr15Pct != null ? `${statusDia.atr15Pct.toFixed(1)}%` : "—"}
+                        </div>
+                    </div>
                 </div>
                 <button
                     type="button"
@@ -251,8 +270,10 @@ export function DailyReportView({
                                 <th className="px-2 py-3 whitespace-nowrap">Reg</th>
                                 <th className="px-2 py-3 whitespace-nowrap">Min</th>
                                 <th className="px-2 py-3 whitespace-nowrap">1° Code</th>
+                                <th className="px-2 py-3 whitespace-nowrap text-center">Area</th>
                                 <th className="px-2 py-3 whitespace-nowrap">Min</th>
                                 <th className="px-2 py-3 whitespace-nowrap">2° Code</th>
+                                <th className="px-2 py-3 whitespace-nowrap text-center">Area</th>
                                 <th className="px-2 py-3 min-w-[200px]">Observaciones</th>
                             </tr>
                         </thead>
@@ -281,11 +302,17 @@ export function DailyReportView({
                                         <td className="px-2 py-2 font-bold text-slate-800">
                                             {m.dlyCod1 || "—"}
                                         </td>
+                                        <td className={`px-2 py-2 whitespace-nowrap text-xs font-bold text-center ${getDelayCodeArea(m.dlyCod1).toUpperCase() === "AIRPORT" ? "bg-red-100 text-red-900 font-bold" : "text-slate-600"}`}>
+                                            {getDelayCodeArea(m.dlyCod1)}
+                                        </td>
                                         <td className={delayTimeCellClassName(m.dlyTime2)}>
                                             {formatDelayCell(m.dlyTime2)}
                                         </td>
                                         <td className="px-2 py-2 font-bold text-slate-800">
                                             {m.dlyCod2 || "—"}
+                                        </td>
+                                        <td className={`px-2 py-2 whitespace-nowrap text-xs font-bold text-center ${getDelayCodeArea(m.dlyCod2).toUpperCase() === "AIRPORT" ? "bg-red-100 text-red-900 font-bold" : "text-slate-600"}`}>
+                                            {getDelayCodeArea(m.dlyCod2)}
                                         </td>
                                         <td className="px-2 py-2 max-w-[320px]">
                                             <div className="flex gap-2 items-start">
