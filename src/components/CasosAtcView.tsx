@@ -266,7 +266,7 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
     // Ramp / Handling (excepto 30 y excluyendo 38 más abajo)
     "31", "32", "33", "34", "35", "36", "37", "39",
     // Airport Facilities / Restrictions / Authorities
-    "85", "86", "87", "88", "89"
+    "85", "86", "87", "88"
   ];
 
   const otpFlights = useMemo(() => {
