@@ -260,7 +260,14 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
     }).sort((a, b) => a.date.localeCompare(b.date) || a.std.localeCompare(b.std));
   }, [flights, startDate, endDate, selectedAirports, selectedCodes]);
 
-  const OTP_CODES = ["3", "8", "12", "14", "15", "34", "85", "18", "36", "11", "39", "33", "86", "87", "99", "35", "19", "58", "75"];
+  const OTP_CODES = [
+    // Pax / Baggage
+    "11", "12", "14", "15", "18", "19",
+    // Ramp / Handling (excepto 30 y excluyendo 38 más abajo)
+    "31", "32", "33", "34", "35", "36", "37", "39",
+    // Airport Facilities / Restrictions / Authorities
+    "85", "86", "87", "88", "89"
+  ];
 
   const otpFlights = useMemo(() => {
     if (!otpDate) return [];
@@ -271,16 +278,12 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
 
       const d1 = f.mvtData?.dlyCod1;
       const d2 = f.mvtData?.dlyCod2;
-      const t1 = parseTimeToMinutes(f.mvtData?.dlyTime1);
-      const t2 = parseTimeToMinutes(f.mvtData?.dlyTime2);
 
       // Excluir vuelos con COD 38
       if (d1 === "38" || d2 === "38") return false;
 
       if (d1 && OTP_CODES.includes(d1)) return true;
       if (d2 && OTP_CODES.includes(d2)) return true;
-      if (d1 === "66" && t1 > 10) return true;
-      if (d2 === "66" && t2 > 10) return true;
 
       return false;
     }).sort((a, b) => a.dep.localeCompare(b.dep) || a.std.localeCompare(b.std));
