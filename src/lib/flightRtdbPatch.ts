@@ -139,6 +139,17 @@ export function buildFlightRtdbUpdate(
         updates.qrfHistory = patch.qrfHistory;
     }
 
+    if (patch.claimTickets !== undefined) {
+        const incoming = patch.claimTickets;
+        if (incoming === null) {
+            updates["claimTickets"] = null;
+        } else {
+            for (const [k, v] of Object.entries(incoming)) {
+                updates[`claimTickets/${k}`] = v;
+            }
+        }
+    }
+
     return forFirebaseDb(updates) as Record<string, unknown>;
 }
 
@@ -171,11 +182,22 @@ export function mergeFlightPatch(existing: Flight, patch: Partial<Flight>): Flig
             }
         }
     }
+    
+    let claimTickets = ex.claimTickets;
+    if (patch.claimTickets !== undefined) {
+        if (patch.claimTickets === null) {
+            claimTickets = undefined;
+        } else {
+            claimTickets = { ...claimTickets, ...patch.claimTickets };
+        }
+    }
+
     return coerceFlightFromDb({
         ...ex,
         ...mergedScalars,
         mvtData,
         hitosData,
         hitosCrewData,
+        claimTickets,
     });
 }

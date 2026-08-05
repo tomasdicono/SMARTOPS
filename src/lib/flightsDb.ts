@@ -57,6 +57,7 @@ function mergeFlightRecords(a: Flight, b: Flight): Flight {
         qrfHistory: mergeQrfHistory(a.qrfHistory, b.qrfHistory),
         alternoArr: pickNonEmptyStr(b.alternoArr, a.alternoArr) || undefined,
         alternoReason: pickNonEmptyStr(b.alternoReason, a.alternoReason) || undefined,
+        claimTickets: a.claimTickets || b.claimTickets ? { ...b.claimTickets, ...a.claimTickets } : undefined,
     });
 }
 

@@ -156,6 +156,25 @@ export interface Flight {
     /** Alterno: destino programado sin cambiar; ATO y motivo operativo. */
     alternoArr?: string;
     alternoReason?: string;
+
+    /** Tickets de reclamo SC-HCC */
+    claimTickets?: Record<string, ClaimTicket>;
+}
+
+export interface ClaimTicket {
+    id: string;
+    text: string;
+    priority: "1" | "2" | "3"; // 1: Red, 2: Yellow, 3: Green
+    status: "pending" | "accepted" | "closed";
+    createdAt: string; // ISO 8601
+    createdByUid: string;
+    createdByName: string;
+    acceptedAt?: string; // ISO 8601
+    acceptedByUid?: string;
+    acceptedByName?: string;
+    closedAt?: string; // ISO 8601
+    closedByUid?: string;
+    closedByName?: string;
 }
 
 /** Evento QRF registrado en el vuelo (activo hasta `resolvedAt`). */

@@ -93,6 +93,7 @@ import { CostControllingView } from "./components/CostControllingView";
 import { canAccessCostControlling } from "./lib/costControllingHelpers";
 import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import { StatusEquiposGRHView } from "./components/StatusEquiposGRHView";
+import { HccTicketsView } from "./components/HccTicketsView";
 import {
   computePernocteRows,
   coercePernocteRow,
@@ -139,7 +140,7 @@ const APP_VERSION = "2026.08.02.2";
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -1485,18 +1486,32 @@ function App() {
               </button>
             )}
             {userRole === "AJS" && (
-              <button
-                type="button"
-                onClick={() => setMainTab("casosAtc")}
-                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                  mainTab === "casosAtc"
-                    ? "bg-rose-600 text-white shadow-md"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                Buscador demoras
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMainTab("casosAtc")}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                    mainTab === "casosAtc"
+                      ? "bg-rose-600 text-white shadow-md"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Buscador demoras
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainTab("ticketsHcc")}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                    mainTab === "ticketsHcc"
+                      ? "bg-purple-600 text-white shadow-md"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <MessageSquareText className="w-4 h-4 shrink-0" />
+                  Tickets HCC
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -1572,6 +1587,8 @@ function App() {
               <>Cost controlling</>
             ) : mainTab === "statusEquiposGRH" ? (
               <>Status Equipos GRH</>
+            ) : mainTab === "ticketsHcc" ? (
+              <>Tickets HCC</>
             ) : (
               <>
                 Vuelos
@@ -1649,6 +1666,11 @@ function App() {
                 console.error("No se pudo guardar plan de acción:", e);
               }
             }}
+          />
+        ) : mainTab === "ticketsHcc" && userRole === "AJS" ? (
+          <HccTicketsView
+            flights={flights}
+            currentUser={currentUser}
           />
         ) : mainTab === "statusEquiposGRH" ? (
           <StatusEquiposGRHView currentUser={currentUser} />

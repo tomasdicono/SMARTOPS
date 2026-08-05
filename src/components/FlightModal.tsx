@@ -4,6 +4,7 @@ import { MVTForm } from "./MVTForm";
 import { HitosTab } from "./HitosTab";
 import { HitosCrewTab } from "./HitosCrewTab";
 import { LimpiezaChecklistTab } from "./LimpiezaChecklistTab";
+import { ClaimTicketsTab } from "./ClaimTicketsTab";
 import {
     flightNeedsCleaningWarning,
     getAirlinePrefix,
@@ -15,7 +16,7 @@ import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
 import { isLimpiezaRole, canEditMvtDelayAfterSent, canSubmitMvtAfterQrf } from "../types";
 import { isQrfActive, isAlternoActive } from "../lib/flightHelpers";
 
-type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA";
+type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA" | "RECLAMOS";
 import { hasMvtSent } from "../lib/controlHelpers";
 import { downloadHitosSummary } from "../lib/downloadHitosSummary";
 import { X, Ban, Download, RotateCcw } from "lucide-react";
@@ -77,6 +78,7 @@ export function FlightModal({
             userRole === "HCC" ||
             userRole === "SC" ||
             userRole === "AJS");
+    const canSeeReclamos = userRole === "AJS"; // Restringido temporalmente a AJS
     const isReadOnlyView = !!flight.cancelled;
     const qrfActive = isQrfActive(flight);
     const alternoActive = isAlternoActive(flight);
@@ -103,12 +105,14 @@ export function FlightModal({
     const tabOrder: FlightModalTab[] = limpiezaAsGuide
         ? [
               ...(canSeeMvt ? (["MVT"] as const) : []),
+              ...(canSeeReclamos ? (["RECLAMOS"] as const) : []),
               ...(canSeeHitos ? (["HITOS"] as const) : []),
               ...(canSeeCrew ? (["CREW"] as const) : []),
               ...(canSeeLimpiezaChecklist ? (["LIMPIEZA"] as const) : []),
           ]
         : [
               ...(canSeeMvt ? (["MVT"] as const) : []),
+              ...(canSeeReclamos ? (["RECLAMOS"] as const) : []),
               ...(canSeeLimpiezaChecklist ? (["LIMPIEZA"] as const) : []),
               ...(canSeeHitos ? (["HITOS"] as const) : []),
               ...(canSeeCrew ? (["CREW"] as const) : []),
@@ -120,7 +124,7 @@ export function FlightModal({
         const isLimpieza = tab === "LIMPIEZA";
         const active = activeTab === tab;
         const label =
-            tab === "MVT" ? "MVT" : tab === "HITOS" ? "Hitos" : tab === "CREW" ? "Hitos Crew" : "Limpieza";
+            tab === "MVT" ? "MVT" : tab === "HITOS" ? "Hitos" : tab === "CREW" ? "Hitos Crew" : tab === "RECLAMOS" ? "Reclamos" : "Limpieza";
         return (
             <button
                 key={tab}
@@ -295,6 +299,24 @@ export function FlightModal({
                                     onSaveMVT(data);
                                 }}
                                 onPersistMvt={onPersistMvt}
+                            />
+                        </div>
+                    )}
+                    {canSeeReclamos && (
+                        <div className={activeTab === "RECLAMOS" ? "block" : "hidden"} aria-hidden={activeTab !== "RECLAMOS"}>
+                            <ClaimTicketsTab
+                                flight={flight}
+                                currentUser={currentUser}
+                                readOnly={isReadOnlyView}
+                                onSaveTickets={async (tickets) => {
+                                    // Update locally and in DB
+                                    try {
+                                        const { updateFlight } = await import("../lib/flightsDb");
+                                        await updateFlight(flight.id, { claimTickets: tickets });
+                                    } catch (err) {
+                                        console.error("Error saving claim tickets", err);
+                                    }
+                                }}
                             />
                         </div>
                     )}
