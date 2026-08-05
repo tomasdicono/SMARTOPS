@@ -78,7 +78,7 @@ export function FlightModal({
             userRole === "HCC" ||
             userRole === "SC" ||
             userRole === "AJS");
-    const canSeeReclamos = userRole === "AJS"; // Restringido temporalmente a AJS
+    const canSeeReclamos = userRole === "AJS" || userRole === "ADMIN"; // Restringido a AJS (y ADMIN para pruebas)
     const isReadOnlyView = !!flight.cancelled;
     const qrfActive = isQrfActive(flight);
     const alternoActive = isAlternoActive(flight);

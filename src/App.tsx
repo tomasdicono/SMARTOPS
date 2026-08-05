@@ -1565,6 +1565,18 @@ function App() {
               <Wrench className="w-4 h-4 shrink-0" />
               Status Equipos
             </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("ticketsHcc")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "ticketsHcc"
+                  ? "bg-purple-600 text-white shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <MessageSquareText className="w-4 h-4 shrink-0" />
+              Tickets HCC
+            </button>
           </div>
         )}
 
@@ -1650,7 +1662,7 @@ function App() {
           />
         ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
           <CostControllingView flights={flights} />
-        ) : mainTab === "casosAtc" && userRole === "AJS" ? (
+        ) : mainTab === "casosAtc" && (userRole === "AJS" || userRole === "ADMIN") ? (
           <CasosAtcView 
             flights={flights} 
             onFlightSelect={(f) => {
@@ -1667,7 +1679,7 @@ function App() {
               }
             }}
           />
-        ) : mainTab === "ticketsHcc" && userRole === "AJS" ? (
+        ) : mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "ADMIN") ? (
           <HccTicketsView
             flights={flights}
             currentUser={currentUser}
