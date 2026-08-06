@@ -1514,18 +1514,20 @@ function App() {
                     <Plane className="w-4 h-4 shrink-0" />
                     Matrículas
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setMainTab("infoCrew")}
-                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                      mainTab === "infoCrew"
-                        ? "bg-purple-600 text-white shadow-md"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    <Users className="w-4 h-4 shrink-0" />
-                    Info Crew
-                  </button>
+                  {false && (
+                    <button
+                      type="button"
+                      onClick={() => setMainTab("infoCrew")}
+                      className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                        mainTab === "infoCrew"
+                          ? "bg-purple-600 text-white shadow-md"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      <Users className="w-4 h-4 shrink-0" />
+                      Info Crew
+                    </button>
+                  )}
                   {false && canAccessCostControlling(userRole) && (
                     <button
                       type="button"
