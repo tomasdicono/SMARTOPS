@@ -209,8 +209,16 @@ export function isMvtCompleteForCard(f: Flight): boolean {
     return atd.length >= 3;
 }
 
+/** Vuelo de traslado (AEP-EZE o EZE-AEP). */
+export function isTrasladoFlight(f: Flight): boolean {
+    const dep = String(f.dep ?? "").trim().toUpperCase();
+    const arr = String(f.arr ?? "").trim().toUpperCase();
+    return (dep === "AEP" && arr === "EZE") || (dep === "EZE" && arr === "AEP");
+}
+
 /** Tarjetas del tablero: hitos validados (Guardar), no solo auto-guardado con carta elegida. */
 export function isHitosCompleteForCard(f: Flight): boolean {
+    if (isTrasladoFlight(f)) return true;
     const t = f.hitosData?.hitosSentAt;
     return t != null && String(t).trim() !== "";
 }

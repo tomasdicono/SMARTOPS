@@ -65,7 +65,7 @@ export function HccTicketsView({ flights, currentUser }: Props) {
             <div className="max-w-[1600px] mx-auto space-y-6">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Reclamos SC (HCC)</h1>
+                        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Tickets SC (HCC)</h1>
                         <p className="text-sm text-slate-500 mt-1">Gestión y recepción de tickets operativos de Station Control.</p>
                     </div>
                 </div>
@@ -86,7 +86,7 @@ export function HccTicketsView({ flights, currentUser }: Props) {
                                         <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
                                             <div className="flex flex-col items-center justify-center">
                                                 <CheckCircle className="w-10 h-10 text-emerald-400 mb-3" />
-                                                <p className="text-base font-bold">No hay reclamos activos en este momento.</p>
+                                                <p className="text-base font-bold">No hay tickets activos en este momento.</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -142,7 +142,7 @@ export function HccTicketsView({ flights, currentUser }: Props) {
                                                                                 onClick={() => handleAcceptTicket(f.id, t.id, t)}
                                                                                 className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors whitespace-nowrap"
                                                                             >
-                                                                                Aceptar Reclamo
+                                                                                Aceptar Ticket
                                                                             </button>
                                                                         )}
                                                                         {t.status === "accepted" && (

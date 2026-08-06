@@ -36,6 +36,7 @@ import {
   isHitosCompleteForCard,
   isQrfActive,
   isAlternoActive,
+  isTrasladoFlight,
   canDownloadHitosSummaryRole,
   hasHitosDataForSummaryExport,
   flightNeedsCleaningWarning,
@@ -56,7 +57,7 @@ import {
   type FleetModelOption,
 } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator, GanttChartSquare, Wrench } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator, GanttChartSquare, Wrench, Clock } from "lucide-react";
 import { AlternoIcon } from "./components/AlternoIcon";
 import { BroomIcon } from "./components/BroomIcon";
 import { downloadHitosSummary } from "./lib/downloadHitosSummary";
@@ -185,6 +186,23 @@ function App() {
   const [mvtSentToast, setMvtSentToast] = useState<{ open: boolean; subtitle?: string }>({ open: false });
   /** Aviso tras guardar Hitos validados */
   const [hitosSavedToast, setHitosSavedToast] = useState<{ open: boolean; subtitle?: string }>({ open: false });
+
+  // Live Header Clock
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatClockTime = (date: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  };
+
+  const currentTimeStr = formatClockTime(currentTime);
 
   const userRole = normalizeUserRole(currentUser?.role);
 
@@ -852,32 +870,34 @@ function App() {
   };
 
   const handleConfirmAlterno = async (id: string, ato: string, reason: string) => {
+    setAlternoModalFlight(null);
+    setFlights((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, alternoArr: ato, alternoReason: reason } : f)),
+    );
+    setSelectedFlight((prev) =>
+      prev?.id === id ? { ...prev, alternoArr: ato, alternoReason: reason } : prev,
+    );
+
     try {
       await updateFlight(id, { alternoArr: ato, alternoReason: reason });
-      setAlternoModalFlight(null);
-      setFlights((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, alternoArr: ato, alternoReason: reason } : f)),
-      );
-      setSelectedFlight((prev) =>
-        prev?.id === id ? { ...prev, alternoArr: ato, alternoReason: reason } : prev,
-      );
     } catch {
-      alert("No se pudo registrar el alterno. Revisá la conexión e intentá de nuevo.");
+      alert("No se pudo registrar el alterno en el servidor. Intenta de nuevo.");
     }
   };
 
   const handleClearAlterno = async (id: string) => {
+    setAlternoModalFlight(null);
+    setFlights((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, alternoArr: undefined, alternoReason: undefined } : f)),
+    );
+    setSelectedFlight((prev) =>
+      prev?.id === id ? { ...prev, alternoArr: undefined, alternoReason: undefined } : prev,
+    );
+
     try {
-      await updateFlight(id, { alternoArr: "", alternoReason: "" });
-      setAlternoModalFlight(null);
-      setFlights((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, alternoArr: undefined, alternoReason: undefined } : f)),
-      );
-      setSelectedFlight((prev) =>
-        prev?.id === id ? { ...prev, alternoArr: undefined, alternoReason: undefined } : prev,
-      );
+      await updateFlight(id, { alternoArr: null, alternoReason: null } as any);
     } catch {
-      alert("No se pudo quitar el alterno. Revisá la conexión e intentá de nuevo.");
+      alert("No se pudo quitar el alterno en el servidor. Intenta de nuevo.");
     }
   };
 
@@ -1140,6 +1160,20 @@ function App() {
     [flights, pernocteDateEffective]
   );
 
+  const pendingTicketsCount = useMemo(() => {
+    let count = 0;
+    flights.forEach((flight) => {
+      if (flight.claimTickets) {
+        Object.values(flight.claimTickets).forEach((ticket) => {
+          if (ticket.status === "pending") {
+            count++;
+          }
+        });
+      }
+    });
+    return count;
+  }, [flights]);
+
   const handlePernoctePatch = (reg: string, patch: Partial<PernocteRowState>) => {
     if (!pernocteDateEffective) return;
     const prev = coercePernocteRow(pernocteData[pernocteDateEffective]?.[reg]);
@@ -1172,413 +1206,467 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-12">
-      <header className="bg-slate-900 border-b border-slate-800 text-white py-3 px-4 md:px-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-40 w-full mb-6 max-w-full min-w-0">
-        <div className="flex items-center justify-between w-full md:w-auto gap-3">
-          <button
-            type="button"
-            onClick={goToFlightsTab}
-            className="flex items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-            title="Ir a vuelos"
-          >
-            <PlaneTakeoff className="w-8 h-8 text-cyan-400 shrink-0" aria-hidden />
-            <h1 className="text-2xl font-black tracking-tight flex items-center gap-2 text-white truncate">
-              SMARTOPS
-              <span className="text-cyan-400 font-bold hidden sm:inline border-l-2 border-slate-700 pl-3">
-                Management
-              </span>
-            </h1>
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">
-          {/* Search Bar */}
-          {mainTab === "tablero" && (
-          <div className="flex flex-1 md:flex-initial min-w-[140px] items-center gap-2 bg-slate-800 px-3 py-2 rounded-full border border-slate-700 shadow-inner">
-            <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Buscar vuelo, matrícula, AEP..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-white focus:outline-none placeholder:text-slate-500 w-full md:w-32 focus:w-full md:focus:w-48 transition-all min-w-0"
-            />
-          </div>
-          )}
-
-          {/* Date Picker — sin overflow-hidden en el header: recorta el popup nativo del type="date". */}
-          <label className="relative z-[60] flex shrink-0 cursor-pointer items-center rounded-full border border-slate-700 bg-slate-800 px-3 py-2 shadow-inner min-h-[2.5rem]">
-            <input
-              id="header-flight-date"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="header-flight-date-input relative min-w-[10.5rem] cursor-pointer bg-transparent py-1 pr-7 text-sm font-bold uppercase tracking-wider text-white focus:outline-none md:min-w-[11rem]"
-            />
-            <CalendarDays
-              className="pointer-events-none absolute right-3 h-4 w-4 shrink-0 text-white"
-              aria-hidden
-            />
-          </label>
-
-          <div className="flex gap-2 w-full md:w-auto justify-center mt-1 md:mt-0 items-center">
-            {/* User Details */}
-            <div className="flex shrink-0 items-center gap-3 bg-slate-800 px-4 py-2 rounded-full border border-slate-700 shadow-inner md:ml-2">
-              <div className="flex flex-col items-end">
-                <span className="text-xs font-bold text-white uppercase leading-none">{currentUser.name.split(' ')[0]}</span>
-                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{userRole}</span>
-              </div>
-              <div className="h-6 w-px bg-slate-700"></div>
-              <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors" title="Cerrar Sessión">
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-
-            {(userRole === "ADMIN" || userRole === "AJS") && (
-              <button
-                onClick={() => setShowUserManagement(true)}
-                className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-full font-bold shadow-sm transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-              >
-                <Users className="w-4 h-4" />
-                <span className="hidden md:inline">Usuarios</span>
-              </button>
-            )}
-
-            {userRole !== "LIMPIEZA" && (
+      <div className="sticky top-0 z-40 w-full mb-6 bg-background shadow-md">
+        <header className="bg-slate-900 border-b border-slate-800 text-white py-3 px-4 md:px-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 w-full max-w-full min-w-0">
+          <div className="flex items-center justify-between w-full md:w-auto gap-4 shrink-0">
             <button
-              onClick={() => setShowOpsMenu(true)}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-5 py-2 rounded-full font-bold shadow-sm transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
-              title="MVT"
+              type="button"
+              onClick={goToFlightsTab}
+              className="flex items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              title="Ir a vuelos"
             >
-              <MessageSquareText className="w-4 h-4 text-cyan-400" />
-              <span>MVT</span>
+              <PlaneTakeoff className="w-8 h-8 text-cyan-400 shrink-0" aria-hidden />
+              <h1 className="text-2xl font-black tracking-tight flex items-center gap-2 text-white truncate">
+                SMARTOPS
+                <span className="text-cyan-400 font-bold hidden sm:inline border-l-2 border-slate-700 pl-3">
+                  Management
+                </span>
+              </h1>
             </button>
+
+            {/* Reloj Digital Premium */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/50 shadow-inner font-mono text-cyan-400 font-black text-sm select-none tracking-wider">
+              <Clock className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <span>{currentTimeStr}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 w-full md:w-auto">
+            {/* Search Bar */}
+            {mainTab === "tablero" && (
+            <div className="flex flex-1 md:flex-initial min-w-[140px] items-center gap-2 bg-slate-800 px-3 py-2 rounded-full border border-slate-700 shadow-inner">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Buscar vuelo, matrícula, AEP..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent text-sm font-semibold text-white focus:outline-none placeholder:text-slate-500 w-full md:w-32 focus:w-full md:focus:w-48 transition-all min-w-0"
+              />
+            </div>
             )}
 
-            {isAdminOrHccDesk(userRole) && (
-              <div className="relative flex-1 md:flex-none" data-load-tools-menu>
-                <button
-                  type="button"
-                  onClick={() => setLoadToolsMenuOpen((o) => !o)}
-                  aria-expanded={loadToolsMenuOpen}
-                  aria-haspopup="menu"
-                  className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide w-full md:w-auto justify-center"
-                  title="Cargar programación, gestiones y más"
-                >
-                  <ClipboardPaste className="w-4 h-4 shrink-0" />
-                  <span>Programación</span>
-                  <ChevronDown
-                    className={`w-4 h-4 shrink-0 transition-transform ${loadToolsMenuOpen ? "rotate-180" : ""}`}
-                    aria-hidden
-                  />
+            {/* Date Picker — sin overflow-hidden en el header: recorta el popup nativo del type="date". */}
+            <label className="relative z-[60] flex shrink-0 cursor-pointer items-center rounded-full border border-slate-700 bg-slate-800 px-3 py-2 shadow-inner min-h-[2.5rem]">
+              <input
+                id="header-flight-date"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="header-flight-date-input relative min-w-[10.5rem] cursor-pointer bg-transparent py-1 pr-7 text-sm font-bold uppercase tracking-wider text-white focus:outline-none md:min-w-[11rem]"
+              />
+              <CalendarDays
+                className="pointer-events-none absolute right-3 h-4 w-4 shrink-0 text-white"
+                aria-hidden
+              />
+            </label>
+
+            <div className="flex gap-2 w-full md:w-auto justify-center mt-1 md:mt-0 items-center">
+              {/* User Details */}
+              <div className="flex shrink-0 items-center gap-3 bg-slate-800 px-4 py-2 rounded-full border border-slate-700 shadow-inner md:ml-2">
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-bold text-white uppercase leading-none">{currentUser.name.split(' ')[0]}</span>
+                  <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{userRole}</span>
+                </div>
+                <div className="h-6 w-px bg-slate-700"></div>
+                <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors" title="Cerrar Sessión">
+                  <LogOut className="w-4 h-4" />
                 </button>
-                {loadToolsMenuOpen && (
-                  <div
-                    role="menu"
-                    className="absolute right-0 top-full z-50 mt-1.5 min-w-[14.5rem] overflow-hidden rounded-xl border border-slate-600 bg-slate-800 py-1 shadow-xl ring-1 ring-black/20"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-indigo-200 hover:bg-indigo-950/60"
-                      title="Pegar tabla de gestiones (matrículas, ETD/ETA, etc.)"
-                      onClick={() => {
-                        setLoadToolsMenuOpen(false);
-                        setShowGestiones(true);
-                      }}
-                    >
-                      <Table2 className="w-4 h-4 shrink-0" aria-hidden />
-                      Gestiones
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-cyan-200 hover:bg-cyan-950/50"
-                      onClick={() => {
-                        setLoadToolsMenuOpen(false);
-                        setShowParser(true);
-                      }}
-                    >
-                      <ClipboardPaste className="w-4 h-4 shrink-0" aria-hidden />
-                      Cargar
-                    </button>
-                    {isHccDeskRole(userRole) && (
-                      <>
-                        <div className="my-1 border-t border-slate-700" role="separator" />
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-950/50"
-                          title="Cargar un vuelo completando los datos a mano"
-                          onClick={() => {
-                            setLoadToolsMenuOpen(false);
-                            setShowManualFlight(true);
-                          }}
-                        >
-                          <CirclePlus className="w-4 h-4 shrink-0" aria-hidden />
-                          Alta manual
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-rose-200 hover:bg-rose-950/50"
-                          title="Eliminar vuelos duplicados (misma fecha, número y ruta)"
-                          onClick={() => {
-                            setLoadToolsMenuOpen(false);
-                            void handleRemoveDuplicateFlights();
-                          }}
-                        >
-                          <ListMinus className="w-4 h-4 shrink-0" aria-hidden />
-                          Quitar repetidos
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
-            )}
+
+              {(userRole === "ADMIN" || userRole === "AJS") && (
+                <button
+                  onClick={() => setShowUserManagement(true)}
+                  className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-full font-bold shadow-sm transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="hidden md:inline">Usuarios</span>
+                </button>
+              )}
+
+              {userRole !== "LIMPIEZA" && (
+              <button
+                onClick={() => setShowOpsMenu(true)}
+                className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-5 py-2 rounded-full font-bold shadow-sm transition-all flex items-center gap-2 text-sm uppercase tracking-wide flex-1 md:flex-none justify-center"
+                title="MVT"
+              >
+                <MessageSquareText className="w-4 h-4 text-cyan-400" />
+                <span>MVT</span>
+              </button>
+              )}
+
+              {isAdminOrHccDesk(userRole) && (
+                <div className="relative flex-1 md:flex-none" data-load-tools-menu>
+                  <button
+                    type="button"
+                    onClick={() => setLoadToolsMenuOpen((o) => !o)}
+                    aria-expanded={loadToolsMenuOpen}
+                    aria-haspopup="menu"
+                    className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 border border-transparent px-5 py-2 rounded-full font-black shadow-md transition-all flex items-center gap-2 text-sm uppercase tracking-wide w-full md:w-auto justify-center"
+                    title="Cargar programación, gestiones y más"
+                  >
+                    <ClipboardPaste className="w-4 h-4 shrink-0" />
+                    <span>Programación</span>
+                    <ChevronDown
+                      className={`w-4 h-4 shrink-0 transition-transform ${loadToolsMenuOpen ? "rotate-180" : ""}`}
+                      aria-hidden
+                    />
+                  </button>
+                  {loadToolsMenuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full z-50 mt-1.5 min-w-[14.5rem] overflow-hidden rounded-xl border border-slate-600 bg-slate-800 py-1 shadow-xl ring-1 ring-black/20"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-indigo-200 hover:bg-indigo-950/60"
+                        title="Pegar tabla de gestiones (matrículas, ETD/ETA, etc.)"
+                        onClick={() => {
+                          setLoadToolsMenuOpen(false);
+                          setShowGestiones(true);
+                        }}
+                      >
+                        <Table2 className="w-4 h-4 shrink-0" aria-hidden />
+                        Gestiones
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-cyan-200 hover:bg-cyan-950/50"
+                        onClick={() => {
+                          setLoadToolsMenuOpen(false);
+                          setShowParser(true);
+                        }}
+                      >
+                        <ClipboardPaste className="w-4 h-4 shrink-0" aria-hidden />
+                        Cargar
+                      </button>
+                      {isHccDeskRole(userRole) && (
+                        <>
+                          <div className="my-1 border-t border-slate-700" role="separator" />
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-950/50"
+                            title="Cargar un vuelo completando los datos a mano"
+                            onClick={() => {
+                              setLoadToolsMenuOpen(false);
+                              setShowManualFlight(true);
+                            }}
+                          >
+                            <CirclePlus className="w-4 h-4 shrink-0" aria-hidden />
+                            Alta manual
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-rose-200 hover:bg-rose-950/50"
+                            title="Eliminar vuelos duplicados (misma fecha, número y ruta)"
+                            onClick={() => {
+                              setLoadToolsMenuOpen(false);
+                              void handleRemoveDuplicateFlights();
+                            }}
+                          >
+                            <ListMinus className="w-4 h-4 shrink-0" aria-hidden />
+                            Quitar repetidos
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+
+        {/* Navigation Tabs sticky part */}
+        {(isScRole(userRole) || isHccDeskRole(userRole) || userRole === "ADMIN") && (
+          <div className="bg-background/95 backdrop-blur-md px-4 sm:px-6 py-2.5 border-t border-slate-200/60">
+            <div className={`mx-auto ${
+              isScRole(userRole) && mainTab === "timeline" ? "max-w-[1920px]" : "max-w-[1600px]"
+            }`}>
+              {isScRole(userRole) && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("tablero")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                      mainTab === "tablero"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Vuelos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("timeline")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "timeline"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <GanttChartSquare className="w-4 h-4 shrink-0" />
+                    Línea de tiempo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("documentos")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "documentos"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <FolderOpen className="w-4 h-4 shrink-0" />
+                    Herramientas útiles
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("statusEquiposGRH")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "statusEquiposGRH"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4 shrink-0" />
+                    Status Equipos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("ticketsHcc")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "ticketsHcc"
+                        ? "bg-purple-600 text-white shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <MessageSquareText className="w-4 h-4 shrink-0" />
+                    Tickets HCC
+                    {pendingTicketsCount > 0 && (
+                      <span className="relative flex h-5 w-5 shrink-0 items-center justify-center ml-1">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center">
+                          {pendingTicketsCount}
+                        </span>
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {isHccDeskRole(userRole) && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("tablero")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                      mainTab === "tablero"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Vuelos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("control")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                      mainTab === "control"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Tablero Control
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("reporte")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "reporte"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <FileBarChart2 className="w-4 h-4 shrink-0" />
+                    Reporte Diario
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("pernocte")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "pernocte"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <Moon className="w-4 h-4 shrink-0" />
+                    Pernocte
+                  </button>
+                  {isHccDeskRole(userRole) && (
+                    <button
+                      type="button"
+                      onClick={() => setMainTab("diferidos")}
+                      className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                        mainTab === "diferidos"
+                          ? "bg-amber-500 text-slate-900 shadow-md"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      <FileWarning className="w-4 h-4 shrink-0" />
+                      Diferidos
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("matriculas")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "matriculas"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                  >
+                    <Plane className="w-4 h-4 shrink-0" />
+                    Matrículas
+                  </button>
+                  {false && canAccessCostControlling(userRole) && (
+                    <button
+                      type="button"
+                      onClick={() => setMainTab("costControlling")}
+                      className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                        mainTab === "costControlling"
+                          ? "bg-emerald-600 text-white shadow-md"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      <Calculator className="w-4 h-4 shrink-0" />
+                      Cost controlling
+                    </button>
+                  )}
+                  {userRole === "AJS" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setMainTab("casosAtc")}
+                        className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                          mainTab === "casosAtc"
+                            ? "bg-rose-600 text-white shadow-md"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        Buscador demoras
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMainTab("ticketsHcc")}
+                        className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                          mainTab === "ticketsHcc"
+                            ? "bg-purple-600 text-white shadow-md"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <MessageSquareText className="w-4 h-4 shrink-0" />
+                        Tickets HCC
+                        {pendingTicketsCount > 0 && (
+                          <span className="relative flex h-5 w-5 shrink-0 items-center justify-center ml-1">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center">
+                              {pendingTicketsCount}
+                            </span>
+                          </span>
+                        )}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("statusEquiposGRH")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "statusEquiposGRH"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4 shrink-0" />
+                    Status Equipos
+                  </button>
+                </div>
+              )}
+
+              {userRole === "ADMIN" && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("tablero")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                      mainTab === "tablero"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Vuelos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("matriculas")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "matriculas"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <Plane className="w-4 h-4 shrink-0" />
+                    Matrículas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("statusEquiposGRH")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "statusEquiposGRH"
+                        ? "bg-cyan-500 text-slate-900 shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4 shrink-0" />
+                    Status Equipos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("ticketsHcc")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "ticketsHcc"
+                        ? "bg-purple-600 text-white shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <MessageSquareText className="w-4 h-4 shrink-0" />
+                    Tickets HCC
+                    {pendingTicketsCount > 0 && (
+                      <span className="relative flex h-5 w-5 shrink-0 items-center justify-center ml-1">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center">
+                          {pendingTicketsCount}
+                        </span>
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       <main
         className={`mx-auto px-4 sm:px-6 ${
           isScRole(userRole) && mainTab === "timeline" ? "max-w-[1920px]" : "max-w-[1600px]"
         }`}
       >
-        {isScRole(userRole) && (
-          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
-            <button
-              type="button"
-              onClick={() => setMainTab("tablero")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
-                mainTab === "tablero"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Vuelos
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("timeline")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "timeline"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <GanttChartSquare className="w-4 h-4 shrink-0" />
-              Línea de tiempo
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("documentos")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "documentos"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <FolderOpen className="w-4 h-4 shrink-0" />
-              Herramientas útiles
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("statusEquiposGRH")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "statusEquiposGRH"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <Wrench className="w-4 h-4 shrink-0" />
-              Status Equipos
-            </button>
-          </div>
-        )}
-
-        {isHccDeskRole(userRole) && (
-          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
-            <button
-              type="button"
-              onClick={() => setMainTab("tablero")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
-                mainTab === "tablero"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Vuelos
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("control")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
-                mainTab === "control"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Tablero Control
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("reporte")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "reporte"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <FileBarChart2 className="w-4 h-4 shrink-0" />
-              Reporte Diario
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("pernocte")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "pernocte"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <Moon className="w-4 h-4 shrink-0" />
-              Pernocte
-            </button>
-            {isHccDeskRole(userRole) && (
-              <button
-                type="button"
-                onClick={() => setMainTab("diferidos")}
-                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                  mainTab === "diferidos"
-                    ? "bg-amber-500 text-slate-900 shadow-md"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                <FileWarning className="w-4 h-4 shrink-0" />
-                Diferidos
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setMainTab("matriculas")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "matriculas"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <Plane className="w-4 h-4 shrink-0" />
-              Matrículas
-            </button>
-            {false && canAccessCostControlling(userRole) && (
-              <button
-                type="button"
-                onClick={() => setMainTab("costControlling")}
-                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                  mainTab === "costControlling"
-                    ? "bg-emerald-600 text-white shadow-md"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                <Calculator className="w-4 h-4 shrink-0" />
-                Cost controlling
-              </button>
-            )}
-            {userRole === "AJS" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setMainTab("casosAtc")}
-                  className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                    mainTab === "casosAtc"
-                      ? "bg-rose-600 text-white shadow-md"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  Buscador demoras
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMainTab("ticketsHcc")}
-                  className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                    mainTab === "ticketsHcc"
-                      ? "bg-purple-600 text-white shadow-md"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  <MessageSquareText className="w-4 h-4 shrink-0" />
-                  Tickets HCC
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => setMainTab("statusEquiposGRH")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "statusEquiposGRH"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <Wrench className="w-4 h-4 shrink-0" />
-              Status Equipos
-            </button>
-          </div>
-        )}
-
-        {userRole === "ADMIN" && (
-          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
-            <button
-              type="button"
-              onClick={() => setMainTab("tablero")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
-                mainTab === "tablero"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Vuelos
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("matriculas")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "matriculas"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <Plane className="w-4 h-4 shrink-0" />
-              Matrículas
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("statusEquiposGRH")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "statusEquiposGRH"
-                  ? "bg-cyan-500 text-slate-900 shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <Wrench className="w-4 h-4 shrink-0" />
-              Status Equipos
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainTab("ticketsHcc")}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                mainTab === "ticketsHcc"
-                  ? "bg-purple-600 text-white shadow-md"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              <MessageSquareText className="w-4 h-4 shrink-0" />
-              Tickets HCC
-            </button>
-          </div>
-        )}
 
         {!(isScRole(userRole) && mainTab === "timeline") && (
         <div className="flex items-center justify-between mb-8">
@@ -1679,7 +1767,7 @@ function App() {
               }
             }}
           />
-        ) : mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "ADMIN") ? (
+        ) : mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "ADMIN" || userRole === "SC") ? (
           <HccTicketsView
             flights={flights}
             currentUser={currentUser}
@@ -1796,7 +1884,7 @@ function App() {
                 badgeIcon = "alert";
               } else if (hasMvt && hasHitos) {
                 cardBg = "bg-emerald-50 dark:bg-[#064e3b] border-emerald-400 dark:border-emerald-500 shadow-emerald-900/20";
-                badgeText = "MVT ✓ · HITOS ✓";
+                badgeText = isTrasladoFlight(flight) ? "MVT ✓ · TRASLADO" : "MVT ✓ · HITOS ✓";
                 badgeColor = "bg-emerald-500 border-white dark:border-[#064e3b] text-white";
                 badgeIcon = "check";
               } else if (hasMvt && !hasHitos) {
@@ -1806,7 +1894,7 @@ function App() {
                 badgeIcon = "alert";
               } else if (!hasMvt && hasHitos) {
                 cardBg = "bg-yellow-50 dark:bg-[#422006] border-yellow-400 dark:border-yellow-600 shadow-yellow-900/20";
-                badgeText = "MVT pendiente · Hitos ✓";
+                badgeText = isTrasladoFlight(flight) ? "MVT pendiente · TRASLADO" : "MVT pendiente · Hitos ✓";
                 badgeColor = "bg-yellow-500 border-white dark:border-[#422006] text-yellow-950 dark:text-yellow-50";
                 badgeIcon = "alert";
               } else {
@@ -1959,10 +2047,18 @@ function App() {
                     </div>
                   )}
                   <div className="flex justify-between items-start mb-4">
-                    <span className={`text-4xl font-black tracking-tighter flex items-baseline gap-1 ${isLate ? "text-red-700 dark:text-red-100" : "text-secondary dark:text-primary"}`}>
-                      <span className="text-lg font-bold opacity-70 tracking-normal text-slate-500 dark:text-slate-400">{getAirlinePrefix(flight.flt)}</span>
-                      {flight.flt}
-                    </span>
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span className={`text-4xl font-black tracking-tighter flex items-baseline gap-1 ${isLate ? "text-red-700 dark:text-red-100" : "text-secondary dark:text-primary"}`}>
+                        <span className="text-lg font-bold opacity-70 tracking-normal text-slate-500 dark:text-slate-400">{getAirlinePrefix(flight.flt)}</span>
+                        {flight.flt}
+                      </span>
+                      {flight.claimTickets && Object.values(flight.claimTickets).some(t => t.status === "pending") && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/80 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 w-fit">
+                          <span className="h-1.5 w-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                          {userRole === "SC" ? "Ticket pendiente" : "Reclamo pendiente"}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {!isCancelled && flightNeedsCleaningWarning(flight) ? (
@@ -2083,14 +2179,10 @@ function App() {
                         e.stopPropagation();
                         setAlternoModalFlight(flight);
                       }}
-                      className={`mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${
-                        alternoActive
-                          ? "text-white bg-amber-600 border-amber-700 hover:bg-amber-700 dark:bg-amber-700 dark:border-amber-500 dark:hover:bg-amber-600"
-                          : "text-amber-950 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40"
-                      }`}
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors text-amber-950 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40"
                     >
                       <AlternoIcon className="w-3.5 h-3.5 shrink-0" />
-                      Alterno{alternoActive ? " · activo" : ""}
+                      Alterno
                     </button>
                   )}
 

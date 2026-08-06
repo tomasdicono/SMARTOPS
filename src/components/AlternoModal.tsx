@@ -60,9 +60,9 @@ export function AlternoModal({ flight, onClose, onConfirm, onClear }: Props) {
         setBusy(true);
         try {
             await Promise.resolve(onConfirm(atoNorm, reasonTrim));
+            onClose();
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
-        } finally {
             setBusy(false);
         }
     };
@@ -74,9 +74,9 @@ export function AlternoModal({ flight, onClose, onConfirm, onClear }: Props) {
         setError("");
         try {
             await Promise.resolve(onClear());
+            onClose();
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
-        } finally {
             setBusy(false);
         }
     };

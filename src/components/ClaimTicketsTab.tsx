@@ -25,6 +25,10 @@ export function ClaimTicketsTab({ flight, currentUser, onSaveTickets, readOnly }
     const [reason, setReason] = useState("");
     const [priority, setPriority] = useState<"1" | "2" | "3">("3");
 
+    const isSc = currentUser?.role === "SC";
+    const ticketLabel = isSc ? "Ticket" : "Reclamo";
+    const ticketsLabel = isSc ? "Tickets" : "Reclamos";
+
     const tickets = Object.values(flight.claimTickets || {}).sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
@@ -95,7 +99,7 @@ export function ClaimTicketsTab({ flight, currentUser, onSaveTickets, readOnly }
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
                         <Send className="w-4 h-4 text-blue-600" />
-                        Nuevo Reclamo a HCC
+                        Nuevo {ticketLabel} a HCC
                     </h3>
                     
                     <div className="space-y-4">
@@ -115,7 +119,7 @@ export function ClaimTicketsTab({ flight, currentUser, onSaveTickets, readOnly }
                         <div className="flex flex-col sm:flex-row gap-4">
                             <input
                                 type="text"
-                                placeholder="Escribe el reclamo (ej. Falta ITC)..."
+                                placeholder={`Escribe el ${ticketLabel.toLowerCase()} (ej. Falta ITC)...`}
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
                                 className="flex-1 rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
@@ -146,12 +150,12 @@ export function ClaimTicketsTab({ flight, currentUser, onSaveTickets, readOnly }
             <div className="space-y-4">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
                     <Clock className="w-4 h-4 text-slate-500" />
-                    Historial de Reclamos
+                    Historial de {ticketsLabel}
                 </h3>
                 
                 {tickets.length === 0 ? (
                     <div className="bg-slate-50 border border-slate-200 border-dashed rounded-xl p-8 text-center">
-                        <p className="text-slate-500 text-sm font-medium">No hay reclamos para este vuelo.</p>
+                        <p className="text-slate-500 text-sm font-medium">No hay {ticketsLabel.toLowerCase()} para este vuelo.</p>
                     </div>
                 ) : (
                     <div className="space-y-3">

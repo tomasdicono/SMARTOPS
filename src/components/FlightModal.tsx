@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { Flight, User } from "../types";
 import { MVTForm } from "./MVTForm";
 import { HitosTab } from "./HitosTab";
@@ -14,7 +14,7 @@ import {
 } from "../lib/flightHelpers";
 import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
 import { isLimpiezaRole, canEditMvtDelayAfterSent, canSubmitMvtAfterQrf } from "../types";
-import { isQrfActive, isAlternoActive } from "../lib/flightHelpers";
+import { isQrfActive, isAlternoActive, isTrasladoFlight } from "../lib/flightHelpers";
 
 type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA" | "RECLAMOS";
 import { hasMvtSent } from "../lib/controlHelpers";
@@ -63,13 +63,15 @@ export function FlightModal({
         return "MVT";
     });
 
+    const isTraslado = isTrasladoFlight(flight);
+
     /** MVT: operaciones / supervisión de carga */
     const canSeeMvt =
         !isLimpiezaRole(userRole) && (userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS");
     /** Hitos (Gantt + ATA): sin acceso CREW (solo Hitos Crew) */
     const canSeeHitos =
-        !isLimpiezaRole(userRole) && (userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS");
-    const canSeeCrew = userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS";
+        !isTraslado && !isLimpiezaRole(userRole) && (userRole === "ADMIN" || userRole === "HCC" || userRole === "SC" || userRole === "AJS");
+    const canSeeCrew = !isTraslado && (userRole === "ADMIN" || userRole === "CREW" || userRole === "AJS");
     const checklistMode = getLimpiezaChecklistMode(flight, checklistDayFlights, checklistSelectedIso);
     const canSeeLimpiezaChecklist =
         checklistMode != null &&
@@ -78,7 +80,7 @@ export function FlightModal({
             userRole === "HCC" ||
             userRole === "SC" ||
             userRole === "AJS");
-    const canSeeReclamos = userRole === "AJS" || userRole === "ADMIN"; // Restringido a AJS (y ADMIN para pruebas)
+    const canSeeReclamos = userRole === "AJS" || userRole === "ADMIN" || userRole === "SC";
     const isReadOnlyView = !!flight.cancelled;
     const qrfActive = isQrfActive(flight);
     const alternoActive = isAlternoActive(flight);
@@ -102,6 +104,11 @@ export function FlightModal({
     /** SC / escritorio: Limpieza es guía ANEXO A, no bloquea MVT ni Hitos. */
     const limpiezaAsGuide = canSeeLimpiezaChecklist && !isLimpiezaRole(userRole);
 
+    const pendingTicketsForFlight = useMemo(() => {
+        if (!flight.claimTickets) return 0;
+        return Object.values(flight.claimTickets).filter(t => t.status === "pending").length;
+    }, [flight.claimTickets]);
+
     const tabOrder: FlightModalTab[] = limpiezaAsGuide
         ? [
               ...(canSeeMvt ? (["MVT"] as const) : []),
@@ -124,13 +131,23 @@ export function FlightModal({
         const isLimpieza = tab === "LIMPIEZA";
         const active = activeTab === tab;
         const label =
-            tab === "MVT" ? "MVT" : tab === "HITOS" ? "Hitos" : tab === "CREW" ? "Hitos Crew" : tab === "RECLAMOS" ? "Reclamos" : "Limpieza";
+            tab === "MVT"
+                ? "MVT"
+                : tab === "HITOS"
+                ? "Hitos"
+                : tab === "CREW"
+                ? "Hitos Crew"
+                : tab === "RECLAMOS"
+                ? userRole === "SC"
+                    ? "Tickets"
+                    : "Reclamos"
+                : "Limpieza";
         return (
             <button
                 key={tab}
                 type="button"
                 onClick={() => selectTab(tab)}
-                className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors ${
+                className={`px-6 py-3 text-sm font-bold uppercase tracking-wider relative transition-colors flex items-center gap-1.5 ${
                     active
                         ? isLimpieza
                             ? "text-violet-700"
@@ -138,7 +155,15 @@ export function FlightModal({
                         : "text-muted-foreground hover:text-foreground"
                 }`}
             >
-                {label}
+                <span>{label}</span>
+                {tab === "RECLAMOS" && pendingTicketsForFlight > 0 && (
+                    <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[9px] font-black text-white items-center justify-center">
+                            {pendingTicketsForFlight}
+                        </span>
+                    </span>
+                )}
                 {active ? (
                     <span
                         className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-lg ${
