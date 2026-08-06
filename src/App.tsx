@@ -1749,7 +1749,7 @@ function App() {
           />
         ) : mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "HCC" || userRole === "ADMIN") ? (
           <HccTicketsView
-            flights={flights}
+            flights={flightsForSelectedDate}
             currentUser={currentUser}
           />
         ) : mainTab === "statusEquiposGRH" ? (

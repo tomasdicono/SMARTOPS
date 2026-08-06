@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import type { Flight, ClaimTicket, User } from "../types";
 import { format } from "date-fns";
 import { getAirlinePrefix } from "../lib/flightHelpers";
@@ -11,6 +11,8 @@ interface Props {
 }
 
 export function HccTicketsView({ flights, currentUser }: Props) {
+    const [activeSubTab, setActiveSubTab] = useState<"enCurso" | "vueloCerrado">("enCurso");
+
     // Only keep flights that actually have tickets
     const flightsWithTickets = useMemo(() => {
         return flights
@@ -24,6 +26,16 @@ export function HccTicketsView({ flights, currentUser }: Props) {
                 return aTime.localeCompare(bTime);
             });
     }, [flights]);
+
+    const enCursoFlights = useMemo(() => {
+        return flightsWithTickets.filter(f => !f.mvtData?.atd || f.mvtData.atd.trim() === "");
+    }, [flightsWithTickets]);
+
+    const vueloCerradoFlights = useMemo(() => {
+        return flightsWithTickets.filter(f => !!(f.mvtData?.atd && f.mvtData.atd.trim() !== ""));
+    }, [flightsWithTickets]);
+
+    const currentFlights = activeSubTab === "enCurso" ? enCursoFlights : vueloCerradoFlights;
 
     const handleAcceptTicket = async (flightId: string, ticketId: string, ticket: ClaimTicket) => {
         if (!currentUser) return;
@@ -60,6 +72,10 @@ export function HccTicketsView({ flights, currentUser }: Props) {
         }
     };
 
+    const emptyMessage = activeSubTab === "enCurso" 
+        ? "No hay tickets en curso para la fecha seleccionada."
+        : "No hay tickets de vuelos cerrados (con ATD) para la fecha seleccionada.";
+
     return (
         <div className="flex-1 p-6 overflow-y-auto bg-slate-100">
             <div className="max-w-[1600px] mx-auto space-y-6">
@@ -68,6 +84,43 @@ export function HccTicketsView({ flights, currentUser }: Props) {
                         <h1 className="text-2xl font-black text-slate-800 tracking-tight">Tickets SC (HCC)</h1>
                         <p className="text-sm text-slate-500 mt-1">Gestión y recepción de tickets operativos de Station Control.</p>
                     </div>
+                </div>
+
+                <div className="flex gap-2 border-b border-slate-200/80 pb-px">
+                    <button
+                        type="button"
+                        onClick={() => setActiveSubTab("enCurso")}
+                        className={`px-5 py-3 text-sm font-black uppercase tracking-wide border-b-2 transition-all flex items-center gap-2 ${
+                            activeSubTab === "enCurso"
+                                ? "border-purple-600 text-purple-700 font-extrabold"
+                                : "border-transparent text-slate-500 hover:text-slate-700"
+                        }`}
+                    >
+                        <Clock className="w-4 h-4 shrink-0" />
+                        En curso
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            activeSubTab === "enCurso" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"
+                        }`}>
+                            {enCursoFlights.length}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveSubTab("vueloCerrado")}
+                        className={`px-5 py-3 text-sm font-black uppercase tracking-wide border-b-2 transition-all flex items-center gap-2 ${
+                            activeSubTab === "vueloCerrado"
+                                ? "border-purple-600 text-purple-700 font-extrabold"
+                                : "border-transparent text-slate-500 hover:text-slate-700"
+                        }`}
+                    >
+                        <CheckCircle className="w-4 h-4 shrink-0" />
+                        Vuelo cerrado
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            activeSubTab === "vueloCerrado" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"
+                        }`}>
+                            {vueloCerradoFlights.length}
+                        </span>
+                    </button>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -81,17 +134,17 @@ export function HccTicketsView({ flights, currentUser }: Props) {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-slate-200">
-                                {flightsWithTickets.length === 0 ? (
+                                {currentFlights.length === 0 ? (
                                     <tr>
                                         <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
                                             <div className="flex flex-col items-center justify-center">
                                                 <CheckCircle className="w-10 h-10 text-emerald-400 mb-3" />
-                                                <p className="text-base font-bold">No hay tickets activos en este momento.</p>
+                                                <p className="text-base font-bold">{emptyMessage}</p>
                                             </div>
                                         </td>
                                     </tr>
                                 ) : (
-                                    flightsWithTickets.map((f) => {
+                                    currentFlights.map((f) => {
                                         const ticketsList = Object.values(f.claimTickets || {}).sort(
                                             (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
                                         );
