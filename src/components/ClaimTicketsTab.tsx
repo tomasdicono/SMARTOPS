@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Flight, ClaimTicket, User } from "../types";
 import { format } from "date-fns";
-import { Send, CheckCircle, Clock } from "lucide-react";
+import { Send, CheckCircle, Clock, Trash2 } from "lucide-react";
 import { push, child, ref } from "firebase/database";
 import { db } from "../lib/firebase";
 
@@ -69,6 +69,15 @@ export function ClaimTicketsTab({ flight, currentUser, onSaveTickets, readOnly }
         };
 
         const updated = { ...(flight.claimTickets || {}), [ticketId]: updatedTicket };
+        onSaveTickets(updated);
+    };
+
+    const handleDeleteTicket = (ticketId: string) => {
+        if (!currentUser || readOnly) return;
+        if (!window.confirm("¿Estás seguro de que deseas eliminar este ticket?")) return;
+
+        const updated = { ...(flight.claimTickets || {}) };
+        delete updated[ticketId];
         onSaveTickets(updated);
     };
 
@@ -190,14 +199,25 @@ export function ClaimTicketsTab({ flight, currentUser, onSaveTickets, readOnly }
                                         </div>
                                     </div>
                                     
-                                    {!readOnly && t.status !== "closed" && (
-                                        <button
-                                            onClick={() => handleCloseTicket(t.id)}
-                                            className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold rounded-lg shadow-sm transition-colors text-xs"
-                                        >
-                                            Marcar como resuelto
-                                        </button>
-                                    )}
+                                    <div className="flex items-center gap-2 self-start sm:self-center">
+                                        {!readOnly && t.status !== "closed" && (
+                                            <button
+                                                onClick={() => handleCloseTicket(t.id)}
+                                                className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold rounded-lg shadow-sm transition-colors text-xs whitespace-nowrap"
+                                            >
+                                                Marcar como resuelto
+                                            </button>
+                                        )}
+                                        {!readOnly && (currentUser?.role === "SC" || currentUser?.role === "AJS" || currentUser?.email === "ignacio.buiatti@swissport.com") && (
+                                            <button
+                                                onClick={() => handleDeleteTicket(t.id)}
+                                                className="p-2 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors border border-transparent hover:border-rose-200"
+                                                title="Eliminar ticket"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}

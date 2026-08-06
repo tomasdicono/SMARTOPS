@@ -102,6 +102,9 @@ export interface StatsReportData {
     routeAfectaciones: RouteAfectacionStatsRow[];
     /** Simultaneidad de salidas por ATD (solo filtro AEP / EZE). */
     simultaneities: SimultaneityAirportStats[] | null;
+    limpiezaTotal: number;
+    limpiezaRequeridas: number;
+    limpiezaPlanificadas: number;
 }
 
 const BOARDING_FILTERS: { filter: BoardingStatsFilter; label: string }[] = [
@@ -368,6 +371,9 @@ export function buildStatsReportData(params: {
         peaMvtBase,
         boardingRows,
         qrfFlights: listQrfFlightsForDay(eventFlights),
+        limpiezaTotal: operational.filter(f => f.hitosData?.limpiezaStatus === "si").length,
+        limpiezaRequeridas: operational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "crew").length,
+        limpiezaPlanificadas: operational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "planificada").length,
         alternoFlights: listAlternoFlightsForDay(eventFlights),
         routeAfectaciones,
         simultaneities: computeSimultaneities(operational, selectedAirports),
@@ -799,6 +805,25 @@ function buildStatsReportHtml(data: StatsReportData): string {
         ${renderComplianceBlock("Llegada crew", data.llegadaCrew, "#4f46e5")}
       </section>
     </div>
+
+    <section class="section">
+      <h2>Servicios de Limpieza</h2>
+      <p class="sub">Hitos de limpieza según datos registrados de los vuelos del filtro.</p>
+      <div class="kpi-row">
+        <div>
+          <p class="kpi-label">Limpiezas Totales Realizadas</p>
+          <p class="kpi-big">${data.limpiezaTotal.toLocaleString("es-AR")}</p>
+        </div>
+        <div>
+          <p class="kpi-label">A Requerimiento (Tripulación)</p>
+          <p class="kpi-big">${data.limpiezaRequeridas.toLocaleString("es-AR")}</p>
+        </div>
+        <div>
+          <p class="kpi-label">Programadas</p>
+          <p class="kpi-big">${data.limpiezaPlanificadas.toLocaleString("es-AR")}</p>
+        </div>
+      </div>
+    </section>
 
     <div class="grid-2">
       <section class="section">

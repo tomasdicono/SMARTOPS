@@ -119,6 +119,20 @@ function parseRowsToFlights(rows: unknown[][]): Flight[] {
                 tempMap.eta = c;
             } else if (cell === "PAX" || cell === "PASAJEROS") {
                 tempMap.pax = c;
+            } else if (
+                cell === "ROUTE" || 
+                cell === "RUTA" || 
+                cell === "RUT" || 
+                cell === "NRO RUTA" || 
+                cell === "Nº RUTA" || 
+                cell === "NRO. RUTA" || 
+                cell === "NRO DE RUTA" || 
+                cell === "Nº DE RUTA" || 
+                cell === "NUMERO DE RUTA" || 
+                cell === "NÚMERO DE RUTA" ||
+                cell === "VUELO COMERCIAL"
+            ) {
+                tempMap.route = c;
             }
         }
 
@@ -152,7 +166,7 @@ function parseRowsToFlights(rows: unknown[][]): Flight[] {
             const eta = colMap.eta !== undefined ? normalizeTimeToken(row[colMap.eta]) : "";
             const pax = colMap.pax !== undefined ? String(row[colMap.pax] || "").trim() : "";
 
-            const route = `${dep}-${arr}`;
+            const route = colMap.route !== undefined ? String(row[colMap.route] || "").trim() : `${dep}-${arr}`;
             const flight: Flight = {
                 id: uuidv4(),
                 date,

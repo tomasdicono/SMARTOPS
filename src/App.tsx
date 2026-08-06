@@ -95,6 +95,7 @@ import { canAccessCostControlling } from "./lib/costControllingHelpers";
 import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import { StatusEquiposGRHView } from "./components/StatusEquiposGRHView";
 import { HccTicketsView } from "./components/HccTicketsView";
+import { InfoCrewView } from "./components/InfoCrewView";
 import {
   computePernocteRows,
   coercePernocteRow,
@@ -141,7 +142,7 @@ const APP_VERSION = "2026.08.02.2";
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc" | "infoCrew"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -1513,6 +1514,18 @@ function App() {
                     <Plane className="w-4 h-4 shrink-0" />
                     Matrículas
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("infoCrew")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "infoCrew"
+                        ? "bg-purple-600 text-white shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <Users className="w-4 h-4 shrink-0" />
+                    Info Crew
+                  </button>
                   {false && canAccessCostControlling(userRole) && (
                     <button
                       type="button"
@@ -1663,6 +1676,8 @@ function App() {
               <>Pernocte</>
             ) : mainTab === "matriculas" && isAdminOrHccDesk(userRole) ? (
               <>Matrículas</>
+            ) : mainTab === "infoCrew" && isHccDeskRole(userRole) ? (
+              <>Info Crew</>
             ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
               <>Cost controlling</>
             ) : mainTab === "statusEquiposGRH" ? (
@@ -1727,6 +1742,11 @@ function App() {
             canEdit={isAdminOrHccDesk(userRole)}
             onSaveModel={handleSaveFleetModel}
             onAdd={handleAddFleetReg}
+          />
+        ) : mainTab === "infoCrew" && isHccDeskRole(userRole) ? (
+          <InfoCrewView
+            flights={flightsForSelectedDate}
+            selectedDate={selectedDate}
           />
         ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
           <CostControllingView flights={flights} />

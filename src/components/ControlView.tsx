@@ -74,6 +74,7 @@ import {
     Luggage,
     Download,
     LayoutDashboard,
+    Sparkles,
 } from "lucide-react";
 
 interface Props {
@@ -262,6 +263,23 @@ export function ControlView({
         statsMvtSentTotal > 0 ? (peaCounts.manga / statsMvtSentTotal) * 100 : null;
     const peaRemotaPct =
         statsMvtSentTotal > 0 ? (peaCounts.remota / statsMvtSentTotal) * 100 : null;
+
+    const statsLimpieza = useMemo(() => {
+        let total = 0;
+        let requeridas = 0;
+        let planificadas = 0;
+        statsFlights.forEach((f) => {
+            if (f.hitosData?.limpiezaStatus === "si") {
+                total++;
+                if (f.hitosData?.limpiezaTipo === "crew") {
+                    requeridas++;
+                } else if (f.hitosData?.limpiezaTipo === "planificada") {
+                    planificadas++;
+                }
+            }
+        });
+        return { total, requeridas, planificadas };
+    }, [statsFlights]);
 
     const cancelledScheduledPaxTotal = useMemo(
         () => cancelledStatsFlights.reduce((s, f) => s + getScheduledPax(f), 0),
@@ -1236,6 +1254,39 @@ export function ControlView({
                                     ? `${llegadaCrewCompliance.onTimeCount} de ${llegadaCrewCompliance.evaluatedCount} vuelo${llegadaCrewCompliance.evaluatedCount !== 1 ? "s" : ""} a tiempo`
                                     : "Sin vuelos con Llegada crew cargada y carta Gantt en el filtro"}
                             </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-violet-50/50 to-white flex flex-col justify-between">
+                            <div>
+                                <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                    <Sparkles className="w-3.5 h-3.5 text-violet-600" aria-hidden />
+                                    Servicios de Limpieza
+                                </p>
+                                <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                    Σ limpiezas registradas en hitos operacionales
+                                </p>
+                                <div className="mt-2 flex items-baseline gap-2">
+                                    <span className="text-4xl font-black text-violet-950 tabular-nums">
+                                        {statsLimpieza.total.toLocaleString("es-AR")}
+                                    </span>
+                                    <span className="text-xs font-bold text-violet-800/60 uppercase">Realizadas</span>
+                                </div>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-3 pt-3 border-t border-violet-100">
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">A Requerimiento</p>
+                                    <p className="text-2xl font-black text-violet-700 tabular-nums">
+                                        {statsLimpieza.requeridas.toLocaleString("es-AR")}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Por tripulación</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Programadas</p>
+                                    <p className="text-2xl font-black text-violet-700 tabular-nums">
+                                        {statsLimpieza.planificadas.toLocaleString("es-AR")}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Planificadas/itinerario</p>
+                                </div>
+                            </div>
                         </div>
                         <div 
                             className="rounded-xl border border-slate-200 bg-gradient-to-br from-fuchsia-50/60 to-white cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden"

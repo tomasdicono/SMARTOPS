@@ -144,6 +144,13 @@ export function buildFlightRtdbUpdate(
         if (incoming === null) {
             updates["claimTickets"] = null;
         } else {
+            if (ex?.claimTickets) {
+                for (const k of Object.keys(ex.claimTickets)) {
+                    if (!Object.prototype.hasOwnProperty.call(incoming, k)) {
+                        updates[`claimTickets/${k}`] = null;
+                    }
+                }
+            }
             for (const [k, v] of Object.entries(incoming)) {
                 updates[`claimTickets/${k}`] = v;
             }
@@ -188,7 +195,7 @@ export function mergeFlightPatch(existing: Flight, patch: Partial<Flight>): Flig
         if (patch.claimTickets === null) {
             claimTickets = undefined;
         } else {
-            claimTickets = { ...claimTickets, ...patch.claimTickets };
+            claimTickets = patch.claimTickets;
         }
     }
 
