@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import type { Flight, ClaimTicket, User } from "../types";
 import { format } from "date-fns";
 import { getAirlinePrefix } from "../lib/flightHelpers";
 import { updateFlight } from "../lib/flightsDb";
-import { CheckCircle, Clock, AlertTriangle } from "lucide-react";
+import { CheckCircle, Clock } from "lucide-react";
 
 interface Props {
     flights: Flight[];
