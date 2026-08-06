@@ -1436,26 +1436,6 @@ function App() {
                     <Wrench className="w-4 h-4 shrink-0" />
                     Status Equipos
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setMainTab("ticketsHcc")}
-                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                      mainTab === "ticketsHcc"
-                        ? "bg-purple-600 text-white shadow-md"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    <MessageSquareText className="w-4 h-4 shrink-0" />
-                    Tickets HCC
-                    {pendingTicketsCount > 0 && (
-                      <span className="relative flex h-5 w-5 shrink-0 items-center justify-center ml-1">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center">
-                          {pendingTicketsCount}
-                        </span>
-                      </span>
-                    )}
-                  </button>
                 </div>
               )}
 
@@ -1561,28 +1541,28 @@ function App() {
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         Buscador demoras
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setMainTab("ticketsHcc")}
-                        className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                          mainTab === "ticketsHcc"
-                            ? "bg-purple-600 text-white shadow-md"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
-                      >
-                        <MessageSquareText className="w-4 h-4 shrink-0" />
-                        Tickets HCC
-                        {pendingTicketsCount > 0 && (
-                          <span className="relative flex h-5 w-5 shrink-0 items-center justify-center ml-1">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center">
-                              {pendingTicketsCount}
-                            </span>
-                          </span>
-                        )}
-                      </button>
                     </>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setMainTab("ticketsHcc")}
+                    className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                      mainTab === "ticketsHcc"
+                        ? "bg-purple-600 text-white shadow-md"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <MessageSquareText className="w-4 h-4 shrink-0" />
+                    Tickets HCC
+                    {pendingTicketsCount > 0 && (
+                      <span className="relative flex h-5 w-5 shrink-0 items-center justify-center ml-1">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center">
+                          {pendingTicketsCount}
+                        </span>
+                      </span>
+                    )}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setMainTab("statusEquiposGRH")}
@@ -1767,7 +1747,7 @@ function App() {
               }
             }}
           />
-        ) : mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "ADMIN" || userRole === "SC") ? (
+        ) : mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "HCC" || userRole === "ADMIN") ? (
           <HccTicketsView
             flights={flights}
             currentUser={currentUser}

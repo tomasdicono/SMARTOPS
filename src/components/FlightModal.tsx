@@ -80,7 +80,7 @@ export function FlightModal({
             userRole === "HCC" ||
             userRole === "SC" ||
             userRole === "AJS");
-    const canSeeReclamos = userRole === "AJS" || userRole === "ADMIN" || userRole === "SC";
+    const canSeeReclamos = userRole === "AJS" || userRole === "HCC" || userRole === "ADMIN" || currentUser?.email === "ignacio.buiatti@swissport.com";
     const isReadOnlyView = !!flight.cancelled;
     const qrfActive = isQrfActive(flight);
     const alternoActive = isAlternoActive(flight);
