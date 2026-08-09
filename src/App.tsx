@@ -1514,7 +1514,7 @@ function App() {
                     <Plane className="w-4 h-4 shrink-0" />
                     Matrículas
                   </button>
-                  {false && (
+                  {isHccDeskRole(userRole) && (
                     <button
                       type="button"
                       onClick={() => setMainTab("infoCrew")}
