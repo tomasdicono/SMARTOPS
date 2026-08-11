@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Flight, ClaimTicket, User } from "../types";
 import { format } from "date-fns";
 import { getAirlinePrefix } from "../lib/flightHelpers";
