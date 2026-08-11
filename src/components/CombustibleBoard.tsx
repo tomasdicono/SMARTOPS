@@ -60,7 +60,7 @@ export function CombustibleBoard({ flights, selectedDate }: Props) {
     const getTamsInfo = (flight: Flight) => {
         // Try to match by airline code (e.g. WJ) + flight number
         const flightNumberMatch = flight.flt.replace(/\D/g, "");
-        const tamsMatch = aa2000Flights.find(t => t.nro === flightNumberMatch && (flight.arr === "AEP" ? t.mov === "A" : t.mov === "D"));
+        const tamsMatch = aa2000Flights.find(t => t.nro.replace(/\D/g, "") === flightNumberMatch && (flight.arr === "AEP" ? t.mov === "A" : t.mov === "D"));
         return tamsMatch;
     };
 
