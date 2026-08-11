@@ -93,7 +93,7 @@ export function CombustibleBoard({ flights, selectedDate }: Props) {
                         const tamsEta = extractTime(tamsArr?.etda);
                         const tamsSta = extractTime(tamsArr?.stda);
                         
-                        const arrTime = tamsAta || pair.arrival.ata || tamsEta || pair.arrival.eta || tamsSta || pair.arrival.sta;
+                        const arrTime = tamsAta || tamsEta || pair.arrival.mvtData?.eta || tamsSta || pair.arrival.sta;
                         const pos = tamsArr?.posicion || "—";
                         
                         return (
