@@ -8,6 +8,7 @@ import {
   isLimpiezaRole,
   isScRole,
   canUseBoardCardToneFilters,
+  isCombustibleRole,
   type Flight,
   type User,
   type HitosData,
@@ -136,13 +137,14 @@ import {
   duplicateKeysForIso,
 } from "./lib/duplicateFlights";
 import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
+import { CombustibleBoard } from "./components/CombustibleBoard";
 
 const APP_VERSION = "2026.08.02.2";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc" | "infoCrew"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc" | "infoCrew" | "combustible"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -206,6 +208,12 @@ function App() {
   const currentTimeStr = formatClockTime(currentTime);
 
   const userRole = normalizeUserRole(currentUser?.role);
+
+  useEffect(() => {
+    if (isCombustibleRole(userRole)) {
+      setMainTab("combustible");
+    }
+  }, [userRole]);
 
   // Auto-reload on remote version mismatch to force client update
   useEffect(() => {
@@ -1662,6 +1670,264 @@ function App() {
           isScRole(userRole) && mainTab === "timeline" ? "max-w-[1920px]" : "max-w-[1600px]"
         }`}
       >
+        {isScRole(userRole) && (
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setMainTab("tablero")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "tablero"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Vuelos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("timeline")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "timeline"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <GanttChartSquare className="w-4 h-4 shrink-0" />
+              Línea de tiempo
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("documentos")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "documentos"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <FolderOpen className="w-4 h-4 shrink-0" />
+              Herramientas útiles
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("statusEquiposGRH")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "statusEquiposGRH"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              Status Equipos
+            </button>
+          </div>
+        )}
+
+        {isHccDeskRole(userRole) && (
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setMainTab("tablero")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "tablero"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Vuelos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("control")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "control"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Tablero Control
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("reporte")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "reporte"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <FileBarChart2 className="w-4 h-4 shrink-0" />
+              Reporte Diario
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("pernocte")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "pernocte"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Moon className="w-4 h-4 shrink-0" />
+              Pernocte
+            </button>
+            {isHccDeskRole(userRole) && (
+              <button
+                type="button"
+                onClick={() => setMainTab("diferidos")}
+                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                  mainTab === "diferidos"
+                    ? "bg-amber-500 text-slate-900 shadow-md"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <FileWarning className="w-4 h-4 shrink-0" />
+                Diferidos
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setMainTab("matriculas")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "matriculas"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Plane className="w-4 h-4 shrink-0" />
+              Matrículas
+            </button>
+            {false && canAccessCostControlling(userRole) && (
+              <button
+                type="button"
+                onClick={() => setMainTab("costControlling")}
+                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                  mainTab === "costControlling"
+                    ? "bg-emerald-600 text-white shadow-md"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <Calculator className="w-4 h-4 shrink-0" />
+                Cost controlling
+              </button>
+            )}
+            {userRole === "AJS" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMainTab("casosAtc")}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                    mainTab === "casosAtc"
+                      ? "bg-rose-600 text-white shadow-md"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Buscador demoras
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainTab("ticketsHcc")}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                    mainTab === "ticketsHcc"
+                      ? "bg-purple-600 text-white shadow-md"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <MessageSquareText className="w-4 h-4 shrink-0" />
+                  Tickets HCC
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainTab("combustible")}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                    mainTab === "combustible"
+                      ? "bg-orange-600 text-white shadow-md"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  Combustible
+                </button>
+              </>
+            )}
+            {userRole === "COMBUSTIBLE" && (
+              <button
+                type="button"
+                onClick={() => setMainTab("combustible")}
+                className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                  mainTab === "combustible"
+                    ? "bg-orange-600 text-white shadow-md"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Combustible
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setMainTab("statusEquiposGRH")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "statusEquiposGRH"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              Status Equipos
+            </button>
+          </div>
+        )}
+
+        {userRole === "ADMIN" && (
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-slate-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setMainTab("tablero")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                mainTab === "tablero"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Vuelos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("matriculas")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "matriculas"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Plane className="w-4 h-4 shrink-0" />
+              Matrículas
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("statusEquiposGRH")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "statusEquiposGRH"
+                  ? "bg-cyan-500 text-slate-900 shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              Status Equipos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab("ticketsHcc")}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                mainTab === "ticketsHcc"
+                  ? "bg-purple-600 text-white shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <MessageSquareText className="w-4 h-4 shrink-0" />
+              Tickets HCC
+            </button>
+          </div>
+        )}
 
         {!(isScRole(userRole) && mainTab === "timeline") && (
         <div className="flex items-center justify-between mb-8">
@@ -1773,6 +2039,11 @@ function App() {
           <HccTicketsView
             flights={flightsForSelectedDate}
             currentUser={currentUser}
+          />
+        ) : mainTab === "combustible" && (userRole === "AJS" || isCombustibleRole(userRole)) ? (
+          <CombustibleBoard
+            flights={flightsForSelectedDate}
+            selectedDate={selectedDate}
           />
         ) : mainTab === "statusEquiposGRH" ? (
           <StatusEquiposGRHView currentUser={currentUser} />

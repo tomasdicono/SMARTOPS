@@ -1,12 +1,16 @@
-export type UserRole = "ADMIN" | "HCC" | "SC" | "CREW" | "AJS" | "LIMPIEZA";
+export type UserRole = "ADMIN" | "HCC" | "SC" | "CREW" | "AJS" | "LIMPIEZA" | "COMBUSTIBLE";
 
 /** Alinea roles guardados en Firebase (p. ej. typo ASJ) para que el modal no quede sin pestañas */
 export function normalizeUserRole(role: unknown): UserRole {
     if (role == null || role === "") return "CREW";
     let u = String(role).trim().toUpperCase();
     if (u === "ASJ") u = "AJS";
-    const allowed: UserRole[] = ["ADMIN", "HCC", "SC", "CREW", "AJS", "LIMPIEZA"];
+    const allowed: UserRole[] = ["ADMIN", "HCC", "SC", "CREW", "AJS", "LIMPIEZA", "COMBUSTIBLE"];
     return (allowed.includes(u as UserRole) ? u : "CREW") as UserRole;
+}
+
+export function isCombustibleRole(role: UserRole): boolean {
+    return role === "COMBUSTIBLE";
 }
 
 /** Personal de limpieza: solo tablero filtrado, sin datos de pasajeros. */

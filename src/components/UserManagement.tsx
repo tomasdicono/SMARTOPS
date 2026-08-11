@@ -138,6 +138,7 @@ const ROLE_SELECT = (
         <option value="CREW">CREW</option>
         <option value="AJS">AJS (Aeropuertos JetSMART)</option>
         <option value="LIMPIEZA">LIMPIEZA (tablero filtrado, sin PAX)</option>
+        <option value="COMBUSTIBLE">COMBUSTIBLE (Proveedor de combustible)</option>
     </>
 );
 
@@ -693,7 +694,9 @@ export function UserManagement({ onClose }: UserManagementProps) {
                                                                           ? "bg-blue-900/50 text-blue-300 border border-blue-700/50"
                                                                           : u.role === "LIMPIEZA"
                                                                             ? "bg-violet-900/50 text-violet-300 border border-violet-700/50"
-                                                                            : "bg-slate-800 text-slate-300 border border-slate-700"
+                                                                            : u.role === "COMBUSTIBLE"
+                                                                              ? "bg-orange-900/50 text-orange-300 border border-orange-700/50"
+                                                                              : "bg-slate-800 text-slate-300 border border-slate-700"
                                                             }`}
                                                         >
                                                             {u.role}
