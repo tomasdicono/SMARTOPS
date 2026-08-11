@@ -139,7 +139,7 @@ import {
 import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 import { CombustibleBoard } from "./components/CombustibleBoard";
 
-const APP_VERSION = "2026.08.11.2";
+const APP_VERSION = "2026.08.11.3";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);

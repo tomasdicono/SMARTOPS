@@ -88,7 +88,12 @@ export function CombustibleBoard({ flights, selectedDate }: Props) {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {pairs.map((pair, idx) => {
                         const tamsArr = getTamsInfo(pair.arrival);
-                        const arrTime = tamsArr?.atda || tamsArr?.etda || tamsArr?.stda || pair.arrival.sta;
+                        const extractTime = (s?: string | null) => s ? s.split(" ").pop() || s : "";
+                        const tamsAta = extractTime(tamsArr?.atda);
+                        const tamsEta = extractTime(tamsArr?.etda);
+                        const tamsSta = extractTime(tamsArr?.stda);
+                        
+                        const arrTime = tamsAta || pair.arrival.ata || tamsEta || pair.arrival.eta || tamsSta || pair.arrival.sta;
                         const pos = tamsArr?.posicion || "—";
                         
                         return (
