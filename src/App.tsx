@@ -1564,6 +1564,17 @@ function App() {
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         Buscador demoras
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setMainTab("combustible")}
+                        className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
+                          mainTab === "combustible"
+                            ? "bg-orange-600 text-white shadow-md"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        Combustible
+                      </button>
                     </>
                   )}
                   <button
