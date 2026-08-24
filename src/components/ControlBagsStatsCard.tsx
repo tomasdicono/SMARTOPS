@@ -53,9 +53,10 @@ export function ControlBagsStatsCard({ flights, selectedAirports }: Props) {
 
             // Hitos check
             const hitos = f.hitosData;
-            const hasSearch = hitos?.entries &&
-                typeof hitos.entries["Inicio búsqueda de equipaje"] === "string" &&
-                hitos.entries["Inicio búsqueda de equipaje"].trim() !== "";
+            const rawVal = hitos?.entries && typeof hitos.entries["Inicio búsqueda de equipaje"] === "string" 
+                ? hitos.entries["Inicio búsqueda de equipaje"].trim() 
+                : "";
+            const hasSearch = rawVal !== "" && rawVal !== "000" && rawVal !== "0000" && rawVal !== "00:00";
 
             if (hasSearch) {
                 entry.searchActivations += 1;

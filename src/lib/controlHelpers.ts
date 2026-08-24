@@ -879,7 +879,7 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
         st.totalFlights += 1;
         
         const rawSearch = hitosEntryHhmm(h.entries, "Inicio búsqueda de equipaje");
-        if (rawSearch && rawSearch !== "0000" && rawSearch !== "00:00") {
+        if (rawSearch && rawSearch !== "000" && rawSearch !== "0000" && rawSearch !== "00:00") {
             totalSearches += 1;
             st.searchActivations += 1;
         }
