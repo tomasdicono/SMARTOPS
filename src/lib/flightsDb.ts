@@ -151,6 +151,31 @@ export async function removeFlightsByIds(ids: string[]): Promise<void> {
 }
 
 /**
+ * Guarda una copia de seguridad en Firebase bajo `backup_deleted_flights`
+ * antes de eliminar los vuelos.
+ */
+export async function backupAndDeleteFlights(flightsToDelete: Flight[]): Promise<void> {
+    if (!flightsToDelete || flightsToDelete.length === 0) return;
+    const nowIso = new Date().toISOString().replace(/[:.]/g, "-");
+    const dateTag = flightsToDelete[0]?.date || "desconocido";
+    const backupRef = ref(db, `backup_deleted_flights/${dateTag}_${nowIso}`);
+
+    const backupMap: Record<string, Flight> = {};
+    for (const f of flightsToDelete) {
+        if (f.id) {
+            backupMap[f.id] = f;
+        }
+    }
+
+    // 1. Guardar copia en Firebase
+    await set(backupRef, forFirebaseDb(backupMap));
+
+    // 2. Eliminar vuelos
+    const ids = flightsToDelete.map((f) => f.id);
+    await removeFlightsByIds(ids);
+}
+
+/**
  * Migra `flights` de array a mapa `{ [id]: Flight }` (una escritura atómica del nodo).
  * Idempotente si ya está en formato mapa.
  */
@@ -166,3 +191,4 @@ export async function migrateFlightsArrayToMap(flights: Flight[]): Promise<void>
     }
     await set(ref(db, "flights"), forFirebaseDb(map));
 }
+

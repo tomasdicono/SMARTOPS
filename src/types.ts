@@ -28,6 +28,11 @@ export function isAdminOrHccDesk(role: UserRole): boolean {
     return role === "ADMIN" || isHccDeskRole(role);
 }
 
+/** ADMIN o AJS (permisos especiales de eliminación masiva o restauración). */
+export function isAdminOrAjs(role: UserRole): boolean {
+    return role === "ADMIN" || role === "AJS";
+}
+
 /** Supervisor de Carga — tablero de vuelos + herramientas útiles. */
 export function isScRole(role: UserRole): boolean {
     return role === "SC";

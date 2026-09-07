@@ -3,6 +3,7 @@ import {
   normalizeUserRole,
   isHccDeskRole,
   isAdminOrHccDesk,
+  isAdminOrAjs,
   canEditMvtDelayAfterSent,
   canSubmitMvtAfterQrf,
   isLimpiezaRole,
@@ -71,6 +72,7 @@ import {
   updateFlight,
   saveFlightsBatch,
   removeFlightsByIds,
+  backupAndDeleteFlights,
   migrateFlightsArrayToMap,
 } from "./lib/flightsDb";
 import { loadUserProfile } from "./lib/loadUserProfile";
@@ -97,6 +99,7 @@ import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import { StatusEquiposGRHView } from "./components/StatusEquiposGRHView";
 import { HccTicketsView } from "./components/HccTicketsView";
 import { InfoCrewView } from "./components/InfoCrewView";
+import { restoreHccPdfReport } from "./lib/restoreHccPdfReport";
 import {
   computePernocteRows,
   coercePernocteRow,
@@ -1095,26 +1098,43 @@ function App() {
   });
 
   const handleDeleteFlightsForSelectedDate = async () => {
+    if (!isAdminOrAjs(userRole)) {
+      alert("Acceso denegado. Únicamente los usuarios con rol ADMINISTRADOR o AJS pueden eliminar los vuelos del día.");
+      return;
+    }
     if (flightsForSelectedDate.length === 0) {
       alert("No hay vuelos para eliminar en el día seleccionado.");
       return;
     }
     const dateFormatted = flightsForSelectedDate[0].date;
-    if (!window.confirm(`¿Estás seguro de que querés eliminar todos los vuelos (${flightsForSelectedDate.length}) cargados para el día ${dateFormatted}? Esta acción no se puede deshacer y borrará toda la información operativa del día.`)) {
+    const confirmInput = window.prompt(
+      `ATENCIÓN: Querés eliminar todos los vuelos (${flightsForSelectedDate.length}) cargados para el día ${dateFormatted}.\n\nSe creará un respaldo automático en Firebase antes de borrar.\n\nEscribí 'BORRAR' en mayúsculas para confirmar:`
+    );
+    if (confirmInput !== "BORRAR") {
+      alert("Operación cancelada.");
       return;
     }
     try {
-      const ids = flightsForSelectedDate.map(f => f.id);
-      await removeFlightsByIds(ids);
+      await backupAndDeleteFlights(flightsForSelectedDate);
       setSelectedFlight(null);
       setCancelModalFlight(null);
       setRescheduleModalFlight(null);
       setRouteModalFlight(null);
       setAlternoModalFlight(null);
       setShowParser(false);
-      alert(`Se eliminaron los ${ids.length} vuelos del día.`);
+      alert(`Se eliminaron los ${flightsForSelectedDate.length} vuelos del día. (Se creó una copia de seguridad en Firebase).`);
     } catch {
       alert("No se pudieron eliminar los vuelos del día. Revisá tu conexión.");
+    }
+  };
+
+  const handleRestorePdfReport = async () => {
+    if (!window.confirm("¿Deseás restaurar las 20 novedades/demoras del Reporte Diario de las 21:48 a los vuelos cargados de hoy?")) return;
+    try {
+      const { count, unmatched } = await restoreHccPdfReport(flights);
+      alert(`¡Éxito! Se actualizaron ${count} vuelos en la base de datos con los datos del reporte de las 21:48.` + (unmatched.length > 0 ? `\n\nNo se encontraron en la grilla: ${unmatched.join(", ")}` : ""));
+    } catch (err) {
+      alert("Error al restaurar novedades: " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -1351,6 +1371,21 @@ function App() {
                         <ClipboardPaste className="w-4 h-4 shrink-0" aria-hidden />
                         Cargar
                       </button>
+                      {isAdminOrHccDesk(userRole) && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-amber-300 hover:bg-amber-950/50"
+                          title="Restaurar las 20 novedades/demoras del Reporte Diario de las 21:48"
+                          onClick={() => {
+                            setLoadToolsMenuOpen(false);
+                            void handleRestorePdfReport();
+                          }}
+                        >
+                          <RotateCcw className="w-4 h-4 shrink-0" aria-hidden />
+                          Restaurar 21:48
+                        </button>
+                      )}
                       {isHccDeskRole(userRole) && (
                         <>
                           <div className="my-1 border-t border-slate-700" role="separator" />
@@ -1737,18 +1772,18 @@ function App() {
             onRemoveQrfEvent={handleRemoveQrfEvent}
             userRole={userRole}
           />
-        ) : mainTab === "reporte" && isHccDeskRole(userRole) ? (
+        ) : mainTab === "reporte" && isAdminOrHccDesk(userRole) ? (
           <DailyReportView
             flights={flights}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             onUpdateDailyReportObs={handleUpdateDailyReportObs}
-            canEditObs={isHccDeskRole(userRole)}
+            canEditObs={isAdminOrHccDesk(userRole)}
             reportUserName={currentUser?.name ?? ""}
             routeAfectaciones={routeAfectaciones}
             dailyReportOtp={dailyReportOtp}
             onSaveDailyReportOtp={handleSaveDailyReportOtp}
-            canEditOtp={isHccDeskRole(userRole)}
+            canEditOtp={isAdminOrHccDesk(userRole)}
           />
         ) : mainTab === "pernocte" && isHccDeskRole(userRole) ? (
           <PernocteView
@@ -2394,7 +2429,7 @@ function App() {
         <ScheduleParser
           onLoadFlights={handleLoadFlights}
           onClose={() => setShowParser(false)}
-          onDeleteFlightsForDate={handleDeleteFlightsForSelectedDate}
+          onDeleteFlightsForDate={isAdminOrAjs(userRole) ? handleDeleteFlightsForSelectedDate : undefined}
         />
       )}
 
