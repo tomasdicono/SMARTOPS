@@ -322,21 +322,36 @@ export async function restoreHccPdfReport(flights: Flight[]): Promise<{ count: n
         });
 
         if (match) {
-            const existingMvt = match.mvtData || {
-                atd: "", off: "", eta: "", dlyCod1: "", dlyTime1: "",
-                dlyCod2: "", dlyTime2: "", observaciones: "", paxActual: "",
-                inf: "", totalBags: "", totalCarga: "", load: ""
-            };
-
-            const updatedMvt = {
-                ...existingMvt,
-                atd: rec.atd || existingMvt.atd || "",
-                dlyCod1: rec.dlyCod1 || existingMvt.dlyCod1 || "",
-                dlyTime1: rec.dlyTime1 || existingMvt.dlyTime1 || "",
-                dlyCod2: rec.dlyCod2 || existingMvt.dlyCod2 || "",
-                dlyTime2: rec.dlyTime2 || existingMvt.dlyTime2 || "",
-                observaciones: rec.observaciones || existingMvt.observaciones || "",
-            };
+            const currentMvt = match.mvtData;
+            const updatedMvt = currentMvt
+                ? {
+                    ...currentMvt,
+                    atd: rec.atd || currentMvt.atd || "",
+                    dlyCod1: rec.dlyCod1 || currentMvt.dlyCod1 || "",
+                    dlyTime1: rec.dlyTime1 || currentMvt.dlyTime1 || "",
+                    dlyCod2: rec.dlyCod2 || currentMvt.dlyCod2 || "",
+                    dlyTime2: rec.dlyTime2 || currentMvt.dlyTime2 || "",
+                    observaciones: rec.observaciones || currentMvt.observaciones || "",
+                }
+                : {
+                    atd: rec.atd || "",
+                    off: "",
+                    eta: "",
+                    dlyCod1: rec.dlyCod1 || "",
+                    dlyTime1: rec.dlyTime1 || "",
+                    dlyCod2: rec.dlyCod2 || "",
+                    dlyTime2: rec.dlyTime2 || "",
+                    observaciones: rec.observaciones || "",
+                    paxActual: "",
+                    inf: "",
+                    totalBags: "",
+                    totalCarga: "",
+                    load: "",
+                    fob: "",
+                    ssee: [],
+                    infoSup: "",
+                    supervisor: "",
+                };
 
             await updateFlight(match.id, {
                 mvtData: updatedMvt,
