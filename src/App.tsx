@@ -99,7 +99,6 @@ import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import { StatusEquiposGRHView } from "./components/StatusEquiposGRHView";
 import { HccTicketsView } from "./components/HccTicketsView";
 import { InfoCrewView } from "./components/InfoCrewView";
-import { restoreHccPdfReport } from "./lib/restoreHccPdfReport";
 import {
   computePernocteRows,
   coercePernocteRow,
@@ -1128,16 +1127,6 @@ function App() {
     }
   };
 
-  const handleRestorePdfReport = async () => {
-    if (!window.confirm("¿Deseás restaurar las 20 novedades/demoras del Reporte Diario de las 21:48 a los vuelos cargados de hoy?")) return;
-    try {
-      const { count, unmatched } = await restoreHccPdfReport(flights, selectedDate);
-      alert(`¡Éxito! Se actualizaron ${count} vuelos en la base de datos con los datos del reporte de las 21:48.` + (unmatched.length > 0 ? `\n\nNo se encontraron en la grilla: ${unmatched.join(", ")}` : ""));
-    } catch (err) {
-      alert("Error al restaurar novedades: " + (err instanceof Error ? err.message : String(err)));
-    }
-  };
-
   /** Tablero: fecha + buscador de tarjetas (independiente del buscador del modal MVT) */
   const filteredFlights = flightsForSelectedDate.filter((f) => {
     const sq = searchQuery.trim().toUpperCase();
@@ -1371,21 +1360,6 @@ function App() {
                         <ClipboardPaste className="w-4 h-4 shrink-0" aria-hidden />
                         Cargar
                       </button>
-                      {isAdminOrHccDesk(userRole) && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-amber-300 hover:bg-amber-950/50"
-                          title="Restaurar las 20 novedades/demoras del Reporte Diario de las 21:48"
-                          onClick={() => {
-                            setLoadToolsMenuOpen(false);
-                            void handleRestorePdfReport();
-                          }}
-                        >
-                          <RotateCcw className="w-4 h-4 shrink-0" aria-hidden />
-                          Restaurar 21:48
-                        </button>
-                      )}
                       {isHccDeskRole(userRole) && (
                         <>
                           <div className="my-1 border-t border-slate-700" role="separator" />

@@ -16,9 +16,8 @@ import {
 } from "../lib/dailyReportOtp";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "../lib/mvtTime";
 import { downloadDailyReportPdf } from "../lib/dailyReportPdf";
-import { restoreHccPdfReport } from "../lib/restoreHccPdfReport";
 import { getDelayCodeArea } from "../lib/delayCodes";
-import { FileDown, CalendarDays, Copy, Check, RotateCcw } from "lucide-react";
+import { FileDown, CalendarDays, Copy, Check } from "lucide-react";
 
 interface Props {
     flights: Flight[];
@@ -80,7 +79,6 @@ export function DailyReportView({
 
     const [otpDraft, setOtpDraft] = useState<DailyReportOtp>(dailyReportOtp);
     const [otpSaveFailed, setOtpSaveFailed] = useState(false);
-    const [isRestoringPdf, setIsRestoringPdf] = useState(false);
     const otpTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
     const otpComplete = isDailyReportOtpComplete(otpDraft);
@@ -210,59 +208,23 @@ export function DailyReportView({
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        disabled={isRestoringPdf}
-                        onClick={async () => {
-                            if (
-                                !window.confirm(
-                                    "¿Deseás aplicar las 20 novedades/demoras del Reporte Diario de las 21:48 a los vuelos cargados de hoy?"
-                                )
-                            ) {
-                                return;
-                            }
-                            setIsRestoringPdf(true);
-                            try {
-                                const { count, unmatched } = await restoreHccPdfReport(flights, selectedDate);
-                                alert(
-                                    `¡Éxito! Se actualizaron ${count} vuelos con los datos del reporte de las 21:48.` +
-                                        (unmatched.length > 0
-                                            ? `\n\nNo se encontraron en la grilla: ${unmatched.join(", ")}`
-                                            : "")
-                                );
-                            } catch (err) {
-                                alert(
-                                    "Error al aplicar datos: " +
-                                        (err instanceof Error ? err.message : String(err))
-                                );
-                            } finally {
-                                setIsRestoringPdf(false);
-                            }
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white shadow-md transition-colors"
-                    >
-                        <RotateCcw className="w-4 h-4 shrink-0" />
-                        {isRestoringPdf ? "Restaurando..." : "Restaurar Novedades 21:48"}
-                    </button>
-                    <button
-                        type="button"
-                        disabled={!canDownloadPdf}
-                        title={downloadTitle}
-                        onClick={async () => {
-                            await flushOtpSave(true);
-                            void downloadDailyReportPdf(rows, selectedDate, {
-                                responsibleName: reportUserName,
-                                statusDia,
-                                manualOtp: otpDraft,
-                            });
-                        }}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-wide bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none text-white shadow-md transition-colors"
-                    >
-                        <FileDown className="w-4 h-4 shrink-0" />
-                        Descargar PDF
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    disabled={!canDownloadPdf}
+                    title={downloadTitle}
+                    onClick={async () => {
+                        await flushOtpSave(true);
+                        void downloadDailyReportPdf(rows, selectedDate, {
+                            responsibleName: reportUserName,
+                            statusDia,
+                            manualOtp: otpDraft,
+                        });
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-wide bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none text-white shadow-md transition-colors"
+                >
+                    <FileDown className="w-4 h-4 shrink-0" />
+                    Descargar PDF
+                </button>
             </div>
 
             <p id="otp-hint" className="text-[11px] text-slate-500 -mt-3 px-1 leading-snug">
