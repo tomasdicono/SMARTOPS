@@ -224,7 +224,7 @@ export function DailyReportView({
                             }
                             setIsRestoringPdf(true);
                             try {
-                                const { count, unmatched } = await restoreHccPdfReport(flights);
+                                const { count, unmatched } = await restoreHccPdfReport(flights, selectedDate);
                                 alert(
                                     `¡Éxito! Se actualizaron ${count} vuelos con los datos del reporte de las 21:48.` +
                                         (unmatched.length > 0

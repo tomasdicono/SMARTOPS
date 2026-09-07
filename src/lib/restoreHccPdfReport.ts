@@ -1,4 +1,5 @@
-import { updateFlight } from "./flightsDb";
+import { saveFlight } from "./flightsDb";
+import { flightDateToIso } from "./controlHelpers";
 import type { Flight } from "../types";
 
 export interface PdfReportRecord {
@@ -305,26 +306,57 @@ function normalizeNum(s: string): string {
     return match ? match[0] : clean;
 }
 
-export async function restoreHccPdfReport(flights: Flight[]): Promise<{ count: number; unmatched: string[] }> {
+export async function restoreHccPdfReport(
+    flights: Flight[],
+    targetIsoDate?: string
+): Promise<{ count: number; unmatched: string[] }> {
     let updatedCount = 0;
     const unmatched: string[] = [];
 
+    const candidates = targetIsoDate
+        ? flights.filter((f) => flightDateToIso(f) === targetIsoDate)
+        : flights;
+
     for (const rec of PDF_2148_RECORDS) {
         const targetNum = normalizeNum(rec.flt);
-        const targetDep = rec.dep.toUpperCase();
-        const targetArr = rec.arr.toUpperCase();
+        const targetDep = rec.dep.trim().toUpperCase();
+        const targetArr = rec.arr.trim().toUpperCase();
 
-        const match = flights.find((f) => {
+        let match = candidates.find((f) => {
             const num = normalizeNum(f.flt);
-            const dep = String(f.dep || "").toUpperCase();
-            const arr = String(f.arr || "").toUpperCase();
+            const dep = String(f.dep || "").trim().toUpperCase();
+            const arr = String(f.arr || "").trim().toUpperCase();
             return num === targetNum && dep === targetDep && arr === targetArr;
         });
 
+        if (!match) {
+            match = candidates.find((f) => normalizeNum(f.flt) === targetNum);
+        }
+
         if (match) {
-            const currentMvt = match.mvtData;
-            const updatedMvt = currentMvt
-                ? {
+            const currentMvt = match.mvtData || {
+                atd: "",
+                off: "",
+                eta: "",
+                dlyCod1: "",
+                dlyTime1: "",
+                dlyCod2: "",
+                dlyTime2: "",
+                observaciones: "",
+                paxActual: "",
+                inf: "",
+                totalBags: "",
+                totalCarga: "",
+                load: "",
+                fob: "",
+                ssee: [],
+                infoSup: "",
+                supervisor: "",
+            };
+
+            const updatedFlight: Flight = {
+                ...match,
+                mvtData: {
                     ...currentMvt,
                     atd: rec.atd || currentMvt.atd || "",
                     dlyCod1: rec.dlyCod1 || currentMvt.dlyCod1 || "",
@@ -332,31 +364,11 @@ export async function restoreHccPdfReport(flights: Flight[]): Promise<{ count: n
                     dlyCod2: rec.dlyCod2 || currentMvt.dlyCod2 || "",
                     dlyTime2: rec.dlyTime2 || currentMvt.dlyTime2 || "",
                     observaciones: rec.observaciones || currentMvt.observaciones || "",
-                }
-                : {
-                    atd: rec.atd || "",
-                    off: "",
-                    eta: "",
-                    dlyCod1: rec.dlyCod1 || "",
-                    dlyTime1: rec.dlyTime1 || "",
-                    dlyCod2: rec.dlyCod2 || "",
-                    dlyTime2: rec.dlyTime2 || "",
-                    observaciones: rec.observaciones || "",
-                    paxActual: "",
-                    inf: "",
-                    totalBags: "",
-                    totalCarga: "",
-                    load: "",
-                    fob: "",
-                    ssee: [],
-                    infoSup: "",
-                    supervisor: "",
-                };
-
-            await updateFlight(match.id, {
-                mvtData: updatedMvt,
+                },
                 dailyReportObs: rec.observaciones,
-            });
+            };
+
+            await saveFlight(updatedFlight);
             updatedCount++;
         } else {
             unmatched.push(`${rec.flt} (${rec.dep}->${rec.arr})`);

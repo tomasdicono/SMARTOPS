@@ -1131,7 +1131,7 @@ function App() {
   const handleRestorePdfReport = async () => {
     if (!window.confirm("¿Deseás restaurar las 20 novedades/demoras del Reporte Diario de las 21:48 a los vuelos cargados de hoy?")) return;
     try {
-      const { count, unmatched } = await restoreHccPdfReport(flights);
+      const { count, unmatched } = await restoreHccPdfReport(flights, selectedDate);
       alert(`¡Éxito! Se actualizaron ${count} vuelos en la base de datos con los datos del reporte de las 21:48.` + (unmatched.length > 0 ? `\n\nNo se encontraron en la grilla: ${unmatched.join(", ")}` : ""));
     } catch (err) {
       alert("Error al restaurar novedades: " + (err instanceof Error ? err.message : String(err)));
