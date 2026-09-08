@@ -40,6 +40,7 @@ import { ControlGpuTab } from "./ControlGpuTab";
 import { ControlUsageTab } from "./ControlUsageTab";
 import { ControlAirportMultiSelect } from "./ControlAirportMultiSelect";
 import { ControlBoardingStatsPanel } from "./ControlBoardingStatsPanel";
+import { ControlPeaHourlyChart } from "./ControlPeaHourlyChart";
 import { ControlBagsStatsCard } from "./ControlBagsStatsCard";
 import { ControlCargaStatsCard } from "./ControlCargaStatsCard";
 import { ControlPaxStatsCard } from "./ControlPaxStatsCard";
@@ -117,6 +118,7 @@ export function ControlView({
         reason: string;
     } | null>(null);
     const [showCod18Modal, setShowCod18Modal] = useState(false);
+    const [activePeaChart, setActivePeaChart] = useState<"manga" | "remota" | null>(null);
     useEffect(() => {
         setStatsDateFrom(selectedDate);
         setStatsDateTo(selectedDate);
@@ -195,6 +197,12 @@ export function ControlView({
         const days = countDaysInclusiveIso(lo, hi);
         if (lo === hi) return f0;
         return `${f0} – ${f1} · ${days} día${days !== 1 ? "s" : ""}`;
+    }, [statsDateFrom, statsDateTo]);
+
+    const periodDayCount = useMemo(() => {
+        const { lo, hi } = normalizeIsoDateRange(statsDateFrom, statsDateTo);
+        if (!lo || !hi) return 1;
+        return Math.max(1, countDaysInclusiveIso(lo, hi));
     }, [statsDateFrom, statsDateTo]);
 
     const statsAtdTimeLabel = useMemo(() => {
@@ -1332,18 +1340,33 @@ export function ControlView({
                             </div>
                         </div>
                         <ControlBoardingStatsPanel flights={statsFlights} />
-                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-violet-50/50 to-white">
-                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
-                                <Building2 className="w-3.5 h-3.5 text-violet-600" aria-hidden />
-                                Uso de manga
-                            </p>
+                        <div
+                            onClick={() => setActivePeaChart((prev) => (prev === "manga" ? null : "manga"))}
+                            className={`rounded-xl border p-4 bg-gradient-to-br from-violet-50/50 to-white dark:from-violet-950/20 dark:to-slate-900 cursor-pointer transition-all hover:shadow-md ${
+                                activePeaChart === "manga"
+                                    ? "border-violet-500 ring-2 ring-violet-500/50 shadow-md"
+                                    : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-700"
+                            }`}
+                            role="button"
+                            tabIndex={0}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-black uppercase text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                    <Building2 className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
+                                    Uso de manga
+                                </p>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 flex items-center gap-1">
+                                    <BarChart3 className="w-3 h-3" />
+                                    {activePeaChart === "manga" ? "Ocultar gráfico" : "Ver gráfico ATD"}
+                                </span>
+                            </div>
                             <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
                                 % sobre MVT enviados en el filtro (PEA en hitos operacionales)
                             </p>
-                            <p className="text-3xl font-black text-violet-950 mt-2 tabular-nums">
+                            <p className="text-3xl font-black text-violet-950 dark:text-violet-100 mt-2 tabular-nums">
                                 {peaMangaPct != null ? `${peaMangaPct.toFixed(1)}%` : "—"}
                             </p>
-                            <p className="text-xs text-slate-600 mt-1">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                 {statsMvtSentTotal > 0
                                     ? `${peaCounts.manga} de ${statsMvtSentTotal} MVT enviado${statsMvtSentTotal !== 1 ? "s" : ""} con PEA «Manga»`
                                     : statsFlightTotal > 0
@@ -1351,18 +1374,33 @@ export function ControlView({
                                       : "Sin vuelos en el filtro"}
                             </p>
                         </div>
-                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-sky-50/50 to-white">
-                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5 text-sky-600" aria-hidden />
-                                Uso de remota
-                            </p>
+                        <div
+                            onClick={() => setActivePeaChart((prev) => (prev === "remota" ? null : "remota"))}
+                            className={`rounded-xl border p-4 bg-gradient-to-br from-sky-50/50 to-white dark:from-sky-950/20 dark:to-slate-900 cursor-pointer transition-all hover:shadow-md ${
+                                activePeaChart === "remota"
+                                    ? "border-sky-500 ring-2 ring-sky-500/50 shadow-md"
+                                    : "border-slate-200 dark:border-slate-800 hover:border-sky-300 dark:hover:border-sky-700"
+                            }`}
+                            role="button"
+                            tabIndex={0}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-black uppercase text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                    <MapPin className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" aria-hidden />
+                                    Uso de remota
+                                </p>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300 flex items-center gap-1">
+                                    <BarChart3 className="w-3 h-3" />
+                                    {activePeaChart === "remota" ? "Ocultar gráfico" : "Ver gráfico ATD"}
+                                </span>
+                            </div>
                             <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
                                 % sobre MVT enviados en el filtro (PEA en hitos operacionales)
                             </p>
-                            <p className="text-3xl font-black text-sky-950 mt-2 tabular-nums">
+                            <p className="text-3xl font-black text-sky-950 dark:text-sky-100 mt-2 tabular-nums">
                                 {peaRemotaPct != null ? `${peaRemotaPct.toFixed(1)}%` : "—"}
                             </p>
-                            <p className="text-xs text-slate-600 mt-1">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                 {statsMvtSentTotal > 0
                                     ? `${peaCounts.remota} de ${statsMvtSentTotal} MVT enviado${statsMvtSentTotal !== 1 ? "s" : ""} con PEA «Remota»`
                                     : statsFlightTotal > 0
@@ -1371,6 +1409,15 @@ export function ControlView({
                             </p>
                         </div>
                     </div>
+
+                    {activePeaChart && (
+                        <ControlPeaHourlyChart
+                            flights={statsFlightsMvtSent}
+                            peaType={activePeaChart}
+                            periodDayCount={periodDayCount}
+                            onClose={() => setActivePeaChart(null)}
+                        />
+                    )}
 
                     {statsFlightsAnyInFilter && cancelledStatsFlights.length === 0 && (
                         <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 flex items-center gap-2 text-sm text-slate-600">

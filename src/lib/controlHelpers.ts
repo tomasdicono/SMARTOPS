@@ -1061,6 +1061,85 @@ export function computePeaCounts(flights: Flight[]): { manga: number; remota: nu
     return { manga, remota };
 }
 
+export interface PeaHourlySlot {
+    hour: number;
+    hourLabel: string;
+    count: number;
+    avgPerDay: number;
+    pctOfTotalPea: number;
+}
+
+export interface PeaHourlyDistribution {
+    slots: PeaHourlySlot[];
+    maxCount: number;
+    peakHour: number | null;
+    totalWithAtd: number;
+    totalWithoutAtd: number;
+}
+
+/** Distribución por hora de ATD para la posición PEA seleccionada (manga o remota). */
+export function computePeaHourlyDistribution(
+    flights: Flight[],
+    peaType: "manga" | "remota",
+    periodDayCount: number,
+): PeaHourlyDistribution {
+    const counts = new Array<number>(24).fill(0);
+    let totalWithAtd = 0;
+    let totalWithoutAtd = 0;
+
+    for (const f of flights) {
+        const p = normalizeHitosData(f.hitosData).peaPosition;
+        if (p !== peaType) continue;
+
+        const atdRaw = f.mvtData?.atd;
+        if (!atdRaw || !String(atdRaw).trim()) {
+            totalWithoutAtd++;
+            continue;
+        }
+
+        const mins = parseTimeToMinutes(atdRaw);
+        const hour = Math.floor(mins / 60);
+        if (hour >= 0 && hour < 24) {
+            counts[hour]++;
+            totalWithAtd++;
+        } else {
+            totalWithoutAtd++;
+        }
+    }
+
+    const totalPeaFlights = totalWithAtd + totalWithoutAtd;
+    const safeDays = Math.max(1, periodDayCount);
+
+    let maxCount = 0;
+    let peakHour: number | null = null;
+
+    for (let h = 0; h < 24; h++) {
+        if (counts[h] > maxCount) {
+            maxCount = counts[h];
+            peakHour = h;
+        }
+    }
+
+    const slots: PeaHourlySlot[] = counts.map((count, hour) => {
+        const hourStr = hour.toString().padStart(2, "0");
+        return {
+            hour,
+            hourLabel: `${hourStr}:00 – ${hourStr}:59`,
+            count,
+            avgPerDay: count / safeDays,
+            pctOfTotalPea: totalPeaFlights > 0 ? (count / totalPeaFlights) * 100 : 0,
+        };
+    });
+
+    return {
+        slots,
+        maxCount,
+        peakHour,
+        totalWithAtd,
+        totalWithoutAtd,
+    };
+}
+
 export function uniqueAirportsFromFlights(flights: Flight[]): string[] {
     const s = new Set<string>();
     for (const f of flights) {
