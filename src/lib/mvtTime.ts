@@ -1,4 +1,5 @@
 import type { Flight, SSEE } from "../types";
+import { formatDelayCodeDisplay } from "./delayCodes";
 
 type MvtData = NonNullable<Flight["mvtData"]>;
 
@@ -92,17 +93,20 @@ export function getMvtDelayDisplayLines(f: Flight): string[] {
     const { isDelayed } = computeMvtDelayStatus(f.std, m.atd, m.dlyTime1, m.dlyTime2);
     if (!isDelayed) return [];
 
-    const obs = (f.dailyReportObs?.trim() || m.observaciones?.trim() || "").trim();
-    
-    const formatLine = (cod: string) => {
+    const formatLine = (cod: string, timeRaw?: string) => {
         const c = cod.trim();
         if (!c) return "";
-        return obs ? `COD ${c} - ${obs}` : `COD ${c}`;
+        const label = formatDelayCodeDisplay(c);
+        const mins = parseTimeToMinutes(timeRaw);
+        if (mins > 0) {
+            return `${label} (${formatMinutesToHHMM(mins)})`;
+        }
+        return label;
     };
 
     return [
-        m.dlyCod1?.trim() ? formatLine(m.dlyCod1) : "",
-        m.dlyCod2?.trim() ? formatLine(m.dlyCod2) : "",
+        m.dlyCod1?.trim() ? formatLine(m.dlyCod1, m.dlyTime1) : "",
+        m.dlyCod2?.trim() ? formatLine(m.dlyCod2, m.dlyTime2) : "",
     ].filter(Boolean);
 }
 
