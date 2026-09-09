@@ -213,8 +213,11 @@ export function isMvtCompleteForCard(f: Flight): boolean {
 export function isTrasladoFlight(f: Flight): boolean {
     const dep = String(f.dep ?? "").trim().toUpperCase();
     const arr = String(f.arr ?? "").trim().toUpperCase();
-    return (dep === "AEP" && arr === "EZE") || (dep === "EZE" && arr === "AEP");
+    if ((dep === "AEP" && arr === "EZE") || (dep === "EZE" && arr === "AEP")) return true;
+    const r = String(f.route ?? "").trim().toUpperCase().replace(/\s+/g, "");
+    return r === "AEP-EZE" || r === "EZE-AEP" || r === "AEP/EZE" || r === "EZE/AEP";
 }
+
 
 /** Tarjetas del tablero: hitos validados (Guardar), no solo auto-guardado con carta elegida. */
 export function isHitosCompleteForCard(f: Flight): boolean {

@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import type { Flight, RouteAfectacionEntry, UserRole } from "../types";
-import { getAirlinePrefix, getHitosDepartureTime } from "../lib/flightHelpers";
+import { getAirlinePrefix, getHitosDepartureTime, isTrasladoFlight } from "../lib/flightHelpers";
 import { getAircraftInfo } from "../lib/fleetData";
 import {
     flightDateToIso,
@@ -222,25 +222,26 @@ export function ControlView({
     }, [statsTimeFrom, statsTimeTo]);
 
     const statsFlights = statsScope.operational;
+    const nonTrasladoStatsFlights = useMemo(() => statsFlights.filter((f) => !isTrasladoFlight(f)), [statsFlights]);
     const cancelledStatsFlights = statsScope.cancelled;
     const statsFlightsAnyInFilter = statsScope.raw.length > 0;
     const statsDateAirportMatchCount = statsScope.dateAirportMatchCount;
 
-    const mix320 = useMemo(() => computeFleetMixShare(statsFlights, "A320"), [statsFlights]);
-    const mix321 = useMemo(() => computeFleetMixShare(statsFlights, "A321"), [statsFlights]);
+    const mix320 = useMemo(() => computeFleetMixShare(nonTrasladoStatsFlights, "A320"), [nonTrasladoStatsFlights]);
+    const mix321 = useMemo(() => computeFleetMixShare(nonTrasladoStatsFlights, "A321"), [nonTrasladoStatsFlights]);
 
-    const totalBags = useMemo(() => statsFlights.reduce((s, f) => s + getBags(f), 0), [statsFlights]);
-    const totalPax = useMemo(() => statsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [statsFlights]);
+    const totalBags = useMemo(() => nonTrasladoStatsFlights.reduce((s, f) => s + getBags(f), 0), [nonTrasladoStatsFlights]);
+    const totalPax = useMemo(() => nonTrasladoStatsFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [nonTrasladoStatsFlights]);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
 
     const interAirports = useMemo(() => ["SCL", "NAT", "REC", "LIM", "FLN", "GIG"], []);
     const interFlights = useMemo(
-        () => statsFlights.filter((f) => interAirports.includes(f.dep) || interAirports.includes(f.arr)),
-        [statsFlights, interAirports],
+        () => nonTrasladoStatsFlights.filter((f) => interAirports.includes(f.dep) || interAirports.includes(f.arr)),
+        [nonTrasladoStatsFlights, interAirports],
     );
     const domFlights = useMemo(
-        () => statsFlights.filter((f) => !interAirports.includes(f.dep) && !interAirports.includes(f.arr)),
-        [statsFlights, interAirports],
+        () => nonTrasladoStatsFlights.filter((f) => !interAirports.includes(f.dep) && !interAirports.includes(f.arr)),
+        [nonTrasladoStatsFlights, interAirports],
     );
 
     const totalBagsInter = useMemo(() => interFlights.reduce((s, f) => s + getBags(f), 0), [interFlights]);
@@ -250,23 +251,23 @@ export function ControlView({
     const totalBagsDom = useMemo(() => domFlights.reduce((s, f) => s + getBags(f), 0), [domFlights]);
     const totalPaxDom = useMemo(() => domFlights.reduce((s, f) => s + getMvtPaxOnly(f), 0), [domFlights]);
     const bagsPerPaxPctDom = totalPaxDom > 0 ? (totalBagsDom / totalPaxDom) * 100 : null;
-    const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(statsFlights), [statsFlights]);
+    const avgGpuUsage = useMemo(() => computeAverageGpuUsageMinutes(nonTrasladoStatsFlights), [nonTrasladoStatsFlights]);
     const inicioEmbarqueCompliance = useMemo(
-        () => computeInicioEmbarqueCompliance(statsFlights),
-        [statsFlights],
+        () => computeInicioEmbarqueCompliance(nonTrasladoStatsFlights),
+        [nonTrasladoStatsFlights],
     );
     const llegadaCrewCompliance = useMemo(
-        () => computeLlegadaCrewCompliance(statsFlights),
-        [statsFlights],
+        () => computeLlegadaCrewCompliance(nonTrasladoStatsFlights),
+        [nonTrasladoStatsFlights],
     );
     const busquedasBagCompliance = useMemo(
-        () => computeBusquedasBagCompliance(statsFlights, controlAirports),
-        [statsFlights, controlAirports],
+        () => computeBusquedasBagCompliance(nonTrasladoStatsFlights, controlAirports),
+        [nonTrasladoStatsFlights, controlAirports],
     );
-    const statsFlightsMvtSent = useMemo(() => statsFlights.filter(hasMvtSent), [statsFlights]);
+    const statsFlightsMvtSent = useMemo(() => nonTrasladoStatsFlights.filter(hasMvtSent), [nonTrasladoStatsFlights]);
     const statsMvtSentTotal = statsFlightsMvtSent.length;
     const peaCounts = useMemo(() => computePeaCounts(statsFlightsMvtSent), [statsFlightsMvtSent]);
-    const statsFlightTotal = statsFlights.length;
+    const statsFlightTotal = nonTrasladoStatsFlights.length;
     const peaMangaPct =
         statsMvtSentTotal > 0 ? (peaCounts.manga / statsMvtSentTotal) * 100 : null;
     const peaRemotaPct =
@@ -276,7 +277,7 @@ export function ControlView({
         let total = 0;
         let requeridas = 0;
         let planificadas = 0;
-        statsFlights.forEach((f) => {
+        nonTrasladoStatsFlights.forEach((f) => {
             if (f.hitosData?.limpiezaStatus === "si") {
                 total++;
                 if (f.hitosData?.limpiezaTipo === "crew") {
@@ -287,7 +288,7 @@ export function ControlView({
             }
         });
         return { total, requeridas, planificadas };
-    }, [statsFlights]);
+    }, [nonTrasladoStatsFlights]);
 
     const cancelledScheduledPaxTotal = useMemo(
         () => cancelledStatsFlights.reduce((s, f) => s + getScheduledPax(f), 0),
@@ -1154,9 +1155,9 @@ export function ControlView({
                                 {mix321.countOfType} de {mix321.totalFlights} vuelo{mix321.totalFlights !== 1 ? "s" : ""} con A321
                             </p>
                         </div>
-                        <ControlBagsStatsCard flights={statsFlights} selectedAirports={controlAirports} />
-                        <ControlCargaStatsCard flights={statsFlights} selectedAirports={controlAirports} />
-                        <ControlPaxStatsCard flights={statsFlights} selectedAirports={controlAirports} />
+                        <ControlBagsStatsCard flights={nonTrasladoStatsFlights} selectedAirports={controlAirports} />
+                        <ControlCargaStatsCard flights={nonTrasladoStatsFlights} selectedAirports={controlAirports} />
+                        <ControlPaxStatsCard flights={nonTrasladoStatsFlights} selectedAirports={controlAirports} />
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-rose-50/60 to-white">
                             <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
                                 <Accessibility className="w-3.5 h-3.5 text-rose-700" aria-hidden />
@@ -1339,7 +1340,7 @@ export function ControlView({
                                 </div>
                             </div>
                         </div>
-                        <ControlBoardingStatsPanel flights={statsFlights} />
+                        <ControlBoardingStatsPanel flights={nonTrasladoStatsFlights} />
                         <div
                             onClick={() => setActivePeaChart((prev) => (prev === "manga" ? null : "manga"))}
                             className={`rounded-xl border p-4 bg-gradient-to-br from-violet-50/50 to-white dark:from-violet-950/20 dark:to-slate-900 cursor-pointer transition-all hover:shadow-md ${

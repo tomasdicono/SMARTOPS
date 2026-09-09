@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import type { Flight, RouteAfectacionEntry, SSEE } from "../types";
 import { formatDelayCodeDisplay, getDelayCodeArea } from "./delayCodes";
 import { normalizeAirportCode } from "./routeAfectaciones";
-import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isAlternoActive, getFlightQrfEvents } from "./flightHelpers";
+import { getAirlinePrefix, isJesFlightNumber, compareFlightsByStd, isAlternoActive, getFlightQrfEvents, isTrasladoFlight } from "./flightHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
 import {
@@ -119,6 +119,7 @@ export function computeTopAvgFlightMetricGroups(
     const map = new Map<string, { totalValue: number; count: number }>();
 
     for (const f of flights) {
+        if (isTrasladoFlight(f)) continue;
         const key = mode === "routes" ? routeGroupKey(f) : destinationGroupKey(f, selectedAirports);
         if (!key) continue;
         const value = getValue(f);
@@ -604,6 +605,7 @@ export function validateHhmmEndNotBeforeStart(
  * Duración uso GPU (minutos) desde hitos operacionales: inicio y fin en HHMM, sin «no se utilizó GPU».
  */
 export function gpuUsageDurationMinutesFromFlight(f: Flight): number | null {
+    if (isTrasladoFlight(f)) return null;
     const h = normalizeHitosData(f.hitosData);
     if (h.gpuNotUsed) return null;
     return hhmmDurationMinutes(h.gpuStart, h.gpuEnd, { maxMinutes: MAX_GPU_DURATION_MINUTES });
@@ -632,6 +634,7 @@ export const MAX_GPU_CONNECTION_WAIT_MINUTES = 12 * 60;
  * Requiere ATA e inicio GPU válidos; excluye «no se utilizó GPU».
  */
 export function gpuConnectionWaitMinutesFromFlight(f: Flight): number | null {
+    if (isTrasladoFlight(f)) return null;
     const h = normalizeHitosData(f.hitosData);
     if (h.gpuNotUsed) return null;
     return hhmmDurationMinutes(h.ata, h.gpuStart, { maxMinutes: MAX_GPU_CONNECTION_WAIT_MINUTES });
@@ -704,6 +707,7 @@ function hitosEntryHhmm(entries: Record<string, string>, milestoneName: string):
  * Mismas reglas de cruce de medianoche que GPU.
  */
 export function boardingDurationMinutesFromFlight(f: Flight): number | null {
+    if (isTrasladoFlight(f)) return null;
     const h = normalizeHitosData(f.hitosData);
     let start =
         hitosEntryHhmm(h.entries, "Inicio Embarque") ?? hitosEntryHhmm(h.entries, "Inicio embarque");
@@ -800,6 +804,7 @@ export function computeInicioEmbarqueCompliance(flights: Flight[]): MilestoneCom
     let onTimeCount = 0;
     let evaluatedCount = 0;
     for (const f of flights) {
+        if (isTrasladoFlight(f)) continue;
         const h = normalizeHitosData(f.hitosData);
         if (!h.ganttChartName) continue;
         const chart = GANTT_CHARTS.find((c) => c.name === h.ganttChartName);
@@ -825,6 +830,7 @@ export function computeLlegadaCrewCompliance(flights: Flight[]): MilestoneCompli
     let onTimeCount = 0;
     let evaluatedCount = 0;
     for (const f of flights) {
+        if (isTrasladoFlight(f)) continue;
         const valMins = crewMilestoneRealMins(f, crewLabel);
         if (valMins == null) continue;
         const hitosForTarget = hitosDataForCrewTargets(f);
@@ -862,11 +868,12 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
     let onTimeCount = 0;
     let evaluatedCount = 0;
     let totalSearches = 0;
-    const totalOperated = flights.length;
+    const nonTrasladoFlights = flights.filter((f) => !isTrasladoFlight(f));
+    const totalOperated = nonTrasladoFlights.length;
     const cod18Flights: Cod18FlightInfo[] = [];
     const groupStats = new Map<string, { searchActivations: number; totalFlights: number; cod18Count: number; cod18TotalMins: number }>();
 
-    for (const f of flights) {
+    for (const f of nonTrasladoFlights) {
         const hasCod18 = f.mvtData?.dlyCod1 === "18" || f.mvtData?.dlyCod2 === "18";
         const h = normalizeHitosData(f.hitosData);
         
@@ -1054,6 +1061,7 @@ export function computePeaCounts(flights: Flight[]): { manga: number; remota: nu
     let manga = 0;
     let remota = 0;
     for (const f of flights) {
+        if (isTrasladoFlight(f)) continue;
         const p = normalizeHitosData(f.hitosData).peaPosition;
         if (p === "manga") manga++;
         else if (p === "remota") remota++;
@@ -1088,6 +1096,7 @@ export function computePeaHourlyDistribution(
     let totalWithoutAtd = 0;
 
     for (const f of flights) {
+        if (isTrasladoFlight(f)) continue;
         const p = normalizeHitosData(f.hitosData).peaPosition;
         if (p !== peaType) continue;
 

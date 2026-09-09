@@ -25,7 +25,7 @@ import {
     type QrfStatusDiaRow,
     type RouteAfectacionStatsRow,
 } from "./controlHelpers";
-import { isJesFlightNumber, getAirlinePrefix } from "./flightHelpers";
+import { isJesFlightNumber, getAirlinePrefix, isTrasladoFlight } from "./flightHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 
 const SIMULTANEITY_AIRPORTS = ["AEP", "EZE"] as const;
@@ -317,23 +317,26 @@ export function buildStatsReportData(params: {
     } = params;
     const operational = flights.filter((f) => !f.cancelled);
     const mvtSent = operational.filter(hasMvtSent);
+    const nonTrasladoOperational = operational.filter((f) => !isTrasladoFlight(f));
+    const nonTrasladoMvtSent = mvtSent.filter((f) => !isTrasladoFlight(f));
+
     const otp = computeOtpStats(operational);
     const { lo, hi } = normalizeIsoDateRange(statsDateFrom, statsDateTo);
     const periodDayCount = lo && hi ? countDaysInclusiveIso(lo, hi) : 0;
     const otpDailyColumns =
         periodDayCount > 1 ? computeOtpDailyColumns(operational, statsDateFrom, statsDateTo) : [];
-    const mix320 = computeFleetMixShare(operational, "A320");
-    const mix321 = computeFleetMixShare(operational, "A321");
-    const peaCounts = computePeaCounts(mvtSent);
-    const peaMvtBase = mvtSent.length;
+    const mix320 = computeFleetMixShare(nonTrasladoOperational, "A320");
+    const mix321 = computeFleetMixShare(nonTrasladoOperational, "A321");
+    const peaCounts = computePeaCounts(nonTrasladoMvtSent);
+    const peaMvtBase = nonTrasladoMvtSent.length;
 
     const boardingRows = BOARDING_FILTERS.map(({ filter, label }) => {
-        const { avgMinutes, countWithBoarding } = computeAverageBoardingMinutes(operational, filter);
+        const { avgMinutes, countWithBoarding } = computeAverageBoardingMinutes(nonTrasladoOperational, filter);
         return { label, avgMinutes, countWithBoarding };
     });
 
-    const totalPax = operational.reduce((s, f) => s + getMvtPaxOnly(f), 0);
-    const totalBags = operational.reduce((s, f) => s + getBags(f), 0);
+    const totalPax = nonTrasladoOperational.reduce((s, f) => s + getMvtPaxOnly(f), 0);
+    const totalBags = nonTrasladoOperational.reduce((s, f) => s + getBags(f), 0);
     const bagsPerPaxPct = totalPax > 0 ? (totalBags / totalPax) * 100 : null;
 
     const now = new Date();
@@ -357,8 +360,8 @@ export function buildStatsReportData(params: {
         totalPax,
         totalBags,
         bagsPerPaxPct,
-        inicioEmbarque: computeInicioEmbarqueCompliance(operational),
-        llegadaCrew: computeLlegadaCrewCompliance(operational),
+        inicioEmbarque: computeInicioEmbarqueCompliance(nonTrasladoOperational),
+        llegadaCrew: computeLlegadaCrewCompliance(nonTrasladoOperational),
         fleet320Pct: mix320.sharePct,
         fleet321Pct: mix321.sharePct,
         fleet320Count: mix320.countOfType,
@@ -371,9 +374,9 @@ export function buildStatsReportData(params: {
         peaMvtBase,
         boardingRows,
         qrfFlights: listQrfFlightsForDay(eventFlights),
-        limpiezaTotal: operational.filter(f => f.hitosData?.limpiezaStatus === "si").length,
-        limpiezaRequeridas: operational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "crew").length,
-        limpiezaPlanificadas: operational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "planificada").length,
+        limpiezaTotal: nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si").length,
+        limpiezaRequeridas: nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "crew").length,
+        limpiezaPlanificadas: nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "planificada").length,
         alternoFlights: listAlternoFlightsForDay(eventFlights),
         routeAfectaciones,
         simultaneities: computeSimultaneities(operational, selectedAirports),

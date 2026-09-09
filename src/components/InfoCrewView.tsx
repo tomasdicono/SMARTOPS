@@ -13,6 +13,7 @@ import {
   Plane
 } from "lucide-react";
 import type { Flight } from "../types";
+import { isTrasladoFlight } from "../lib/flightHelpers";
 
 // Safe, custom date parsing function that works for "dd-MM-yyyy" and "yyyy-MM-dd"
 function parseToDate(dateStr: string, timeStr: string): Date {
@@ -163,6 +164,7 @@ export function InfoCrewView({ flights }: InfoCrewViewProps) {
     // 1. Group flights strictly by Route
     const groups: Record<string, Flight[]> = {};
     for (const f of flights) {
+      if (isTrasladoFlight(f)) continue;
       const r = (f.route || "").trim();
       if (!r) continue;
       if (!groups[r]) {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Flight } from "../types";
 import { computeTopAvgBagsGroups, getBags } from "../lib/controlHelpers";
+import { isTrasladoFlight } from "../lib/flightHelpers";
 import { ChevronDown, Luggage } from "lucide-react";
 
 interface Props {
@@ -40,6 +41,7 @@ export function ControlBagsStatsCard({ flights, selectedAirports }: Props) {
         }>();
 
         for (const f of flights) {
+            if (isTrasladoFlight(f)) continue;
             const station = String(f.dep ?? "").trim().toUpperCase();
             if (!station) continue;
 
