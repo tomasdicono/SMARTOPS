@@ -15,7 +15,7 @@ import {
     refMinutesForHitos,
 } from "./hitosReference";
 import { GANTT_CHARTS } from "./hitosData";
-import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
+import { formatMinutesToHHMM, parseTimeToMinutes, isMvtDelayJustified } from "./mvtTime";
 import { getFuelSupplier, type FuelSupplier } from "./fuelSupplier";
 
 /** Convierte fecha de vuelo (DD-MM-YYYY o YYYY-MM-DD) a ISO YYYY-MM-DD */
@@ -1228,11 +1228,12 @@ export function hasMvtPaxEntered(f: Flight): boolean {
     return (f.mvtData?.paxActual ?? "").trim() !== "";
 }
 
-/** MVT enviado al servidor (`mvtSentAt`), mismo criterio que factor ocupación en status día. */
+/** MVT enviado al servidor (`mvtSentAt`), requiriendo que la demora esté justificada si existe. */
 export function hasMvtSent(f: Flight): boolean {
     if (f.cancelled) return false;
     const m = f.mvtData;
-    return m != null && m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "";
+    if (m == null || m.mvtSentAt == null || String(m.mvtSentAt).trim() === "") return false;
+    return isMvtDelayJustified(f.std, m);
 }
 
 /** MVT con ATD cargado (suficiente para medir OTP). Denominador “MVT enviados”. */

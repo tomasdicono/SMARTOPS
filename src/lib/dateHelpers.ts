@@ -1,9 +1,17 @@
 import type { Flight } from "../types";
 import { parse, addHours, isAfter } from "date-fns";
+import { isMvtDelayJustified } from "./mvtTime";
 
 export function isFlightIncompleteAndLate(flight: Flight): boolean {
     if (flight.cancelled) return false;
-    if (flight.mvtData) return false;
+    const m = flight.mvtData;
+    if (m) {
+        const atd = String(m.atd ?? "").replace(/\D/g, "");
+        const hasAtd = atd.length >= 3;
+        const hasSent = m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "";
+        const justified = isMvtDelayJustified(flight.std, m);
+        if ((hasSent || hasAtd) && justified) return false;
+    }
 
     try {
         // Flight date format is "DD-MM-YYYY", e.g., "01-04-2026"

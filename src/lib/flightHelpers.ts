@@ -2,6 +2,7 @@ import type { Flight, HitosData, QrfEvent, UserRole } from "../types";
 import { parseHHmmToMinutes } from "./controlHelpers";
 import { isFlightIncompleteAndLate } from "./dateHelpers";
 import { normalizeHitosCrewData, normalizeHitosData, normalizeMvtData } from "./flightDataNormalize";
+import { isMvtDelayJustified } from "./mvtTime";
 
 /** Tono visual de la tarjeta en el tablero (HCC/AJS filtros). */
 export type FlightCardTone = "green" | "yellow" | "red" | "grey";
@@ -200,10 +201,12 @@ export function coerceFlightFromDb(f: Flight): Flight {
     return base;
 }
 
-/** Tarjetas del tablero: MVT enviado o legado con ATD cargado. */
+/** Tarjetas del tablero: MVT enviado o legado con ATD cargado, requiriendo que la demora (si existe) esté justificada. */
 export function isMvtCompleteForCard(f: Flight): boolean {
+    if (f.cancelled) return false;
     const m = f.mvtData;
     if (!m) return false;
+    if (!isMvtDelayJustified(f.std, m)) return false;
     if (m.mvtSentAt != null && String(m.mvtSentAt).trim() !== "") return true;
     const atd = String(m.atd ?? "").replace(/\D/g, "");
     return atd.length >= 3;

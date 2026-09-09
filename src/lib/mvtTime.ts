@@ -227,3 +227,22 @@ export function validateMvtSendDelays(
 
     return { ok: true, status };
 }
+
+/**
+ * Verifica si la demora (si existe) está completamente justificada por tiempos y códigos DLY válidos.
+ * Devuelve `false` si el vuelo está demorado (ATD > STD) y la demora no está completamente justificada.
+ */
+export function isMvtDelayJustified(std: string, mvt: Flight["mvtData"]): boolean {
+    if (!mvt) return true;
+    const atd = String(mvt.atd ?? "").replace(/\D/g, "");
+    if (atd.length < 3) return true;
+    return validateMvtSendDelays(
+        std,
+        mvt.atd,
+        mvt.dlyCod1,
+        mvt.dlyTime1,
+        mvt.dlyCod2,
+        mvt.dlyTime2,
+    ).ok;
+}
+
