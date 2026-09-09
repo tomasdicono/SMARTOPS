@@ -2,7 +2,6 @@ import type { Flight } from "../types";
 import { flightDateToIso } from "./controlHelpers";
 import { compareFlightsByStd, getAirlinePrefix } from "./flightHelpers";
 import { computeMvtDelayStatus, formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
-import { hasRecordedMvtDelay } from "./controlHelpers";
 
 /** Vuelo con MVT y al menos tiempo de demora cargado (dly time 1 y/o 2). */
 export function flightHasDelayTimesLoaded(f: Flight): boolean {
@@ -16,16 +15,19 @@ export function flightHasDelayTimesLoaded(f: Flight): boolean {
 export function totalDelayMinutes(f: Flight): number {
     const m = f.mvtData;
     if (!m) return 0;
-    return parseTimeToMinutes(m.dlyTime1) + parseTimeToMinutes(m.dlyTime2);
+    const { isDelayed, delayMinutes } = computeMvtDelayStatus(f.std, m.atd, m.dlyTime1, m.dlyTime2);
+    if (!isDelayed) return 0;
+    const dlySum = parseTimeToMinutes(m.dlyTime1) + parseTimeToMinutes(m.dlyTime2);
+    return Math.max(delayMinutes, dlySum);
 }
 
-/** Reporte diario: solo vuelos con demora real (ATD > STD) y datos DLY cargados. */
+/** Reporte diario: solo vuelos con demora real (ATD > STD), aunque no tengan código ni tiempo DLY asignado. */
 export function flightBelongsInDailyDelayReport(f: Flight): boolean {
+    if (f.cancelled) return false;
     const m = f.mvtData;
     if (!m) return false;
     const { isDelayed } = computeMvtDelayStatus(f.std, m.atd, m.dlyTime1, m.dlyTime2);
-    if (!isDelayed) return false;
-    return flightHasDelayTimesLoaded(f) || hasRecordedMvtDelay(f);
+    return isDelayed;
 }
 
 export function filterDelayedFlightsForDate(flights: Flight[], isoDate: string): Flight[] {
