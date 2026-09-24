@@ -11,6 +11,8 @@ import {
     isMvtCompleteForCard,
     hasHitosDataForSummaryExport,
     canDownloadHitosSummaryRole,
+    canDownloadBriefingPhotoRole,
+    hasBriefingPhoto,
 } from "../lib/flightHelpers";
 import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
 import { isLimpiezaRole, canEditMvtDelayAfterSent, canSubmitMvtAfterQrf } from "../types";
@@ -18,8 +20,8 @@ import { isQrfActive, isAlternoActive, isTrasladoFlight } from "../lib/flightHel
 
 type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA" | "RECLAMOS";
 import { hasMvtSent } from "../lib/controlHelpers";
-import { downloadHitosSummary } from "../lib/downloadHitosSummary";
-import { X, Ban, Download, RotateCcw } from "lucide-react";
+import { downloadHitosSummary, downloadBriefingPhoto } from "../lib/downloadHitosSummary";
+import { X, Ban, Download, ImageDown, RotateCcw } from "lucide-react";
 import { AlternoIcon } from "./AlternoIcon";
 import { BroomIcon } from "./BroomIcon";
 
@@ -100,6 +102,8 @@ export function FlightModal({
         !isReadOnlyView &&
         isMvtCompleteForCard(flight) &&
         hasHitosDataForSummaryExport(flight);
+    const canDownloadBriefing =
+        canDownloadBriefingPhotoRole(userRole) && hasBriefingPhoto(flight);
 
     /** SC / escritorio: Limpieza es guía ANEXO A, no bloquea MVT ni Hitos. */
     const limpiezaAsGuide = canSeeLimpiezaChecklist && !isLimpiezaRole(userRole);
@@ -217,6 +221,17 @@ export function FlightModal({
                         </div>
                     </div>
                     <div className="absolute top-4 right-4 flex items-center gap-2">
+                        {canDownloadBriefing && (
+                            <button
+                                type="button"
+                                onClick={() => downloadBriefingPhoto(flight)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/50 bg-sky-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-sky-900 shadow-sm hover:bg-sky-100 transition-colors"
+                                title="Descargar imagen del briefing operacional"
+                            >
+                                <ImageDown className="w-4 h-4 shrink-0" aria-hidden />
+                                <span className="hidden sm:inline">Briefing</span>
+                            </button>
+                        )}
                         {canDownloadHitosSummary && (
                             <button
                                 type="button"

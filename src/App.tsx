@@ -40,7 +40,9 @@ import {
   isAlternoActive,
   isTrasladoFlight,
   canDownloadHitosSummaryRole,
+  canDownloadBriefingPhotoRole,
   hasHitosDataForSummaryExport,
+  hasBriefingPhoto,
   flightNeedsCleaningWarning,
   appendQrfEvent,
   normalizeQrfHistory,
@@ -59,10 +61,10 @@ import {
   type FleetModelOption,
 } from "./lib/fleetData";
 import { WeatherIndicator } from "./components/WeatherIndicator";
-import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator, GanttChartSquare, Wrench, Clock } from "lucide-react";
+import { PlaneTakeoff, AlertCircle, CheckCircle2, ClipboardPaste, MessageSquareText, CalendarDays, Search, Users, LogOut, Loader2, Download, ImageDown, Ban, FileBarChart2, CirclePlus, CalendarClock, Moon, Route, Table2, FileWarning, RotateCcw, Settings, FolderOpen, ListMinus, ChevronDown, Plane, Trash2, Calculator, GanttChartSquare, Wrench, Clock } from "lucide-react";
 import { AlternoIcon } from "./components/AlternoIcon";
 import { BroomIcon } from "./components/BroomIcon";
-import { downloadHitosSummary } from "./lib/downloadHitosSummary";
+import { downloadHitosSummary, downloadBriefingPhoto } from "./lib/downloadHitosSummary";
 import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, push, remove } from "firebase/database";
 import {
@@ -1962,6 +1964,10 @@ function App() {
                 hasMvt &&
                 hasHitosDataForSummaryExport(flight) &&
                 !isCancelled;
+              const showBriefingDownload =
+                canDownloadBriefingPhotoRole(userRole) &&
+                hasBriefingPhoto(flight) &&
+                !isCancelled;
 
               return (
                 <div
@@ -1969,11 +1975,25 @@ function App() {
                   onClick={() => setSelectedFlight(flight)}
                   className={`relative border-2 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1.5 ${cardBg}`}
                 >
-                  {(showHitosDownload || showFlightActionsMenu) && (
+                  {(showHitosDownload || showBriefingDownload || showFlightActionsMenu) && (
                     <div
                       className="absolute top-2 right-2 z-20 flex items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {showBriefingDownload && (
+                        <button
+                          type="button"
+                          title="Descargar imagen del briefing operacional"
+                          aria-label="Descargar imagen del briefing operacional"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadBriefingPhoto(flight);
+                          }}
+                          className="inline-flex items-center justify-center rounded-xl border-2 border-sky-600/40 bg-white/95 p-2 text-sky-800 shadow-md hover:bg-sky-50 hover:border-sky-500 transition-colors"
+                        >
+                          <ImageDown className="w-4 h-4 shrink-0" aria-hidden />
+                        </button>
+                      )}
                       {showHitosDownload && (
                         <button
                           type="button"

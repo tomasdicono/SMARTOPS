@@ -623,3 +623,40 @@ export function downloadHitosSummary(flight: Flight): void {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+
+/** Descarga la foto del briefing operacional (código 66) adjunta al MVT. */
+export function downloadBriefingPhoto(
+    flight: Flight,
+    photoOverride?: string | null,
+): void {
+    const photo = String(photoOverride ?? flight.mvtData?.briefingPhoto ?? "").trim();
+    if (!photo) return;
+
+    let href = photo;
+    let ext = "jpg";
+
+    const dataMatch = photo.match(/^data:image\/([\w+.-]+);base64,/i);
+    if (dataMatch) {
+        const mimeSub = dataMatch[1].toLowerCase().replace("jpeg", "jpg");
+        ext = mimeSub.split("+")[0] || "jpg";
+    } else if (!/^https?:\/\//i.test(photo)) {
+        // Base64 crudo sin prefijo data:
+        href = `data:image/jpeg;base64,${photo}`;
+        ext = "jpg";
+    } else {
+        try {
+            const path = new URL(photo).pathname;
+            const fromPath = path.split(".").pop()?.toLowerCase();
+            if (fromPath && /^[a-z0-9]{2,5}$/.test(fromPath)) ext = fromPath;
+        } catch {
+            /* keep jpg */
+        }
+    }
+
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `briefing_${safeFilePart(flight.flt)}_${safeFilePart(flight.date)}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}

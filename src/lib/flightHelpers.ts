@@ -256,6 +256,16 @@ export function canDownloadHitosSummaryRole(role: UserRole): boolean {
     return role === "HCC" || role === "AJS" || role === "ADMIN" || role === "SC";
 }
 
+/** Roles que pueden descargar la foto del briefing operacional (código 66). */
+export function canDownloadBriefingPhotoRole(role: UserRole): boolean {
+    return role === "HCC" || role === "AJS";
+}
+
+/** Hay foto de briefing operacional adjunta al MVT. */
+export function hasBriefingPhoto(f: Flight): boolean {
+    return String(f.mvtData?.briefingPhoto ?? "").trim() !== "";
+}
+
 /**
  * Datos mínimos para exportar el resumen: validación con Guardar, o borrador con carta y al menos un horario real,
  * u horarios en hitos crew (excl. claves internas __…).

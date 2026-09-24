@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import type { Flight } from "../types";
-import { RotateCcw, Plus, Trash2, Calculator, CheckCircle2, Lock } from "lucide-react";
+import { isHccDeskRole } from "../types";
+import { RotateCcw, Plus, Trash2, Calculator, CheckCircle2, Lock, ImageDown } from "lucide-react";
 import { hasMvtSent } from "../lib/controlHelpers";
 import {
     formatMinutesToHHMM,
@@ -15,6 +16,7 @@ import { normalizeMvtData } from "../lib/flightDataNormalize";
 import { isQrfActive } from "../lib/flightHelpers";
 import { clearMvtDraft, readLegacyMvtDraft } from "../lib/mvtDraftStorage";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
+import { downloadBriefingPhoto } from "../lib/downloadHitosSummary";
 
 interface Props {
     flight: Flight;
@@ -398,16 +400,28 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
                                         alt="Briefing Operacional" 
                                         className="w-full h-auto max-h-60 object-contain rounded-lg"
                                     />
-                                    {!fieldDisabled(true) && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleChange("briefingPhoto", "")}
-                                            className="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
-                                            title="Eliminar foto"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    )}
+                                    <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                                        {userRole && isHccDeskRole(userRole) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => downloadBriefingPhoto(flight, data.briefingPhoto)}
+                                                className="p-2 bg-sky-600 hover:bg-sky-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
+                                                title="Descargar imagen del briefing"
+                                            >
+                                                <ImageDown className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        {!fieldDisabled(true) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleChange("briefingPhoto", "")}
+                                                className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
+                                                title="Eliminar foto"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center border-2 border-dashed border-red-300 rounded-xl p-6 bg-slate-50 hover:bg-red-50/20 transition-colors">
