@@ -25,7 +25,7 @@ import {
     type QrfStatusDiaRow,
     type RouteAfectacionStatsRow,
 } from "./controlHelpers";
-import { isJesFlightNumber, getAirlinePrefix, isTrasladoFlight } from "./flightHelpers";
+import { isJesFlightNumber, getAirlinePrefix, isFerryFlight } from "./flightHelpers";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 
 const SIMULTANEITY_AIRPORTS = ["AEP", "EZE"] as const;
@@ -317,8 +317,8 @@ export function buildStatsReportData(params: {
     } = params;
     const operational = flights.filter((f) => !f.cancelled);
     const mvtSent = operational.filter(hasMvtSent);
-    const nonTrasladoOperational = operational.filter((f) => !isTrasladoFlight(f));
-    const nonTrasladoMvtSent = mvtSent.filter((f) => !isTrasladoFlight(f));
+    const nonTrasladoOperational = operational.filter((f) => !isFerryFlight(f));
+    const nonTrasladoMvtSent = mvtSent.filter((f) => !isFerryFlight(f));
 
     const otp = computeOtpStats(operational);
     const { lo, hi } = normalizeIsoDateRange(statsDateFrom, statsDateTo);

@@ -221,6 +221,18 @@ export function isTrasladoFlight(f: Flight): boolean {
     return r === "AEP-EZE" || r === "EZE-AEP" || r === "AEP/EZE" || r === "EZE/AEP";
 }
 
+/** Vuelo ferry: traslado AEP↔EZE, o PAX 0 (MVT si hay dato; si no, programación). */
+export function isFerryFlight(f: Flight): boolean {
+    if (isTrasladoFlight(f)) return true;
+    const mvtRaw = f.mvtData?.paxActual;
+    if (mvtRaw != null && String(mvtRaw).trim() !== "") {
+        return (parseInt(String(mvtRaw).replace(/\D/g, ""), 10) || 0) === 0;
+    }
+    const schedRaw = String(f.pax ?? "").replace(/\D/g, "");
+    if (schedRaw === "") return false;
+    return (parseInt(schedRaw, 10) || 0) === 0;
+}
+
 
 /** Tarjetas del tablero: hitos validados (Guardar), no solo auto-guardado con carta elegida. */
 export function isHitosCompleteForCard(f: Flight): boolean {

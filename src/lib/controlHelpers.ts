@@ -863,6 +863,15 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
         cod18Count: number;
         cod18TotalMins: number;
     }[];
+    rankingBySupervisor: {
+        label: string;
+        searchActivations: number;
+        totalFlights: number;
+        cod18Count: number;
+        cod18TotalMins: number;
+        evaluatedCount: number;
+        onTimeCount: number;
+    }[];
 } {
     const names = ["Inicio búsqueda de equipaje"];
     let onTimeCount = 0;
@@ -872,6 +881,7 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
     const totalOperated = nonTrasladoFlights.length;
     const cod18Flights: Cod18FlightInfo[] = [];
     const groupStats = new Map<string, { searchActivations: number; totalFlights: number; cod18Count: number; cod18TotalMins: number }>();
+    const supStats = new Map<string, { searchActivations: number; totalFlights: number; cod18Count: number; cod18TotalMins: number; evaluatedCount: number; onTimeCount: number }>();
 
     for (const f of nonTrasladoFlights) {
         const hasCod18 = f.mvtData?.dlyCod1 === "18" || f.mvtData?.dlyCod2 === "18";
@@ -884,18 +894,31 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
         }
         const st = groupStats.get(groupKey)!;
         st.totalFlights += 1;
+
+        let supervisor = String(f.mvtData?.supervisor ?? "").trim().toUpperCase();
+        if (!supervisor) {
+            supervisor = String(f.hitosData?.hitosSentByName ?? f.mvtData?.mvtSentByName ?? "SIN ESPECIFICAR").trim().toUpperCase();
+        }
+        if (!supStats.has(supervisor)) {
+            supStats.set(supervisor, { searchActivations: 0, totalFlights: 0, cod18Count: 0, cod18TotalMins: 0, evaluatedCount: 0, onTimeCount: 0 });
+        }
+        const supSt = supStats.get(supervisor)!;
+        supSt.totalFlights += 1;
         
         const rawSearch = hitosEntryHhmm(h.entries, "Inicio búsqueda de equipaje");
         if (rawSearch && rawSearch !== "000" && rawSearch !== "0000" && rawSearch !== "00:00") {
             totalSearches += 1;
             st.searchActivations += 1;
+            supSt.searchActivations += 1;
         }
         
         if (hasCod18) {
             st.cod18Count += 1;
+            supSt.cod18Count += 1;
             const t1 = f.mvtData?.dlyCod1 === "18" ? Number(f.mvtData?.dlyTime1) || 0 : 0;
             const t2 = f.mvtData?.dlyCod2 === "18" ? Number(f.mvtData?.dlyTime2) || 0 : 0;
             st.cod18TotalMins += t1 + t2;
+            supSt.cod18TotalMins += t1 + t2;
         }
 
         if (!h.ganttChartName) {
@@ -934,8 +957,13 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
         
         const targetMins = refMinutesForHitos(f, h, chart) - offset;
         evaluatedCount += 1;
+        supSt.evaluatedCount += 1;
+        
         const onTime = isMilestoneOnTime(valMins, targetMins);
-        if (onTime) onTimeCount += 1;
+        if (onTime) {
+            onTimeCount += 1;
+            supSt.onTimeCount += 1;
+        }
         
         if (hasCod18) {
             cod18Flights.push({ flight: f, onTime, valMins });
@@ -947,6 +975,12 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
         .sort((a, b) => b.searchActivations - a.searchActivations || b.cod18Count - a.cod18Count)
         .filter((a) => a.searchActivations > 0 || a.cod18Count > 0);
 
+    const rankingBySupervisor = Array.from(supStats.entries())
+        .map(([label, data]) => ({ label, ...data }))
+        .sort((a, b) => b.cod18TotalMins - a.cod18TotalMins || b.searchActivations - a.searchActivations || a.label.localeCompare(b.label))
+        .filter((a) => a.searchActivations > 0 || a.cod18Count > 0)
+        .slice(0, 10);
+
     return {
         onTimePct: evaluatedCount > 0 ? (onTimeCount / evaluatedCount) * 100 : null,
         onTimeCount,
@@ -955,6 +989,7 @@ export function computeBusquedasBagCompliance(flights: Flight[], controlAirports
         totalSearches,
         totalOperated,
         rankingByAirport,
+        rankingBySupervisor,
     };
 }
 

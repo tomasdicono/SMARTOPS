@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import type { Flight, RouteAfectacionEntry, UserRole } from "../types";
-import { getAirlinePrefix, getHitosDepartureTime, isTrasladoFlight } from "../lib/flightHelpers";
+import { getAirlinePrefix, getHitosDepartureTime, formatFlightDateDDMMM, isFerryFlight } from "../lib/flightHelpers";
 import { getAircraftInfo } from "../lib/fleetData";
 import {
     flightDateToIso,
@@ -222,7 +222,9 @@ export function ControlView({
     }, [statsTimeFrom, statsTimeTo]);
 
     const statsFlights = statsScope.operational;
-    const nonTrasladoStatsFlights = useMemo(() => statsFlights.filter((f) => !isTrasladoFlight(f)), [statsFlights]);
+    const nonTrasladoStatsFlights = useMemo(() => statsFlights.filter((f) => !isFerryFlight(f)), [statsFlights]);
+    const ferryStatsFlights = useMemo(() => statsFlights.filter((f) => isFerryFlight(f)), [statsFlights]);
+    const ferryStatsCount = ferryStatsFlights.length;
     const cancelledStatsFlights = statsScope.cancelled;
     const statsFlightsAnyInFilter = statsScope.raw.length > 0;
     const statsDateAirportMatchCount = statsScope.dateAirportMatchCount;
@@ -1158,6 +1160,23 @@ export function ControlView({
                         <ControlBagsStatsCard flights={nonTrasladoStatsFlights} selectedAirports={controlAirports} />
                         <ControlCargaStatsCard flights={nonTrasladoStatsFlights} selectedAirports={controlAirports} />
                         <ControlPaxStatsCard flights={nonTrasladoStatsFlights} selectedAirports={controlAirports} />
+                        <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-sky-50/60 to-white">
+                            <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
+                                <Route className="w-3.5 h-3.5 text-sky-700" aria-hidden />
+                                Ferry
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                AEP↔EZE o PAX 0 (excluidos del resto de métricas)
+                            </p>
+                            <p className="text-3xl font-black text-sky-950 mt-2 tabular-nums">
+                                {ferryStatsCount.toLocaleString("es-AR")}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                {statsFlightTotal + ferryStatsCount > 0
+                                    ? `${ferryStatsCount} de ${statsFlightTotal + ferryStatsCount} vuelo${statsFlightTotal + ferryStatsCount !== 1 ? "s" : ""} operativos`
+                                    : "Sin vuelos en el filtro"}
+                            </p>
+                        </div>
                         <div className="rounded-xl border border-slate-200 p-4 bg-gradient-to-br from-rose-50/60 to-white">
                             <p className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
                                 <Accessibility className="w-3.5 h-3.5 text-rose-700" aria-hidden />
@@ -1439,9 +1458,10 @@ export function ControlView({
                                 </span>
                             </div>
                             <div className="overflow-x-auto rounded-lg border border-rose-100 bg-white shadow-inner">
-                                <table className="w-full text-sm min-w-[640px]">
+                                <table className="w-full text-sm min-w-[720px]">
                                     <thead>
                                         <tr className="bg-rose-50/90 text-left text-[10px] font-black uppercase tracking-wider text-rose-800 border-b border-rose-100">
+                                            <th className="px-3 py-2 whitespace-nowrap">Fecha</th>
                                             <th className="px-3 py-2">Vuelo</th>
                                             <th className="px-3 py-2">Ruta</th>
                                             <th className="px-3 py-2 whitespace-nowrap">STD</th>
@@ -1452,6 +1472,9 @@ export function ControlView({
                                     <tbody className="divide-y divide-rose-50">
                                         {cancelledStatsFlights.map((f) => (
                                             <tr key={f.id} className="hover:bg-rose-50/50">
+                                                <td className="px-3 py-2 tabular-nums font-mono font-bold text-slate-800 whitespace-nowrap">
+                                                    {formatFlightDateDDMMM(f.date) || "—"}
+                                                </td>
                                                 <td className="px-3 py-2 font-black text-slate-900 whitespace-nowrap">
                                                     <span className="text-slate-500 font-bold">{getAirlinePrefix(f.flt)}</span>
                                                     {f.flt}
@@ -1741,6 +1764,52 @@ export function ControlView({
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-mono text-rose-700">
                                                     {r.cod18Count > 0 ? (r.cod18TotalMins / r.cod18Count).toFixed(1) + "m" : "—"}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+
+                            <div className="p-3 bg-slate-100/50 border-y border-slate-200 mt-6 sticky top-0 backdrop-blur z-10">
+                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">
+                                    TOP Supervisores
+                                </h3>
+                                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">Supervisores con más demoras registradas</p>
+                            </div>
+                            {busquedasBagCompliance.rankingBySupervisor?.length === 0 ? (
+                                <p className="text-center text-slate-500 py-8 text-sm">Sin datos para el ranking de supervisores.</p>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-slate-50/80 border-b border-slate-100">
+                                        <tr className="text-left text-xs font-black uppercase tracking-wider text-slate-500">
+                                            <th className="px-3 py-2">Supervisor</th>
+                                            <th className="px-3 py-2 text-right">Activaciones</th>
+                                            <th className="px-3 py-2 text-right">Prom. COD 18</th>
+                                            <th className="px-3 py-2 text-right">En Horario</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 mb-6">
+                                        {busquedasBagCompliance.rankingBySupervisor?.map((r, i) => (
+                                            <tr key={r.label} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap flex items-center gap-1.5">
+                                                    <span className="text-slate-400 text-[10px] w-3 text-right">{i + 1}.</span> {r.label}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-mono text-fuchsia-700 font-bold">{r.searchActivations}</td>
+                                                <td className="px-3 py-2 text-right font-mono text-rose-700">
+                                                    {r.cod18Count > 0 ? (r.cod18TotalMins / r.cod18Count).toFixed(1) + "m" : "—"}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-mono text-emerald-700 font-bold">
+                                                    {r.evaluatedCount > 0 ? (
+                                                        <>
+                                                            {((r.onTimeCount / r.evaluatedCount) * 100).toFixed(1)}%
+                                                            <span className="text-[10px] text-slate-400 ml-1 font-normal hidden sm:inline">
+                                                                ({r.onTimeCount}/{r.evaluatedCount})
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-slate-400 font-normal">—</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
