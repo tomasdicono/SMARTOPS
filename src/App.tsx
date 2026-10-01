@@ -9,7 +9,6 @@ import {
   isLimpiezaRole,
   isScRole,
   canUseBoardCardToneFilters,
-  isCombustibleRole,
   type Flight,
   type User,
   type HitosData,
@@ -100,7 +99,6 @@ import { canAccessCostControlling } from "./lib/costControllingHelpers";
 import { DocumentosUtilesView } from "./components/DocumentosUtilesView";
 import { StatusEquiposGRHView } from "./components/StatusEquiposGRHView";
 import { HccTicketsView } from "./components/HccTicketsView";
-import { InfoCrewView } from "./components/InfoCrewView";
 import {
   computePernocteRows,
   coercePernocteRow,
@@ -141,14 +139,13 @@ import {
   duplicateKeysForIso,
 } from "./lib/duplicateFlights";
 import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
-import { CombustibleBoard } from "./components/CombustibleBoard";
 
 const APP_VERSION = "2026.08.11.3";
 
 function App() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [mainTab, setMainTab] = useState<
-    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc" | "infoCrew" | "combustible"
+    "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc"
   >("tablero");
   /** Incrementa al sincronizar `fleet/` en Firebase para refrescar la pestaña Matrículas. */
   const [fleetVersion, setFleetVersion] = useState(0);
@@ -212,12 +209,6 @@ function App() {
   const currentTimeStr = formatClockTime(currentTime);
 
   const userRole = normalizeUserRole(currentUser?.role);
-
-  useEffect(() => {
-    if (isCombustibleRole(userRole)) {
-      setMainTab("combustible");
-    }
-  }, [userRole]);
 
   // Auto-reload on remote version mismatch to force client update
   useEffect(() => {
@@ -1533,20 +1524,6 @@ function App() {
                     <Plane className="w-4 h-4 shrink-0" />
                     Matrículas
                   </button>
-                  {isHccDeskRole(userRole) && (
-                    <button
-                      type="button"
-                      onClick={() => setMainTab("infoCrew")}
-                      className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                        mainTab === "infoCrew"
-                          ? "bg-purple-600 text-white shadow-md"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      <Users className="w-4 h-4 shrink-0" />
-                      Info Crew
-                    </button>
-                  )}
                   {false && canAccessCostControlling(userRole) && (
                     <button
                       type="button"
@@ -1574,17 +1551,6 @@ function App() {
                       >
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         Buscador demoras
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMainTab("combustible")}
-                        className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 ${
-                          mainTab === "combustible"
-                            ? "bg-orange-600 text-white shadow-md"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
-                      >
-                        Combustible
                       </button>
                     </>
                   )}
@@ -1709,8 +1675,6 @@ function App() {
               <>Pernocte</>
             ) : mainTab === "matriculas" && isAdminOrHccDesk(userRole) ? (
               <>Matrículas</>
-            ) : mainTab === "infoCrew" && isHccDeskRole(userRole) ? (
-              <>Info Crew</>
             ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
               <>Cost controlling</>
             ) : mainTab === "statusEquiposGRH" ? (
@@ -1776,11 +1740,6 @@ function App() {
             onSaveModel={handleSaveFleetModel}
             onAdd={handleAddFleetReg}
           />
-        ) : mainTab === "infoCrew" && isHccDeskRole(userRole) ? (
-          <InfoCrewView
-            flights={flightsForSelectedDate}
-            selectedDate={selectedDate}
-          />
         ) : mainTab === "costControlling" && canAccessCostControlling(userRole) ? (
           <CostControllingView flights={flights} />
         ) : mainTab === "casosAtc" && (userRole === "AJS" || userRole === "ADMIN") ? (
@@ -1804,11 +1763,6 @@ function App() {
           <HccTicketsView
             flights={flightsForSelectedDate}
             currentUser={currentUser}
-          />
-        ) : mainTab === "combustible" && (userRole === "AJS" || isCombustibleRole(userRole)) ? (
-          <CombustibleBoard
-            flights={flightsForSelectedDate}
-            selectedDate={selectedDate}
           />
         ) : mainTab === "statusEquiposGRH" ? (
           <StatusEquiposGRHView currentUser={currentUser} />
