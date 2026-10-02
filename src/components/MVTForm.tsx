@@ -275,6 +275,9 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
     );
     const canSendMvt = sendGate.ok;
     const sendBlockMessage = !sendGate.ok ? sendGate.message : null;
+    const hasCod66 = data.dlyCod1 === "66" || data.dlyCod2 === "66";
+    /** HCC puede adjuntar briefing siempre; con COD 66 es obligatorio para todos. */
+    const showBriefingUpload = hasCod66 || userRole === "HCC";
     const maxPax = useMemo(() => getMvtMaxPax(flight.reg), [flight.reg]);
     const maxPaxHint = useMemo(() => getMvtMaxPaxLabel(flight.reg), [flight.reg]);
 
@@ -382,82 +385,6 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
                         <DelayCodeSelect label="DLY COD 2" value={data.dlyCod2} onChange={(v) => handleChange("dlyCod2", v)} disabled={fieldDisabled(true)} />
                         <NumberInput label="DLY TIME 2" value={data.dlyTime2} onChange={(v) => handleChange("dlyTime2", v)} disabled={fieldDisabled(true)} />
                     </div>
-                    {/* Foto de Briefing Operacional si se selecciona código 66 */}
-                    {(data.dlyCod1 === "66" || data.dlyCod2 === "66") && (
-                        <div className="mt-5 p-4 rounded-xl border border-red-200 bg-white shadow-sm flex flex-col gap-3 animate-in fade-in duration-300">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping animate-duration-1000"></span>
-                                    Briefing Operacional (Código 66)
-                                    <span className="text-red-500 ml-1 font-bold">* Obligatorio</span>
-                                </label>
-                            </div>
-                            
-                            {data.briefingPhoto ? (
-                                <div className="relative group max-w-sm rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
-                                    <img 
-                                        src={data.briefingPhoto} 
-                                        alt="Briefing Operacional" 
-                                        className="w-full h-auto max-h-60 object-contain rounded-lg"
-                                    />
-                                    <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                                        {userRole && isHccDeskRole(userRole) && (
-                                            <button
-                                                type="button"
-                                                onClick={() => downloadBriefingPhoto(flight, data.briefingPhoto)}
-                                                className="p-2 bg-sky-600 hover:bg-sky-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
-                                                title="Descargar imagen del briefing"
-                                            >
-                                                <ImageDown className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                        {!fieldDisabled(true) && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleChange("briefingPhoto", "")}
-                                                className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
-                                                title="Eliminar foto"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center border-2 border-dashed border-red-300 rounded-xl p-6 bg-slate-50 hover:bg-red-50/20 transition-colors">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        id="briefing-photo-input"
-                                        disabled={fieldDisabled(true)}
-                                        onChange={async (e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                                try {
-                                                    const base64 = await compressImage(file);
-                                                    handleChange("briefingPhoto", base64);
-                                                } catch (err) {
-                                                    console.error("Error compressing image:", err);
-                                                    alert("No se pudo procesar la imagen. Intentá con otra.");
-                                                }
-                                            }
-                                        }}
-                                        className="hidden"
-                                    />
-                                    <label
-                                        htmlFor="briefing-photo-input"
-                                        className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-black uppercase tracking-wide cursor-pointer transition-colors shadow-md ${fieldDisabled(true) ? "opacity-50 pointer-events-none" : ""}`}
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Adjuntar Foto Briefing
-                                    </label>
-                                    <p className="text-xs text-slate-500 mt-2 text-center">
-                                        Subí un archivo de imagen o tomá una foto desde la cámara.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
                     <div className="mt-4 flex flex-col gap-1.5 focus-within:text-red-600 transition-colors">
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Observaciones (Demora)</label>
                         <textarea
@@ -467,6 +394,102 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
                             className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-foreground transition-all min-h-[60px] resize-y disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                     </div>
+                </section>
+            )}
+
+            {showBriefingUpload && (
+                <section
+                    className={`p-4 rounded-xl border bg-white shadow-sm flex flex-col gap-3 animate-in fade-in duration-300 ${
+                        hasCod66 ? "border-red-200" : "border-sky-200"
+                    }`}
+                >
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 flex-wrap">
+                            <span
+                                className={`w-2 h-2 rounded-full ${hasCod66 ? "bg-red-500 animate-ping animate-duration-1000" : "bg-sky-500"}`}
+                            ></span>
+                            {hasCod66 ? "Briefing Operacional (Código 66)" : "Briefing Operacional"}
+                            {hasCod66 ? (
+                                <span className="text-red-500 ml-1 font-bold">* Obligatorio</span>
+                            ) : (
+                                <span className="text-sky-600 ml-1 font-bold">Opcional</span>
+                            )}
+                        </label>
+                    </div>
+
+                    {data.briefingPhoto ? (
+                        <div className="relative group max-w-sm rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                            <img
+                                src={data.briefingPhoto}
+                                alt="Briefing Operacional"
+                                className="w-full h-auto max-h-60 object-contain rounded-lg"
+                            />
+                            <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                                {userRole && isHccDeskRole(userRole) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => downloadBriefingPhoto(flight, data.briefingPhoto)}
+                                        className="p-2 bg-sky-600 hover:bg-sky-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
+                                        title="Descargar imagen del briefing"
+                                    >
+                                        <ImageDown className="w-4 h-4" />
+                                    </button>
+                                )}
+                                {!fieldDisabled(true) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleChange("briefingPhoto", "")}
+                                        className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
+                                        title="Eliminar foto"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div
+                            className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 bg-slate-50 transition-colors ${
+                                hasCod66
+                                    ? "border-red-300 hover:bg-red-50/20"
+                                    : "border-sky-300 hover:bg-sky-50/30"
+                            }`}
+                        >
+                            <input
+                                type="file"
+                                accept="image/*"
+                                id="briefing-photo-input"
+                                disabled={fieldDisabled(true)}
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        try {
+                                            const base64 = await compressImage(file);
+                                            handleChange("briefingPhoto", base64);
+                                        } catch (err) {
+                                            console.error("Error compressing image:", err);
+                                            alert("No se pudo procesar la imagen. Intentá con otra.");
+                                        }
+                                    }
+                                }}
+                                className="hidden"
+                            />
+                            <label
+                                htmlFor="briefing-photo-input"
+                                className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-black uppercase tracking-wide cursor-pointer transition-colors shadow-md ${
+                                    hasCod66
+                                        ? "bg-red-600 hover:bg-red-500"
+                                        : "bg-sky-600 hover:bg-sky-500"
+                                } ${fieldDisabled(true) ? "opacity-50 pointer-events-none" : ""}`}
+                            >
+                                <Plus className="w-4 h-4" />
+                                Adjuntar Foto Briefing
+                            </label>
+                            <p className="text-xs text-slate-500 mt-2 text-center">
+                                Subí un archivo de imagen o tomá una foto desde la cámara.
+                            </p>
+                        </div>
+                    )}
                 </section>
             )}
 
