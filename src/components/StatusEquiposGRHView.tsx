@@ -30,12 +30,16 @@ type StatusOption = "Operativo" | "Inoperativo" | "No disponible";
 
 type SubTab = "estado" | "historial";
 
+type Prestador = "ITC" | "ARSA" | "OTRO";
+const PRESTADORES: Prestador[] = ["ITC", "ARSA", "OTRO"];
+
 interface EquipoHistorial {
   id: string;
   numero: string;
   tipo: TipoEquipo;
   aeropuerto: string;
   marcaModelo?: string;
+  prestador: Prestador;
   createdAt: number;
   createdBy: string;
 }
@@ -76,6 +80,7 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
   const [newEquipoNumero, setNewEquipoNumero] = useState("");
   const [newEquipoTipo, setNewEquipoTipo] = useState<TipoEquipo>("GPU");
   const [newEquipoMarcaModelo, setNewEquipoMarcaModelo] = useState("");
+  const [newEquipoPrestador, setNewEquipoPrestador] = useState<Prestador>("ITC");
   
   // Modal state for adding falla
   const [showAddFalla, setShowAddFalla] = useState(false);
@@ -195,16 +200,25 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       numero: newEquipoNumero.trim(),
       tipo: newEquipoTipo,
       aeropuerto: selectedAeropuerto,
+      prestador: newEquipoPrestador,
       ...(newEquipoMarcaModelo.trim() && { marcaModelo: newEquipoMarcaModelo.trim() }),
       createdAt: Date.now(),
       createdBy: userName
     };
     
     const newRef = push(ref(db, "historialEquipos/equipos"));
-    set(newRef, newEquipo);
+    set(newRef, newEquipo)
+      .then(() => {
+        console.log("Equipo agregado correctamente");
+      })
+      .catch((error) => {
+        console.error("Error al agregar equipo:", error);
+        alert("Error al agregar equipo: " + error.message);
+      });
     
     setNewEquipoNumero("");
     setNewEquipoMarcaModelo("");
+    setNewEquipoPrestador("ITC");
     setShowAddEquipo(false);
   };
 
@@ -347,6 +361,8 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
           setNewEquipoTipo={setNewEquipoTipo}
           newEquipoMarcaModelo={newEquipoMarcaModelo}
           setNewEquipoMarcaModelo={setNewEquipoMarcaModelo}
+          newEquipoPrestador={newEquipoPrestador}
+          setNewEquipoPrestador={setNewEquipoPrestador}
           handleAddEquipo={handleAddEquipo}
           handleDeleteEquipo={handleDeleteEquipo}
           showAddFalla={showAddFalla}
@@ -490,6 +506,8 @@ interface HistorialIncidenciasTabProps {
   setNewEquipoTipo: (t: TipoEquipo) => void;
   newEquipoMarcaModelo: string;
   setNewEquipoMarcaModelo: (m: string) => void;
+  newEquipoPrestador: Prestador;
+  setNewEquipoPrestador: (p: Prestador) => void;
   handleAddEquipo: () => void;
   handleDeleteEquipo: (id: string) => void;
   showAddFalla: boolean;
@@ -520,6 +538,8 @@ function HistorialIncidenciasTab({
   setNewEquipoTipo,
   newEquipoMarcaModelo,
   setNewEquipoMarcaModelo,
+  newEquipoPrestador,
+  setNewEquipoPrestador,
   handleAddEquipo,
   handleDeleteEquipo,
   showAddFalla,
@@ -601,12 +621,17 @@ function HistorialIncidenciasTab({
           {equipos.map((equipo) => {
             const fallas = getFallasForEquipo(equipo.id);
             const isExpanded = expandedEquipos.has(equipo.id);
+            const prestadorColor = equipo.prestador === "ITC" 
+              ? "border-l-emerald-500 bg-emerald-50" 
+              : equipo.prestador === "ARSA" 
+              ? "border-l-cyan-500 bg-cyan-50" 
+              : "border-l-slate-400 bg-slate-50";
             
             return (
-              <div key={equipo.id} className="border border-slate-200 rounded-xl overflow-hidden">
+              <div key={equipo.id} className={`border border-slate-200 rounded-xl overflow-hidden border-l-4 ${prestadorColor}`}>
                 {/* Equipment Header */}
                 <div 
-                  className="bg-slate-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
+                  className="px-4 py-3 flex items-center justify-between cursor-pointer hover:brightness-95 transition-all"
                   onClick={() => toggleExpanded(equipo.id)}
                 >
                   <div className="flex items-center gap-3">
@@ -617,12 +642,19 @@ function HistorialIncidenciasTab({
                     }`}>
                       {equipo.tipo}
                     </span>
+                    <span className={`px-2 py-1 rounded-md text-xs font-bold ${
+                      equipo.prestador === "ITC" ? "bg-emerald-500 text-white" :
+                      equipo.prestador === "ARSA" ? "bg-cyan-500 text-white" :
+                      "bg-slate-500 text-white"
+                    }`}>
+                      {equipo.prestador || "OTRO"}
+                    </span>
                     <span className="font-bold text-slate-800">#{equipo.numero}</span>
                     {equipo.marcaModelo && (
                       <span className="text-sm text-slate-500 italic">{equipo.marcaModelo}</span>
                     )}
                     <span className="text-sm text-slate-500">
-                      ({fallas.length} {fallas.length === 1 ? "falla" : "fallas"})
+                      ({fallas.length} {fallas.length === 1 ? "evento" : "eventos"})
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -658,7 +690,7 @@ function HistorialIncidenciasTab({
                   <div className="border-t border-slate-200">
                     {fallas.length === 0 ? (
                       <div className="px-4 py-6 text-center text-slate-500 text-sm">
-                        No hay fallas registradas para este equipo
+                        No hay eventos registrados para este equipo
                       </div>
                     ) : (
                       <div className="divide-y divide-slate-100">
@@ -755,6 +787,27 @@ function HistorialIncidenciasTab({
                   placeholder="Ej: Hobart 4400, etc."
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Prestador de Servicios</label>
+                <div className="flex gap-2">
+                  {PRESTADORES.map((prest) => (
+                    <button
+                      key={prest}
+                      type="button"
+                      onClick={() => setNewEquipoPrestador(prest)}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex-1 ${
+                        newEquipoPrestador === prest
+                          ? prest === "ITC" ? "bg-emerald-500 text-white" :
+                            prest === "ARSA" ? "bg-cyan-500 text-white" :
+                            "bg-slate-500 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {prest}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
