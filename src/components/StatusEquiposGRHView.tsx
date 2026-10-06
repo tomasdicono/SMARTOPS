@@ -109,6 +109,9 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       } else {
         setEquiposHistorial({});
       }
+    }, (error) => {
+      console.error("Error cargando equipos historial:", error);
+      setLoadingHistorial(false);
     });
     
     const unsubFallas = onValue(fallasRef, (snap) => {
@@ -117,6 +120,9 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       } else {
         setFallasHistorial({});
       }
+      setLoadingHistorial(false);
+    }, (error) => {
+      console.error("Error cargando fallas historial:", error);
       setLoadingHistorial(false);
     });
     
@@ -248,7 +254,7 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
     return { status, isOutdated, tooltip };
   };
 
-  if (loading || loadingHistorial) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
@@ -301,7 +307,11 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       </div>
       
       {subTab === "historial" ? (
-        <HistorialIncidenciasTab
+        loadingHistorial ? (
+          <div className="flex items-center justify-center p-12">
+            <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+          </div>
+        ) : <HistorialIncidenciasTab
           aeropuertos={AEROPUERTOS_HISTORIAL}
           selectedAeropuerto={selectedAeropuerto}
           setSelectedAeropuerto={setSelectedAeropuerto}
