@@ -35,6 +35,7 @@ interface EquipoHistorial {
   numero: string;
   tipo: TipoEquipo;
   aeropuerto: string;
+  marcaModelo?: string;
   createdAt: number;
   createdBy: string;
 }
@@ -74,6 +75,7 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
   const [showAddEquipo, setShowAddEquipo] = useState(false);
   const [newEquipoNumero, setNewEquipoNumero] = useState("");
   const [newEquipoTipo, setNewEquipoTipo] = useState<TipoEquipo>("GPU");
+  const [newEquipoMarcaModelo, setNewEquipoMarcaModelo] = useState("");
   
   // Modal state for adding falla
   const [showAddFalla, setShowAddFalla] = useState(false);
@@ -193,6 +195,7 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       numero: newEquipoNumero.trim(),
       tipo: newEquipoTipo,
       aeropuerto: selectedAeropuerto,
+      ...(newEquipoMarcaModelo.trim() && { marcaModelo: newEquipoMarcaModelo.trim() }),
       createdAt: Date.now(),
       createdBy: userName
     };
@@ -201,6 +204,7 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
     set(newRef, newEquipo);
     
     setNewEquipoNumero("");
+    setNewEquipoMarcaModelo("");
     setShowAddEquipo(false);
   };
 
@@ -341,6 +345,8 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
           setNewEquipoNumero={setNewEquipoNumero}
           newEquipoTipo={newEquipoTipo}
           setNewEquipoTipo={setNewEquipoTipo}
+          newEquipoMarcaModelo={newEquipoMarcaModelo}
+          setNewEquipoMarcaModelo={setNewEquipoMarcaModelo}
           handleAddEquipo={handleAddEquipo}
           handleDeleteEquipo={handleDeleteEquipo}
           showAddFalla={showAddFalla}
@@ -482,6 +488,8 @@ interface HistorialIncidenciasTabProps {
   setNewEquipoNumero: (n: string) => void;
   newEquipoTipo: TipoEquipo;
   setNewEquipoTipo: (t: TipoEquipo) => void;
+  newEquipoMarcaModelo: string;
+  setNewEquipoMarcaModelo: (m: string) => void;
   handleAddEquipo: () => void;
   handleDeleteEquipo: (id: string) => void;
   showAddFalla: boolean;
@@ -510,6 +518,8 @@ function HistorialIncidenciasTab({
   setNewEquipoNumero,
   newEquipoTipo,
   setNewEquipoTipo,
+  newEquipoMarcaModelo,
+  setNewEquipoMarcaModelo,
   handleAddEquipo,
   handleDeleteEquipo,
   showAddFalla,
@@ -608,6 +618,9 @@ function HistorialIncidenciasTab({
                       {equipo.tipo}
                     </span>
                     <span className="font-bold text-slate-800">#{equipo.numero}</span>
+                    {equipo.marcaModelo && (
+                      <span className="text-sm text-slate-500 italic">{equipo.marcaModelo}</span>
+                    )}
                     <span className="text-sm text-slate-500">
                       ({fallas.length} {fallas.length === 1 ? "falla" : "fallas"})
                     </span>
@@ -728,6 +741,18 @@ function HistorialIncidenciasTab({
                   value={newEquipoNumero}
                   onChange={(e) => setNewEquipoNumero(e.target.value)}
                   placeholder="Ej: 001, A12, etc."
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">
+                  Marca / Modelo <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={newEquipoMarcaModelo}
+                  onChange={(e) => setNewEquipoMarcaModelo(e.target.value)}
+                  placeholder="Ej: Hobart 4400, etc."
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all"
                 />
               </div>
