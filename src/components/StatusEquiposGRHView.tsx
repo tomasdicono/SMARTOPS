@@ -84,7 +84,14 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
 
   useEffect(() => {
     const statusRef = ref(db, "statusEquiposGRH");
+    
+    // Timeout para evitar loading infinito
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+    
     const unsub = onValue(statusRef, (snap) => {
+      clearTimeout(timeout);
       if (snap.exists()) {
         setData(snap.val());
       } else {
@@ -92,16 +99,25 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       }
       setLoading(false);
     }, (error) => {
+      clearTimeout(timeout);
       console.error("Error cargando statusEquiposGRH:", error);
       setLoading(false);
     });
-    return () => unsub();
+    return () => {
+      clearTimeout(timeout);
+      unsub();
+    };
   }, []);
 
   // Load historial data
   useEffect(() => {
     const equiposRef = ref(db, "historialEquipos/equipos");
     const fallasRef = ref(db, "historialEquipos/fallas");
+    
+    // Timeout para evitar loading infinito
+    const timeout = setTimeout(() => {
+      setLoadingHistorial(false);
+    }, 5000);
     
     const unsubEquipos = onValue(equiposRef, (snap) => {
       if (snap.exists()) {
@@ -111,10 +127,10 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       }
     }, (error) => {
       console.error("Error cargando equipos historial:", error);
-      setLoadingHistorial(false);
     });
     
     const unsubFallas = onValue(fallasRef, (snap) => {
+      clearTimeout(timeout);
       if (snap.exists()) {
         setFallasHistorial(snap.val());
       } else {
@@ -122,11 +138,13 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       }
       setLoadingHistorial(false);
     }, (error) => {
+      clearTimeout(timeout);
       console.error("Error cargando fallas historial:", error);
       setLoadingHistorial(false);
     });
     
     return () => {
+      clearTimeout(timeout);
       unsubEquipos();
       unsubFallas();
     };
