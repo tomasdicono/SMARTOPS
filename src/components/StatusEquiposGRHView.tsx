@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, push, remove } from "firebase/database";
 import { db } from "../lib/firebase";
-import { Loader2, AlertTriangle, Plus, Trash2, History, Wrench, ChevronDown, X } from "lucide-react";
+import { Loader2, AlertTriangle, Plus, Trash2, History, Wrench, ChevronDown, X, Upload } from "lucide-react";
 import type { User } from "../types";
 import { startOfWeek, isBefore, format } from "date-fns";
+import * as XLSX from "xlsx";
 
 const BASES = [
   "AEP", "EZE", "BRC", "COR", "CPC", "CRD", "FTE", "JUJ", "IGR", "MDZ", "NQN", 
@@ -81,6 +82,10 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
   const [newEquipoTipo, setNewEquipoTipo] = useState<TipoEquipo>("GPU");
   const [newEquipoMarcaModelo, setNewEquipoMarcaModelo] = useState("");
   const [newEquipoPrestador, setNewEquipoPrestador] = useState<Prestador>("ITC");
+  
+  // Excel import state
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Modal state for adding falla
   const [showAddFalla, setShowAddFalla] = useState(false);
@@ -220,6 +225,88 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
     setNewEquipoMarcaModelo("");
     setNewEquipoPrestador("ITC");
     setShowAddEquipo(false);
+  };
+
+  const handleImportExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        const userName = currentUser?.name?.trim() || currentUser?.email || "Usuario";
+        let imported = 0;
+        let errors = 0;
+
+        for (const row of jsonData as Record<string, unknown>[]) {
+          const tipoRaw = String(row["Equipo"] || row["EQUIPO"] || row["Tipo"] || row["TIPO"] || "").toUpperCase().trim();
+          const numero = String(row["Número de equipo"] || row["NÚMERO DE EQUIPO"] || row["Numero"] || row["NUMERO"] || row["Número"] || "").trim();
+          const marcaModelo = String(row["Marca/Modelo"] || row["MARCA/MODELO"] || row["Marca"] || row["MARCA"] || "").trim();
+          const prestadorRaw = String(row["Proveedor"] || row["PROVEEDOR"] || row["Prestador"] || row["PRESTADOR"] || "").toUpperCase().trim();
+          const aeropuerto = String(row["ATO"] || row["ato"] || row["Aeropuerto"] || row["AEROPUERTO"] || "").toUpperCase().trim();
+
+          // Validar tipo
+          let tipo: TipoEquipo;
+          if (tipoRaw === "GPU") tipo = "GPU";
+          else if (tipoRaw === "ASU") tipo = "ASU";
+          else if (tipoRaw === "ACU") tipo = "ACU";
+          else {
+            errors++;
+            continue;
+          }
+
+          // Validar prestador
+          let prestador: Prestador;
+          if (prestadorRaw === "ITC") prestador = "ITC";
+          else if (prestadorRaw === "ARSA") prestador = "ARSA";
+          else prestador = "OTRO";
+
+          // Validar campos requeridos
+          if (!numero || !aeropuerto) {
+            errors++;
+            continue;
+          }
+
+          const newEquipo: Omit<EquipoHistorial, "id"> = {
+            numero,
+            tipo,
+            aeropuerto,
+            prestador,
+            ...(marcaModelo && { marcaModelo }),
+            createdAt: Date.now(),
+            createdBy: userName
+          };
+
+          try {
+            const newRef = push(ref(db, "historialEquipos/equipos"));
+            await set(newRef, newEquipo);
+            imported++;
+          } catch {
+            errors++;
+          }
+        }
+
+        alert(`Importación completada:\n- ${imported} equipos importados\n- ${errors} errores`);
+      } catch (error) {
+        console.error("Error al importar Excel:", error);
+        alert("Error al procesar el archivo Excel");
+      } finally {
+        setIsImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
   };
 
   const handleDeleteEquipo = (equipoId: string) => {
@@ -364,6 +451,9 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
           newEquipoPrestador={newEquipoPrestador}
           setNewEquipoPrestador={setNewEquipoPrestador}
           handleAddEquipo={handleAddEquipo}
+          handleImportExcel={handleImportExcel}
+          isImporting={isImporting}
+          fileInputRef={fileInputRef}
           handleDeleteEquipo={handleDeleteEquipo}
           showAddFalla={showAddFalla}
           setShowAddFalla={setShowAddFalla}
@@ -509,6 +599,9 @@ interface HistorialIncidenciasTabProps {
   newEquipoPrestador: Prestador;
   setNewEquipoPrestador: (p: Prestador) => void;
   handleAddEquipo: () => void;
+  handleImportExcel: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  isImporting: boolean;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   handleDeleteEquipo: (id: string) => void;
   showAddFalla: boolean;
   setShowAddFalla: (show: boolean) => void;
@@ -541,6 +634,9 @@ function HistorialIncidenciasTab({
   newEquipoPrestador,
   setNewEquipoPrestador,
   handleAddEquipo,
+  handleImportExcel,
+  isImporting,
+  fileInputRef,
   handleDeleteEquipo,
   showAddFalla,
   setShowAddFalla,
@@ -599,14 +695,36 @@ function HistorialIncidenciasTab({
         <h3 className="text-lg font-bold text-slate-800">
           Equipos en {selectedAeropuerto}
         </h3>
-        <button
-          type="button"
-          onClick={() => setShowAddEquipo(true)}
-          className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-600 transition-all flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Agregar Equipo
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".xlsx,.xls"
+            onChange={handleImportExcel}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+            className="px-4 py-2 bg-slate-600 text-white rounded-lg text-sm font-bold hover:bg-slate-700 transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {isImporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            Importar Excel
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddEquipo(true)}
+            className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-600 transition-all flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar Equipo
+          </button>
+        </div>
       </div>
 
       {/* Equipment List */}
