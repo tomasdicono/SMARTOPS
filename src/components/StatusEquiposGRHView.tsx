@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, push, remove } from "firebase/database";
 import { db } from "../lib/firebase";
-import { Loader2, AlertTriangle, Plus, Trash2, History, Wrench, ChevronDown, X, Upload } from "lucide-react";
+import { Loader2, AlertTriangle, Plus, Trash2, History, Wrench, ChevronDown, X } from "lucide-react";
 import type { User } from "../types";
 import { startOfWeek, isBefore, format } from "date-fns";
 import * as XLSX from "xlsx";
@@ -197,8 +197,12 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   };
 
-  const handleAddEquipo = () => {
+  const [isSavingEquipo, setIsSavingEquipo] = useState(false);
+  
+  const handleAddEquipo = async () => {
     if (!newEquipoNumero.trim()) return;
+    
+    setIsSavingEquipo(true);
     
     const userName = currentUser?.name?.trim() || currentUser?.email || "Usuario";
     const newEquipo: Omit<EquipoHistorial, "id"> = {
@@ -211,20 +215,20 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
       createdBy: userName
     };
     
-    const newRef = push(ref(db, "historialEquipos/equipos"));
-    set(newRef, newEquipo)
-      .then(() => {
-        console.log("Equipo agregado correctamente");
-      })
-      .catch((error) => {
-        console.error("Error al agregar equipo:", error);
-        alert("Error al agregar equipo: " + error.message);
-      });
-    
-    setNewEquipoNumero("");
-    setNewEquipoMarcaModelo("");
-    setNewEquipoPrestador("ITC");
-    setShowAddEquipo(false);
+    try {
+      const newRef = push(ref(db, "historialEquipos/equipos"));
+      await set(newRef, newEquipo);
+      console.log("Equipo agregado correctamente");
+      setNewEquipoNumero("");
+      setNewEquipoMarcaModelo("");
+      setNewEquipoPrestador("ITC");
+      setShowAddEquipo(false);
+    } catch (error) {
+      console.error("Error al agregar equipo:", error);
+      alert("Error al agregar equipo: " + (error as Error).message);
+    } finally {
+      setIsSavingEquipo(false);
+    }
   };
 
   const handleImportExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -451,6 +455,7 @@ export function StatusEquiposGRHView({ currentUser }: StatusEquiposGRHViewProps)
           newEquipoPrestador={newEquipoPrestador}
           setNewEquipoPrestador={setNewEquipoPrestador}
           handleAddEquipo={handleAddEquipo}
+          isSavingEquipo={isSavingEquipo}
           handleImportExcel={handleImportExcel}
           isImporting={isImporting}
           fileInputRef={fileInputRef}
@@ -599,6 +604,7 @@ interface HistorialIncidenciasTabProps {
   newEquipoPrestador: Prestador;
   setNewEquipoPrestador: (p: Prestador) => void;
   handleAddEquipo: () => void;
+  isSavingEquipo: boolean;
   handleImportExcel: (event: React.ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -634,9 +640,10 @@ function HistorialIncidenciasTab({
   newEquipoPrestador,
   setNewEquipoPrestador,
   handleAddEquipo,
-  handleImportExcel,
-  isImporting,
-  fileInputRef,
+  isSavingEquipo,
+  // handleImportExcel,
+  // isImporting,
+  // fileInputRef,
   handleDeleteEquipo,
   showAddFalla,
   setShowAddFalla,
@@ -696,6 +703,7 @@ function HistorialIncidenciasTab({
           Equipos en {selectedAeropuerto}
         </h3>
         <div className="flex items-center gap-2">
+          {/* Importar Excel desactivado temporalmente
           <input
             type="file"
             ref={fileInputRef}
@@ -716,6 +724,7 @@ function HistorialIncidenciasTab({
             )}
             Importar Excel
           </button>
+          */}
           <button
             type="button"
             onClick={() => setShowAddEquipo(true)}
@@ -939,10 +948,17 @@ function HistorialIncidenciasTab({
               <button
                 type="button"
                 onClick={handleAddEquipo}
-                disabled={!newEquipoNumero.trim()}
-                className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!newEquipoNumero.trim() || isSavingEquipo}
+                className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Agregar
+                {isSavingEquipo ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Agregar"
+                )}
               </button>
             </div>
           </div>
