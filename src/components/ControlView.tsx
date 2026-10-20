@@ -47,6 +47,7 @@ import { ControlPaxStatsCard } from "./ControlPaxStatsCard";
 import { AlternoIcon } from "./AlternoIcon";
 import { ControlTimelineTab } from "./ControlTimelineTab";
 import { ControlDashboardAjsTab } from "./ControlDashboardAjsTab";
+import { ControlLimpiezaTab } from "./ControlLimpiezaTab";
 import { RemoveQrfConfirmModal } from "./RemoveQrfConfirmModal";
 import {
     BarChart3,
@@ -93,7 +94,7 @@ interface Props {
 /** Pestaña «Línea de tiempo» en Control operacional. */
 const SHOW_TIMELINE_TAB = true;
 
-type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel" | "usage" | "gpu" | "dashboard";
+type ControlSubTab = "timeline" | "obvk" | "stats" | "statusDia" | "fuel" | "usage" | "gpu" | "dashboard" | "limpieza";
 
 export function ControlView({
     flights,
@@ -488,6 +489,18 @@ export function ControlView({
                             Dashboard de seguimiento
                         </button>
                     )}
+                    <button
+                        type="button"
+                        onClick={() => setSubTab("limpieza")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all ${
+                            subTab === "limpieza"
+                                ? "bg-violet-600 text-white shadow-md"
+                                : "bg-white/80 text-slate-600 hover:bg-white border border-transparent hover:border-slate-200"
+                        }`}
+                    >
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        Limpieza
+                    </button>
                 </div>
 
                 {/* ——— Línea de tiempo ——— */}
@@ -497,6 +510,10 @@ export function ControlView({
 
                 {subTab === "dashboard" && (
                     <ControlDashboardAjsTab flights={flights} />
+                )}
+
+                {subTab === "limpieza" && (
+                    <ControlLimpiezaTab flights={statsFlights} />
                 )}
 
                 {subTab === "obvk" && (
