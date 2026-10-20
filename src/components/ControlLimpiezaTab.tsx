@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Flight } from "../types";
 import { normalizeHitosData } from "../lib/flightDataNormalize";
 import { isTrasladoFlight, getAirlinePrefix } from "../lib/flightHelpers";
+import { flightDateToIso } from "../lib/controlHelpers";
 import { Sparkles, CheckCircle2, XCircle, Plane, BarChart3, Download, Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -39,7 +40,8 @@ interface CumplimientoProgramada {
 function filterFlightsByDate(flights: Flight[], dateFrom: string, dateTo: string): Flight[] {
     if (!dateFrom && !dateTo) return flights;
     return flights.filter(f => {
-        const d = f.date || "";
+        const d = flightDateToIso(f);
+        if (!d) return false;
         if (dateFrom && d < dateFrom) return false;
         if (dateTo && d > dateTo) return false;
         return true;
@@ -89,7 +91,7 @@ function computeCumplimientoProgramada(flights: Flight[]): CumplimientoProgramad
     
     for (const f of validFlights) {
         const reg = f.reg?.trim().toUpperCase() || "";
-        const date = f.date || "";
+        const date = flightDateToIso(f);
         if (!reg || !date) continue;
         
         const key = `${reg}-${date}`;
@@ -217,7 +219,7 @@ function downloadLimpiezaExcel(
         const limpieza = h.limpiezaStatus === "si" ? "Sí" : h.limpiezaStatus === "no" ? "No" : "Sin info";
         const tipo = h.limpiezaTipo === "planificada" ? "Planificada" : h.limpiezaTipo === "crew" ? "Crew" : "-";
         return [
-            f.date || "",
+            flightDateToIso(f) || "",
             `${getAirlinePrefix(f.flt)}${f.flt}`,
             f.reg || "",
             f.dep || "",
