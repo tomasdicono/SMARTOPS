@@ -513,7 +513,7 @@ export function ControlView({
                 )}
 
                 {subTab === "limpieza" && (
-                    <ControlLimpiezaTab flights={statsFlights} />
+                    <ControlLimpiezaTab flights={flights} />
                 )}
 
                 {subTab === "obvk" && (
