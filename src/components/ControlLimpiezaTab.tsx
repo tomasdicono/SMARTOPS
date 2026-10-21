@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Flight } from "../types";
 import { isTrasladoFlight, getAirlinePrefix, flightNeedsCleaningWarning, getHitosDepartureTime } from "../lib/flightHelpers";
-import { flightDateToIso } from "../lib/controlHelpers";
+import { flightDateToIso, parseHHmmToMinutes } from "../lib/controlHelpers";
 import { ARGENTINA_AIRPORTS } from "../lib/costControllingHelpers";
 import { Sparkles, CheckCircle2, Plane, BarChart3, Download, Calendar, Target } from "lucide-react";
 
@@ -36,6 +36,7 @@ interface ProgramadaRow {
     arr: string;
     std: string;
     motivo: string;
+    marcadoEn: string;
     ejecutada: boolean;
 }
 
@@ -63,6 +64,12 @@ function operationalFlights(flights: Flight[]): Flight[] {
     return flights.filter(f => !isTrasladoFlight(f) && !f.cancelled);
 }
 
+function compareFlightTimeline(a: Flight, b: Flight): number {
+    const dateCmp = flightDateToIso(a).localeCompare(flightDateToIso(b));
+    if (dateCmp !== 0) return dateCmp;
+    return parseHHmmToMinutes(getHitosDepartureTime(a)) - parseHHmmToMinutes(getHitosDepartureTime(b));
+}
+
 function firstDeparturesByRegAndDate(flights: Flight[]): Set<string> {
     const byKey = new Map<string, Flight>();
     for (const f of flights) {
@@ -71,51 +78,89 @@ function firstDeparturesByRegAndDate(flights: Flight[]): Set<string> {
         if (!reg || !date) continue;
         const key = `${reg}|${date}`;
         const prev = byKey.get(key);
-        if (!prev || getHitosDepartureTime(f).localeCompare(getHitosDepartureTime(prev)) < 0) {
+        if (!prev || compareFlightTimeline(f, prev) < 0) {
             byKey.set(key, f);
         }
     }
     return new Set([...byKey.values()].map(f => f.id));
 }
 
-function isProgramadaEsperada(f: Flight, firstDepartureIds: Set<string>): boolean {
-    return firstDepartureIds.has(f.id) || flightNeedsCleaningWarning(f);
+function buildNextFlightById(timelineFlights: Flight[]): Map<string, Flight> {
+    const byReg = new Map<string, Flight[]>();
+    for (const f of timelineFlights) {
+        const reg = f.reg?.trim().toUpperCase() || "";
+        if (!reg) continue;
+        const list = byReg.get(reg) ?? [];
+        list.push(f);
+        byReg.set(reg, list);
+    }
+    const nextById = new Map<string, Flight>();
+    for (const list of byReg.values()) {
+        list.sort(compareFlightTimeline);
+        for (let i = 0; i < list.length - 1; i++) {
+            nextById.set(list[i].id, list[i + 1]);
+        }
+    }
+    return nextById;
 }
 
-function computeProgramadas(flights: Flight[]): ProgramadaRow[] {
-    const ops = operationalFlights(flights);
-    const firstIds = firstDeparturesByRegAndDate(ops);
-    return ops
-        .filter(f => isArgentinaDeparture(f) && isProgramadaEsperada(f, firstIds))
-        .map(f => {
-            const first = firstIds.has(f.id);
-            const longBlock = flightNeedsCleaningWarning(f);
-            const motivo = first && longBlock
-                ? "Primera salida + bloque > 03:30"
-                : first
-                    ? "Primera salida del día"
-                    : "Bloque > 03:30hs";
-            return {
-                fecha: flightDateToIso(f) || "",
-                vuelo: `${getAirlinePrefix(f.flt)}${f.flt}`,
-                reg: f.reg || "",
-                dep: f.dep || "",
-                arr: f.arr || "",
-                std: f.std || "",
-                motivo,
-                ejecutada: f.hitosData?.limpiezaStatus === "si",
-            };
-        })
-        .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.vuelo.localeCompare(b.vuelo));
+function flightLabel(f: Flight): string {
+    return `${getAirlinePrefix(f.flt)}${f.flt}`;
 }
 
-function computeLimpiezaStats(flights: Flight[]): LimpiezaStats {
-    const nonTrasladoOperational = operationalFlights(flights);
+function toProgramadaRow(
+    f: Flight,
+    motivo: string,
+    checkFlight: Flight | undefined,
+    marcadoEn: string,
+): ProgramadaRow {
+    return {
+        fecha: flightDateToIso(f) || "",
+        vuelo: flightLabel(f),
+        reg: f.reg || "",
+        dep: f.dep || "",
+        arr: f.arr || "",
+        std: f.std || "",
+        motivo,
+        marcadoEn,
+        ejecutada: checkFlight?.hitosData?.limpiezaStatus === "si",
+    };
+}
+
+function computeProgramadas(scopedFlights: Flight[], timelineFlights: Flight[]): ProgramadaRow[] {
+    const scoped = operationalFlights(scopedFlights);
+    const timeline = operationalFlights(timelineFlights);
+    const firstIds = firstDeparturesByRegAndDate(scoped);
+    const nextById = buildNextFlightById(timeline);
+    const rows: ProgramadaRow[] = [];
+
+    for (const f of scoped) {
+        if (!isArgentinaDeparture(f)) continue;
+        const first = firstIds.has(f.id);
+        const longBlock = flightNeedsCleaningWarning(f);
+
+        if (first) {
+            rows.push(toProgramadaRow(f, "Primera salida del día", f, `${flightLabel(f)} (mismo vuelo)`));
+        }
+        if (longBlock) {
+            const next = nextById.get(f.id);
+            const marcadoEn = next
+                ? `${flightLabel(next)} ${flightDateToIso(next)} ${next.dep}-${next.arr}`.trim()
+                : "Sin vuelo siguiente";
+            rows.push(toProgramadaRow(f, "Bloque > 03:30hs (limpia en destino)", next, marcadoEn));
+        }
+    }
+
+    return rows.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.vuelo.localeCompare(b.vuelo) || a.motivo.localeCompare(b.motivo));
+}
+
+function computeLimpiezaStats(scopedFlights: Flight[], timelineFlights: Flight[]): LimpiezaStats {
+    const nonTrasladoOperational = operationalFlights(scopedFlights);
     
     const limpiezaTotal = nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si").length;
     const limpiezaRequeridas = nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "crew").length;
     const limpiezaPlanificadas = nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "planificada").length;
-    const programadas = computeProgramadas(nonTrasladoOperational);
+    const programadas = computeProgramadas(scopedFlights, timelineFlights);
     const programadasEsperadas = programadas.length;
     const programadasCumplidas = programadas.filter(p => p.ejecutada).length;
 
@@ -196,13 +241,14 @@ function htmlTable(headers: string[], rows: unknown[][], opts?: { lastColBadge?:
 
 function downloadLimpiezaExcel(
     flights: Flight[],
+    allFlights: Flight[],
     stats: LimpiezaStats,
     porMatricula: LimpiezaPorMatricula[],
     dateFrom: string,
     dateTo: string
 ) {
     const period = dateFrom && dateTo ? `${dateFrom} a ${dateTo}` : "Todos los vuelos";
-    const programadas = computeProgramadas(flights);
+    const programadas = computeProgramadas(flights, allFlights);
     const cumplimientoColor = stats.pctCumplimiento >= 80 ? "#10B981" : stats.pctCumplimiento >= 50 ? "#F59E0B" : "#F43F5E";
 
     const flightsConLimpieza = operationalFlights(flights).filter(f => f.hitosData?.limpiezaStatus === "si");
@@ -220,7 +266,7 @@ function downloadLimpiezaExcel(
         r.reg, r.totalVuelos, r.limpiezasEjecutadas, r.requeridas, r.planificadas, `${r.pctLimpieza.toFixed(1)}%`
     ]);
     const cumplimientoRows = programadas.map(p => [
-        p.fecha, p.vuelo, p.reg, p.dep, p.arr, p.std, p.motivo, p.ejecutada ? "Sí" : "No"
+        p.fecha, p.vuelo, p.reg, p.dep, p.arr, p.std, p.motivo, p.marcadoEn, p.ejecutada ? "Sí" : "No"
     ]);
 
     const html = `<!DOCTYPE html>
@@ -260,8 +306,8 @@ function downloadLimpiezaExcel(
     <tr><td>Limpiezas realizadas</td><td>${stats.limpiezaTotal}</td><td>${stats.pctConLimpieza.toFixed(1)}% de los vuelos</td></tr>
     <tr><td>A requerimiento (tripulación)</td><td>${stats.limpiezaRequeridas}</td><td>${stats.pctRequeridas.toFixed(1)}% de las realizadas</td></tr>
     <tr><td>Programadas (hitos)</td><td>${stats.limpiezaPlanificadas}</td><td>${stats.pctPlanificadas.toFixed(1)}% de las realizadas</td></tr>
-    <tr><td>Programadas esperadas</td><td>${stats.programadasEsperadas}</td><td>Primera salida del día + bloque &gt; 03:30hs (solo salidas de Argentina)</td></tr>
-    <tr><td>Programadas cumplidas</td><td>${stats.programadasCumplidas}</td><td>Con limpieza registrada en hitos</td></tr>
+    <tr><td>Programadas esperadas</td><td>${stats.programadasEsperadas}</td><td>Primera salida del día (mismo vuelo) + bloque &gt; 03:30hs verificado en el vuelo siguiente (solo salidas de Argentina)</td></tr>
+    <tr><td>Programadas cumplidas</td><td>${stats.programadasCumplidas}</td><td>Con limpieza registrada en hitos del vuelo correspondiente</td></tr>
     <tr class="cumpl"><td>% cumplimiento programadas</td><td>${stats.pctCumplimiento.toFixed(1)}%</td><td>${stats.programadasCumplidas} de ${stats.programadasEsperadas}</td></tr>
   </table>
   <h2>Por matrícula</h2>
@@ -269,7 +315,7 @@ function downloadLimpiezaExcel(
   <h2>Detalle de limpiezas realizadas</h2>
   ${htmlTable(["Fecha", "Vuelo", "Matrícula", "Origen", "Destino", "STD", "Tipo Limpieza"], detalleRows, { lastColBadge: true })}
   <h2>Cumplimiento de programadas</h2>
-  ${htmlTable(["Fecha", "Vuelo", "Matrícula", "Origen", "Destino", "STD", "Motivo programada", "Ejecutada"], cumplimientoRows, { lastColBadge: true })}
+  ${htmlTable(["Fecha", "Vuelo", "Matrícula", "Origen", "Destino", "STD", "Motivo programada", "Limpieza se marca en", "Ejecutada"], cumplimientoRows, { lastColBadge: true })}
 </body>
 </html>`;
 
@@ -290,11 +336,11 @@ export function ControlLimpiezaTab({ flights }: Props) {
     const [dateTo, setDateTo] = useState("");
     
     const filteredFlights = useMemo(() => filterFlightsByDate(flights, dateFrom, dateTo), [flights, dateFrom, dateTo]);
-    const stats = useMemo(() => computeLimpiezaStats(filteredFlights), [filteredFlights]);
+    const stats = useMemo(() => computeLimpiezaStats(filteredFlights, flights), [filteredFlights, flights]);
     const porMatricula = useMemo(() => computeLimpiezaPorMatricula(filteredFlights), [filteredFlights]);
 
     const handleDownloadExcel = () => {
-        downloadLimpiezaExcel(filteredFlights, stats, porMatricula, dateFrom, dateTo);
+        downloadLimpiezaExcel(filteredFlights, flights, stats, porMatricula, dateFrom, dateTo);
     };
 
     return (
@@ -428,7 +474,7 @@ export function ControlLimpiezaTab({ flights }: Props) {
                         {stats.programadasCumplidas} de {stats.programadasEsperadas} programadas
                     </div>
                     <div className="text-xs text-slate-400 mt-1">
-                        Primera salida del día + bloque &gt; 03:30hs · solo salidas de Argentina
+                        Primera salida: mismo vuelo · Bloque &gt; 03:30hs: vuelo siguiente · solo salidas de Argentina
                     </div>
                 </div>
             </div>
