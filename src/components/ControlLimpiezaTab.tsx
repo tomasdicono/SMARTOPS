@@ -2,7 +2,14 @@ import { useMemo, useState } from "react";
 import type { Flight } from "../types";
 import { isTrasladoFlight, getAirlinePrefix, flightNeedsCleaningWarning, getHitosDepartureTime } from "../lib/flightHelpers";
 import { flightDateToIso } from "../lib/controlHelpers";
+import { ARGENTINA_AIRPORTS } from "../lib/costControllingHelpers";
 import { Sparkles, CheckCircle2, Plane, BarChart3, Download, Calendar, Target } from "lucide-react";
+
+const ARGENTINA_DEP_AIRPORTS = new Set<string>([...ARGENTINA_AIRPORTS, "SDE", "UAQ"]);
+
+function isArgentinaDeparture(f: Flight): boolean {
+    return ARGENTINA_DEP_AIRPORTS.has(String(f.dep ?? "").trim().toUpperCase());
+}
 
 interface Props {
     flights: Flight[];
@@ -79,7 +86,7 @@ function computeProgramadas(flights: Flight[]): ProgramadaRow[] {
     const ops = operationalFlights(flights);
     const firstIds = firstDeparturesByRegAndDate(ops);
     return ops
-        .filter(f => isProgramadaEsperada(f, firstIds))
+        .filter(f => isArgentinaDeparture(f) && isProgramadaEsperada(f, firstIds))
         .map(f => {
             const first = firstIds.has(f.id);
             const longBlock = flightNeedsCleaningWarning(f);
@@ -253,7 +260,7 @@ function downloadLimpiezaExcel(
     <tr><td>Limpiezas realizadas</td><td>${stats.limpiezaTotal}</td><td>${stats.pctConLimpieza.toFixed(1)}% de los vuelos</td></tr>
     <tr><td>A requerimiento (tripulación)</td><td>${stats.limpiezaRequeridas}</td><td>${stats.pctRequeridas.toFixed(1)}% de las realizadas</td></tr>
     <tr><td>Programadas (hitos)</td><td>${stats.limpiezaPlanificadas}</td><td>${stats.pctPlanificadas.toFixed(1)}% de las realizadas</td></tr>
-    <tr><td>Programadas esperadas</td><td>${stats.programadasEsperadas}</td><td>Primera salida del día + bloque &gt; 03:30hs</td></tr>
+    <tr><td>Programadas esperadas</td><td>${stats.programadasEsperadas}</td><td>Primera salida del día + bloque &gt; 03:30hs (solo salidas de Argentina)</td></tr>
     <tr><td>Programadas cumplidas</td><td>${stats.programadasCumplidas}</td><td>Con limpieza registrada en hitos</td></tr>
     <tr class="cumpl"><td>% cumplimiento programadas</td><td>${stats.pctCumplimiento.toFixed(1)}%</td><td>${stats.programadasCumplidas} de ${stats.programadasEsperadas}</td></tr>
   </table>
@@ -421,7 +428,7 @@ export function ControlLimpiezaTab({ flights }: Props) {
                         {stats.programadasCumplidas} de {stats.programadasEsperadas} programadas
                     </div>
                     <div className="text-xs text-slate-400 mt-1">
-                        Primera salida del día + bloque &gt; 03:30hs
+                        Primera salida del día + bloque &gt; 03:30hs · solo salidas de Argentina
                     </div>
                 </div>
             </div>
