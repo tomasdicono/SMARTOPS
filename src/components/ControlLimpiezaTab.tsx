@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import type { Flight } from "../types";
-import { isTrasladoFlight, getAirlinePrefix } from "../lib/flightHelpers";
+import { isTrasladoFlight, getAirlinePrefix, flightNeedsCleaningWarning, getHitosDepartureTime } from "../lib/flightHelpers";
 import { flightDateToIso } from "../lib/controlHelpers";
-import { Sparkles, CheckCircle2, Plane, BarChart3, Download, Calendar } from "lucide-react";
-import * as XLSX from "xlsx";
+import { Sparkles, CheckCircle2, Plane, BarChart3, Download, Calendar, Target } from "lucide-react";
 
 interface Props {
     flights: Flight[];
@@ -17,6 +16,20 @@ interface LimpiezaStats {
     pctConLimpieza: number;
     pctRequeridas: number;
     pctPlanificadas: number;
+    programadasEsperadas: number;
+    programadasCumplidas: number;
+    pctCumplimiento: number;
+}
+
+interface ProgramadaRow {
+    fecha: string;
+    vuelo: string;
+    reg: string;
+    dep: string;
+    arr: string;
+    std: string;
+    motivo: string;
+    ejecutada: boolean;
 }
 
 interface LimpiezaPorMatricula {
@@ -39,13 +52,65 @@ function filterFlightsByDate(flights: Flight[], dateFrom: string, dateTo: string
     });
 }
 
+function operationalFlights(flights: Flight[]): Flight[] {
+    return flights.filter(f => !isTrasladoFlight(f) && !f.cancelled);
+}
+
+function firstDeparturesByRegAndDate(flights: Flight[]): Set<string> {
+    const byKey = new Map<string, Flight>();
+    for (const f of flights) {
+        const reg = f.reg?.trim().toUpperCase() || "";
+        const date = flightDateToIso(f);
+        if (!reg || !date) continue;
+        const key = `${reg}|${date}`;
+        const prev = byKey.get(key);
+        if (!prev || getHitosDepartureTime(f).localeCompare(getHitosDepartureTime(prev)) < 0) {
+            byKey.set(key, f);
+        }
+    }
+    return new Set([...byKey.values()].map(f => f.id));
+}
+
+function isProgramadaEsperada(f: Flight, firstDepartureIds: Set<string>): boolean {
+    return firstDepartureIds.has(f.id) || flightNeedsCleaningWarning(f);
+}
+
+function computeProgramadas(flights: Flight[]): ProgramadaRow[] {
+    const ops = operationalFlights(flights);
+    const firstIds = firstDeparturesByRegAndDate(ops);
+    return ops
+        .filter(f => isProgramadaEsperada(f, firstIds))
+        .map(f => {
+            const first = firstIds.has(f.id);
+            const longBlock = flightNeedsCleaningWarning(f);
+            const motivo = first && longBlock
+                ? "Primera salida + bloque > 03:30"
+                : first
+                    ? "Primera salida del día"
+                    : "Bloque > 03:30hs";
+            return {
+                fecha: flightDateToIso(f) || "",
+                vuelo: `${getAirlinePrefix(f.flt)}${f.flt}`,
+                reg: f.reg || "",
+                dep: f.dep || "",
+                arr: f.arr || "",
+                std: f.std || "",
+                motivo,
+                ejecutada: f.hitosData?.limpiezaStatus === "si",
+            };
+        })
+        .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.vuelo.localeCompare(b.vuelo));
+}
+
 function computeLimpiezaStats(flights: Flight[]): LimpiezaStats {
-    // Misma lógica que statsReport.ts
-    const nonTrasladoOperational = flights.filter(f => !isTrasladoFlight(f) && !f.cancelled);
+    const nonTrasladoOperational = operationalFlights(flights);
     
     const limpiezaTotal = nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si").length;
     const limpiezaRequeridas = nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "crew").length;
     const limpiezaPlanificadas = nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si" && f.hitosData?.limpiezaTipo === "planificada").length;
+    const programadas = computeProgramadas(nonTrasladoOperational);
+    const programadasEsperadas = programadas.length;
+    const programadasCumplidas = programadas.filter(p => p.ejecutada).length;
 
     const totalVuelos = nonTrasladoOperational.length;
 
@@ -57,6 +122,9 @@ function computeLimpiezaStats(flights: Flight[]): LimpiezaStats {
         pctConLimpieza: totalVuelos > 0 ? (limpiezaTotal / totalVuelos) * 100 : 0,
         pctRequeridas: limpiezaTotal > 0 ? (limpiezaRequeridas / limpiezaTotal) * 100 : 0,
         pctPlanificadas: limpiezaTotal > 0 ? (limpiezaPlanificadas / limpiezaTotal) * 100 : 0,
+        programadasEsperadas,
+        programadasCumplidas,
+        pctCumplimiento: programadasEsperadas > 0 ? (programadasCumplidas / programadasEsperadas) * 100 : 0,
     };
 }
 
@@ -96,6 +164,29 @@ function computeLimpiezaPorMatricula(flights: Flight[]): LimpiezaPorMatricula[] 
         .sort((a, b) => b.limpiezasEjecutadas - a.limpiezasEjecutadas);
 }
 
+function escHtml(value: unknown): string {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function htmlTable(headers: string[], rows: unknown[][], opts?: { lastColBadge?: boolean }): string {
+    const head = headers.map(h => `<th>${escHtml(h)}</th>`).join("");
+    const body = rows.map((row, i) => {
+        const tds = row.map((cell, idx) => {
+            const raw = String(cell ?? "");
+            let cls = "";
+            if (opts?.lastColBadge && idx === row.length - 1) {
+                cls = raw === "Sí" ? "ok" : raw === "No" ? "bad" : raw === "Programada" ? "prog" : raw === "A Requerimiento" ? "req" : "";
+            }
+            return `<td class="${cls}">${escHtml(raw)}</td>`;
+        }).join("");
+        return `<tr class="${i % 2 ? "alt" : ""}">${tds}</tr>`;
+    }).join("");
+    return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
 function downloadLimpiezaExcel(
     flights: Flight[],
     stats: LimpiezaStats,
@@ -103,62 +194,88 @@ function downloadLimpiezaExcel(
     dateFrom: string,
     dateTo: string
 ) {
-    const wb = XLSX.utils.book_new();
-    
-    // Hoja 1: Resumen
-    const resumenData = [
-        ["REPORTE DE LIMPIEZA"],
-        [""],
-        ["Período", dateFrom && dateTo ? `${dateFrom} a ${dateTo}` : "Todos los vuelos"],
-        ["Total de vuelos operativos (excl. traslados)", stats.totalVuelos],
-        [""],
-        ["SERVICIOS DE LIMPIEZA"],
-        ["Limpiezas Totales Realizadas", stats.limpiezaTotal],
-        ["% de vuelos con limpieza", `${stats.pctConLimpieza.toFixed(1)}%`],
-        [""],
-        ["DESGLOSE"],
-        ["A Requerimiento (Tripulación)", stats.limpiezaRequeridas, `${stats.pctRequeridas.toFixed(1)}%`],
-        ["Programadas (Planificadas/itinerario)", stats.limpiezaPlanificadas, `${stats.pctPlanificadas.toFixed(1)}%`],
-    ];
-    const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
-    XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
-    
-    // Hoja 2: Por Matrícula
-    const matriculaHeaders = ["Matrícula", "Total Vuelos", "Limpiezas Realizadas", "A Requerimiento", "Programadas", "% Limpieza"];
-    const matriculaRows = porMatricula.map(r => [
-        r.reg,
-        r.totalVuelos,
-        r.limpiezasEjecutadas,
-        r.requeridas,
-        r.planificadas,
-        `${r.pctLimpieza.toFixed(1)}%`
+    const period = dateFrom && dateTo ? `${dateFrom} a ${dateTo}` : "Todos los vuelos";
+    const programadas = computeProgramadas(flights);
+    const cumplimientoColor = stats.pctCumplimiento >= 80 ? "#10B981" : stats.pctCumplimiento >= 50 ? "#F59E0B" : "#F43F5E";
+
+    const flightsConLimpieza = operationalFlights(flights).filter(f => f.hitosData?.limpiezaStatus === "si");
+    const detalleRows = flightsConLimpieza.map(f => [
+        flightDateToIso(f) || "",
+        `${getAirlinePrefix(f.flt)}${f.flt}`,
+        f.reg || "",
+        f.dep || "",
+        f.arr || "",
+        f.std || "",
+        f.hitosData?.limpiezaTipo === "crew" ? "A Requerimiento" :
+        f.hitosData?.limpiezaTipo === "planificada" ? "Programada" : "-",
     ]);
-    const wsMatricula = XLSX.utils.aoa_to_sheet([matriculaHeaders, ...matriculaRows]);
-    XLSX.utils.book_append_sheet(wb, wsMatricula, "Por Matrícula");
-    
-    // Hoja 3: Detalle de vuelos con limpieza
-    const nonTrasladoOperational = flights.filter(f => !isTrasladoFlight(f) && !f.cancelled);
-    const flightsConLimpieza = nonTrasladoOperational.filter(f => f.hitosData?.limpiezaStatus === "si");
-    
-    const detalleHeaders = ["Fecha", "Vuelo", "Matrícula", "Origen", "Destino", "STD", "Tipo Limpieza"];
-    const detalleRows = flightsConLimpieza.map(f => {
-        const tipo = f.hitosData?.limpiezaTipo === "crew" ? "A Requerimiento (Tripulación)" : 
-                     f.hitosData?.limpiezaTipo === "planificada" ? "Programada" : "-";
-        return [
-            flightDateToIso(f) || "",
-            `${getAirlinePrefix(f.flt)}${f.flt}`,
-            f.reg || "",
-            f.dep || "",
-            f.arr || "",
-            f.std || "",
-            tipo
-        ];
-    });
-    const wsDetalle = XLSX.utils.aoa_to_sheet([detalleHeaders, ...detalleRows]);
-    XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Limpiezas");
-    
+    const matriculaRows = porMatricula.map(r => [
+        r.reg, r.totalVuelos, r.limpiezasEjecutadas, r.requeridas, r.planificadas, `${r.pctLimpieza.toFixed(1)}%`
+    ]);
+    const cumplimientoRows = programadas.map(p => [
+        p.fecha, p.vuelo, p.reg, p.dep, p.arr, p.std, p.motivo, p.ejecutada ? "Sí" : "No"
+    ]);
+
+    const html = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head>
+<meta charset="UTF-8" />
+<style>
+  body { font-family: Calibri, Arial, sans-serif; color: #0F172A; }
+  .banner { background: #0F172A; color: #fff; padding: 16px 20px; }
+  .banner h1 { margin: 0; font-size: 22px; }
+  .banner p { margin: 4px 0 0; color: #67E8F9; font-weight: 700; }
+  .kpis { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .kpis th { background: #7C3AED; color: #fff; padding: 8px 10px; text-align: left; }
+  .kpis td { padding: 8px 10px; border-bottom: 1px solid #E2E8F0; }
+  .kpis tr:nth-child(even) td { background: #F8FAFC; }
+  .cumpl { background: ${cumplimientoColor}; color: #fff; font-weight: 800; }
+  h2 { color: #0F172A; border-left: 6px solid #06B6D4; padding-left: 10px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+  th { background: #0F172A; color: #fff; padding: 8px; font-size: 12px; }
+  td { padding: 7px 8px; border-bottom: 1px solid #E2E8F0; text-align: center; }
+  tr.alt td { background: #F1F5F9; }
+  td.ok { background: #D1FAE5; color: #047857; font-weight: 800; }
+  td.bad { background: #FEE2E2; color: #BE123C; font-weight: 800; }
+  td.prog { background: #EDE9FE; color: #6D28D9; font-weight: 700; }
+  td.req { background: #DBEAFE; color: #1D4ED8; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <h1>SMARTOPS · Servicios de Limpieza</h1>
+    <p>Período: ${escHtml(period)}</p>
+  </div>
+  <h2>Resumen</h2>
+  <table class="kpis">
+    <tr><th>KPI</th><th>Valor</th><th>Detalle</th></tr>
+    <tr><td>Vuelos operativos</td><td>${stats.totalVuelos}</td><td>Excluye traslados y cancelados</td></tr>
+    <tr><td>Limpiezas realizadas</td><td>${stats.limpiezaTotal}</td><td>${stats.pctConLimpieza.toFixed(1)}% de los vuelos</td></tr>
+    <tr><td>A requerimiento (tripulación)</td><td>${stats.limpiezaRequeridas}</td><td>${stats.pctRequeridas.toFixed(1)}% de las realizadas</td></tr>
+    <tr><td>Programadas (hitos)</td><td>${stats.limpiezaPlanificadas}</td><td>${stats.pctPlanificadas.toFixed(1)}% de las realizadas</td></tr>
+    <tr><td>Programadas esperadas</td><td>${stats.programadasEsperadas}</td><td>Primera salida del día + bloque &gt; 03:30hs</td></tr>
+    <tr><td>Programadas cumplidas</td><td>${stats.programadasCumplidas}</td><td>Con limpieza registrada en hitos</td></tr>
+    <tr class="cumpl"><td>% cumplimiento programadas</td><td>${stats.pctCumplimiento.toFixed(1)}%</td><td>${stats.programadasCumplidas} de ${stats.programadasEsperadas}</td></tr>
+  </table>
+  <h2>Por matrícula</h2>
+  ${htmlTable(["Matrícula", "Total Vuelos", "Limpiezas Realizadas", "A Requerimiento", "Programadas", "% Limpieza"], matriculaRows)}
+  <h2>Detalle de limpiezas realizadas</h2>
+  ${htmlTable(["Fecha", "Vuelo", "Matrícula", "Origen", "Destino", "STD", "Tipo Limpieza"], detalleRows, { lastColBadge: true })}
+  <h2>Cumplimiento de programadas</h2>
+  ${htmlTable(["Fecha", "Vuelo", "Matrícula", "Origen", "Destino", "STD", "Motivo programada", "Ejecutada"], cumplimientoRows, { lastColBadge: true })}
+</body>
+</html>`;
+
+    const blob = new Blob(["\uFEFF", html], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
     const dateLabel = dateFrom && dateTo ? `${dateFrom}_${dateTo}` : "todos";
-    XLSX.writeFile(wb, `reporte_limpieza_${dateLabel}.xlsx`);
+    a.href = url;
+    a.download = `reporte_limpieza_${dateLabel}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
 }
 
 export function ControlLimpiezaTab({ flights }: Props) {
@@ -237,7 +354,7 @@ export function ControlLimpiezaTab({ flights }: Props) {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Limpiezas Realizadas */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                     <div className="flex items-center justify-between mb-2">
@@ -288,6 +405,23 @@ export function ControlLimpiezaTab({ flights }: Props) {
                             <span className="text-sm text-slate-600">Programadas</span>
                             <span className="font-bold text-violet-600">{stats.pctPlanificadas.toFixed(1)}%</span>
                         </div>
+                    </div>
+                </div>
+
+                {/* Cumplimiento programadas */}
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-bold text-slate-500 uppercase">Cumplimiento</span>
+                        <Target className="w-5 h-5 text-cyan-500" />
+                    </div>
+                    <div className={`text-3xl font-black ${stats.pctCumplimiento >= 80 ? "text-emerald-600" : stats.pctCumplimiento >= 50 ? "text-amber-600" : "text-rose-600"}`}>
+                        {stats.pctCumplimiento.toFixed(1)}%
+                    </div>
+                    <div className="text-sm text-slate-500 mt-1">
+                        {stats.programadasCumplidas} de {stats.programadasEsperadas} programadas
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1">
+                        Primera salida del día + bloque &gt; 03:30hs
                     </div>
                 </div>
             </div>
