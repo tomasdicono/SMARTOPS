@@ -134,6 +134,8 @@ export interface Flight {
         /** ISO 8601 — última corrección del MVT por un usuario HCC tras el envío */
         mvtEditedByHccAt?: string;
         briefingPhoto?: string;
+        /** La imagen está en `flights/_briefing/{id}`, no en este registro. */
+        briefingOnFile?: boolean;
     };
 
     // Custom Gantt Chart / Turnaround Performance Data

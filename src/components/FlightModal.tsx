@@ -17,6 +17,7 @@ import {
 import { getLimpiezaChecklistMode } from "../lib/limpiezaChecklistHelpers";
 import { isLimpiezaRole, canEditMvtDelayAfterSent, canSubmitMvtAfterQrf } from "../types";
 import { isQrfActive, isAlternoActive, isTrasladoFlight } from "../lib/flightHelpers";
+import { flightWithBriefingPhoto } from "../lib/flightsDb";
 
 type FlightModalTab = "MVT" | "HITOS" | "CREW" | "LIMPIEZA" | "RECLAMOS";
 import { hasMvtSent } from "../lib/controlHelpers";
@@ -224,7 +225,9 @@ export function FlightModal({
                         {canDownloadBriefing && (
                             <button
                                 type="button"
-                                onClick={() => downloadBriefingPhoto(flight)}
+                                onClick={() => {
+                                    void flightWithBriefingPhoto(flight).then((withPhoto) => downloadBriefingPhoto(withPhoto));
+                                }}
                                 className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/50 bg-sky-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-sky-900 shadow-sm hover:bg-sky-100 transition-colors"
                                 title="Descargar imagen del briefing operacional"
                             >
@@ -235,7 +238,9 @@ export function FlightModal({
                         {canDownloadHitosSummary && (
                             <button
                                 type="button"
-                                onClick={() => downloadHitosSummary(flight)}
+                                onClick={() => {
+                                    void flightWithBriefingPhoto(flight).then((withPhoto) => downloadHitosSummary(withPhoto));
+                                }}
                                 className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/50 bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-emerald-900 shadow-sm hover:bg-emerald-100 transition-colors"
                                 title="Descargar informe HTML de hitos (operacionales y tripulación)"
                             >
