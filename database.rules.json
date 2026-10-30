@@ -10,6 +10,7 @@
     "flights": {
       ".read": "auth != null",
       ".write": "auth != null",
+      ".indexOn": ["date"],
       "$flightId": {
         ".read": "auth != null",
         ".write": "auth != null"

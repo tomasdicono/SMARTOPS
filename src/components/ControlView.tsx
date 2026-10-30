@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
 import type { Flight, RouteAfectacionEntry, UserRole } from "../types";
 import { getAirlinePrefix, getHitosDepartureTime, formatFlightDateDDMMM, isFerryFlight } from "../lib/flightHelpers";
 import { getAircraftInfo } from "../lib/fleetData";
@@ -124,6 +125,8 @@ export function ControlView({
         setStatsDateFrom(selectedDate);
         setStatsDateTo(selectedDate);
     }, [selectedDate]);
+
+    useEnsureFlightRange(statsDateFrom, statsDateTo, true);
 
     useEffect(() => {
         if (!SHOW_TIMELINE_TAB && subTab === "timeline") {
@@ -1078,6 +1081,9 @@ export function ControlView({
                                 min={statsDateFrom || undefined}
                                 className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 [color-scheme:light] w-[min(100%,11rem)]"
                             />
+                        </div>
+                        <div className="w-full">
+                            <FlightRangeStatus from={statsDateFrom} to={statsDateTo} />
                         </div>
                         <ControlAirportMultiSelect
                             options={airportOptions}

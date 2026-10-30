@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import {
     computeUsageControlByBase,
@@ -70,6 +71,8 @@ export function ControlUsageTab({
         return { dateFrom: lo, dateTo: hi };
     }, [usageDateFrom, usageDateTo]);
 
+    useEnsureFlightRange(dateFrom, dateTo);
+
     const airportFilter: StatsAirportFilter = selectedAirports;
 
     const usageAirportOptions = useMemo(() => {
@@ -101,6 +104,7 @@ export function ControlUsageTab({
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-5">
+                <FlightRangeStatus from={dateFrom} to={dateTo} />
                 <div className="flex flex-wrap items-end gap-3 pb-1">
                     <div className="shrink-0">
                         <label className="block text-xs font-black uppercase text-slate-500 mb-1">Desde</label>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import { flightDateToIso } from "../lib/controlHelpers";
 import { getAirlinePrefix } from "../lib/flightHelpers";
@@ -22,6 +23,8 @@ const MONTH_NAMES = [
 export function ControlDashboardAjsTab({ flights }: Props) {
     const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
     const [selectedCell, setSelectedCell] = useState<{ dep: string, year: number, month: number, code: string } | null>(null);
+    useEnsureFlightRange(`${selectedYear}-01-01`, `${selectedYear}-12-31`);
+    useEnsureFlightRange(`${selectedYear - 1}-12-01`, `${selectedYear - 1}-12-31`);
 
     // Filter valid flights
     const validFlights = useMemo(() => flights.filter(f => !f.cancelled && f.mvtData), [flights]);
@@ -37,7 +40,7 @@ export function ControlDashboardAjsTab({ flights }: Props) {
             }
         });
         const currentY = new Date().getFullYear();
-        years.add(currentY);
+        for (let y = currentY; y >= currentY - 4; y--) years.add(y);
         return Array.from(years).sort((a, b) => b - a);
     }, [validFlights]);
 
@@ -230,6 +233,9 @@ export function ControlDashboardAjsTab({ flights }: Props) {
 
     return (
         <div className="animate-in fade-in duration-200">
+            <div className="px-5 pt-4">
+                <FlightRangeStatus from={`${selectedYear}-01-01`} to={`${selectedYear}-12-31`} />
+            </div>
             <div className="p-5 space-y-4 bg-slate-50 border-b border-slate-200">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">

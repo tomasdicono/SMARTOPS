@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import {
     addDaysIso,
@@ -61,6 +62,8 @@ export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirp
         setFuelDateTo(selectedDate);
         setFuelRangePreset("day");
     }, [selectedDate]);
+
+    useEnsureFlightRange(fuelDateFrom, fuelDateTo);
 
     const applyFuelRangePreset = (preset: Exclude<FuelRangePreset, null>) => {
         const anchor = selectedDate;
@@ -137,6 +140,7 @@ export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirp
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-5">
+                <FlightRangeStatus from={fuelDateFrom} to={fuelDateTo} />
                 <div className="flex flex-wrap gap-2">
                     {(
                         [

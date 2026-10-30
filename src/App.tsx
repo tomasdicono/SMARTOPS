@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   normalizeUserRole,
   isHccDeskRole,
@@ -68,14 +68,23 @@ import { auth, db } from "./lib/firebase";
 import { ref, onValue, set, push, remove } from "firebase/database";
 import {
   parseFlightsSnapshot,
-  isLegacyFlightsArray,
   saveFlight,
   updateFlight,
   saveFlightsBatch,
   removeFlightsByIds,
   backupAndDeleteFlights,
-  migrateFlightsArrayToMap,
 } from "./lib/flightsDb";
+import {
+  eachIsoInRange,
+  fetchFlightsForIso,
+  flightsOnDateQuery,
+  isIsoDate,
+  isoToStoredFlightDate,
+  mapFlightInCache,
+  replaceCachedFlights,
+  setDayFlights,
+} from "./lib/flightsByDate";
+import { FlightLoadProvider, type FlightLoadApi } from "./lib/flightLoad";
 import { loadUserProfile } from "./lib/loadUserProfile";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
@@ -115,7 +124,7 @@ import {
 import { RouteChangeModal } from "./components/RouteChangeModal";
 import { CasosAtcView } from "./components/CasosAtcView";
 import { GestionesModal } from "./components/GestionesModal";
-import { flightDateToIso } from "./lib/controlHelpers";
+import { addDaysIso, flightDateToIso } from "./lib/controlHelpers";
 import { coerceRouteAfectacion, normalizeAirportCode } from "./lib/routeAfectaciones";
 import {
   coerceDailyReportOtp,
@@ -143,7 +152,23 @@ import { mvtLoadIndicatesConnectionBags } from "./lib/a321LoadBays";
 const APP_VERSION = "2026.08.11.3";
 
 function App() {
-  const [flights, setFlights] = useState<Flight[]>([]);
+  /** Vuelos ya descargados, agrupados por fecha ISO. La entrada solo pide el día visible. */
+  const [flightsByIso, setFlightsByIso] = useState<Record<string, Flight[]>>({});
+  const flightsByIsoRef = useRef(flightsByIso);
+  flightsByIsoRef.current = flightsByIso;
+  const [failedFlightIsos, setFailedFlightIsos] = useState<string[]>([]);
+  const failedFlightIsosRef = useRef(new Set<string>());
+  const inflightIsosRef = useRef(new Set<string>());
+  const flights = useMemo(() => {
+    const byId = new Map<string, Flight>();
+    for (const list of Object.values(flightsByIso)) {
+      for (const f of list) {
+        const id = String(f.id ?? "").trim();
+        if (id) byId.set(id, f);
+      }
+    }
+    return [...byId.values()];
+  }, [flightsByIso]);
   const [mainTab, setMainTab] = useState<
     "tablero" | "control" | "reporte" | "pernocte" | "diferidos" | "matriculas" | "costControlling" | "documentos" | "timeline" | "casosAtc" | "statusEquiposGRH" | "ticketsHcc"
   >("tablero");
@@ -162,6 +187,8 @@ function App() {
   const [routeAfectacionesByDate, setRouteAfectacionesByDate] = useState<
     Record<string, RouteAfectacionEntry[]>
   >({});
+  /** Fechas extra de routeAfectaciones (informes). El día seleccionado se escucha siempre. */
+  const [routeRangeIsos, setRouteRangeIsos] = useState<string[]>([]);
   const [dailyReportOtp, setDailyReportOtp] = useState<DailyReportOtp>(emptyDailyReportOtp);
   /** Matrícula → texto (Firebase: diferidos/{matrícula}) */
   const [diferidosMap, setDiferidosMap] = useState<Record<string, DiferidoEntry>>({});
@@ -336,76 +363,181 @@ function App() {
     return () => unsubscribeAuth();
   }, []);
 
-  // Live Cloud Synchronization via Firebase Realtime DB (solo con sesión válida)
+  const liveFlightIsos = useMemo(() => {
+    const dates = new Set<string>();
+    if (isIsoDate(selectedDate)) dates.add(selectedDate);
+    if (mainTab === "pernocte") {
+      const day = pernocteDateEffective || selectedDate;
+      if (isIsoDate(day)) {
+        dates.add(day);
+        dates.add(addDaysIso(day, 1));
+      }
+    }
+    return [...dates].sort();
+  }, [selectedDate, mainTab, pernocteDateEffective]);
+  const liveFlightIsosRef = useRef(liveFlightIsos);
+  liveFlightIsosRef.current = liveFlightIsos;
+  const liveFlightKey = liveFlightIsos.join("|");
+
+  const loadFlightIsos = useCallback(async (isos: string[]) => {
+    const unique = [...new Set(isos)].filter(isIsoDate);
+    const missing = unique.filter(
+      (iso) => !(iso in flightsByIsoRef.current) && !inflightIsosRef.current.has(iso),
+    );
+    for (const iso of missing) inflightIsosRef.current.add(iso);
+    try {
+      for (let i = 0; i < missing.length; i += 12) {
+        const chunk = missing.slice(i, i + 12);
+        const pairs = await Promise.all(
+          chunk.map(async (iso) => {
+            try {
+              return { iso, list: await fetchFlightsForIso(iso), ok: true as const };
+            } catch (e) {
+              console.error("Error al cargar vuelos del día", iso, e);
+              return { iso, list: [] as Flight[], ok: false as const };
+            }
+          }),
+        );
+        const failed = pairs.filter((p) => !p.ok).map((p) => p.iso);
+        if (failed.length > 0) {
+          for (const iso of failed) failedFlightIsosRef.current.add(iso);
+          setFailedFlightIsos([...failedFlightIsosRef.current]);
+        }
+        const okPairs = pairs.filter((p) => p.ok);
+        if (okPairs.length > 0) {
+          let clearedFailure = false;
+          for (const { iso } of okPairs) {
+            if (failedFlightIsosRef.current.delete(iso)) clearedFailure = true;
+          }
+          if (clearedFailure) setFailedFlightIsos([...failedFlightIsosRef.current]);
+          setFlightsByIso((prev) => {
+            let next = prev;
+            for (const { iso, list } of okPairs) {
+              if (iso in next) continue;
+              next = setDayFlights(next, iso, list);
+            }
+            flightsByIsoRef.current = next;
+            return next === prev ? prev : next;
+          });
+        }
+      }
+    } finally {
+      for (const iso of missing) inflightIsosRef.current.delete(iso);
+    }
+  }, []);
+
+  const clearFailedIsos = useCallback((isos: string[]) => {
+    let changed = false;
+    for (const iso of isos) {
+      if (failedFlightIsosRef.current.delete(iso)) changed = true;
+    }
+    if (changed) setFailedFlightIsos([...failedFlightIsosRef.current]);
+  }, []);
+
+  const ensureFlightIsos = useCallback(
+    (isos: string[]) => {
+      const days = [...new Set(isos)].filter(isIsoDate);
+      clearFailedIsos(days);
+      void loadFlightIsos(days);
+    },
+    [clearFailedIsos, loadFlightIsos],
+  );
+
+  const ensureFlightRange = useCallback(
+    (fromIso: string, toIso: string, opts?: { includeRoutes?: boolean }) => {
+      const days = eachIsoInRange(fromIso, toIso);
+      if (days.length === 0) return;
+      clearFailedIsos(days);
+      void loadFlightIsos(days);
+      if (opts?.includeRoutes) setRouteRangeIsos(days);
+    },
+    [clearFailedIsos, loadFlightIsos],
+  );
+
+  // Día visible en vivo. Otros días se piden al abrir un período (informes, pernocte, etc.).
   useEffect(() => {
     if (!currentUser) {
-      setFlights([]);
+      setFlightsByIso({});
+      flightsByIsoRef.current = {};
+      failedFlightIsosRef.current.clear();
+      setFailedFlightIsos([]);
+      setRouteRangeIsos([]);
       return;
     }
-    const flightsRef = ref(db, 'flights');
-    const unsubscribe = onValue(flightsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) {
-        setFlights([]);
-        return;
-      }
-      const validFlights = parseFlightsSnapshot(data);
-      setFlights(validFlights);
-
-      if (isLegacyFlightsArray(data)) {
-        void migrateFlightsArrayToMap(validFlights).catch((e) =>
-          console.error("Error al migrar flights a guardado por vuelo:", e)
-        );
-      }
-
-      setSelectedFlight((prev) => {
-        if (!prev) return null;
-        return validFlights.find((f) => f.id === prev.id) ?? null;
-      });
-      setRouteModalFlight((prev) => {
-        if (!prev) return null;
-        return validFlights.find((f) => f.id === prev.id) ?? null;
-      });
-      setAlternoModalFlight((prev) => {
-        if (!prev) return null;
-        return validFlights.find((f) => f.id === prev.id) ?? null;
-      });
+    if (liveFlightIsos.length === 0) return;
+    const unsubs = liveFlightIsos.map((iso) => {
+      const stored = isoToStoredFlightDate(iso);
+      return onValue(
+        flightsOnDateQuery(stored),
+        (snapshot) => {
+          setFlightsByIso((prev) => {
+            const next = setDayFlights(prev, iso, parseFlightsSnapshot(snapshot.val()));
+            flightsByIsoRef.current = next;
+            return next;
+          });
+        },
+        (err) => {
+          console.error("Error al escuchar vuelos del día", iso, err);
+        },
+      );
     });
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [currentUser, liveFlightKey, liveFlightIsos]);
 
-    return () => unsubscribe();
-  }, [currentUser]);
+  useEffect(() => {
+    const sync = (prev: Flight | null): Flight | null => {
+      if (!prev) return null;
+      const fresh = flights.find((f) => f.id === prev.id);
+      if (fresh) return fresh;
+      const iso = flightDateToIso(prev);
+      if (iso && Object.prototype.hasOwnProperty.call(flightsByIso, iso)) return null;
+      return prev;
+    };
+    setSelectedFlight(sync);
+    setRouteModalFlight(sync);
+    setAlternoModalFlight(sync);
+  }, [flights, flightsByIso]);
 
   const routeAfectaciones = useMemo(
     () => (selectedDate ? routeAfectacionesByDate[selectedDate] ?? [] : []),
     [routeAfectacionesByDate, selectedDate],
   );
 
+  const routeListenIsos = useMemo(() => {
+    const dates = new Set<string>();
+    if (isIsoDate(selectedDate)) dates.add(selectedDate);
+    for (const iso of routeRangeIsos) {
+      if (isIsoDate(iso)) dates.add(iso);
+    }
+    return [...dates].sort();
+  }, [selectedDate, routeRangeIsos]);
+  const routeListenKey = routeListenIsos.join("|");
+
   useEffect(() => {
     if (!currentUser) {
       setRouteAfectacionesByDate({});
       return;
     }
-    const r = ref(db, "routeAfectaciones");
-    const unsub = onValue(r, (snapshot) => {
-      const v = snapshot.val();
-      if (!v || typeof v !== "object") {
-        setRouteAfectacionesByDate({});
-        return;
-      }
-      const byDate: Record<string, RouteAfectacionEntry[]> = {};
-      for (const [dateKey, dayNode] of Object.entries(v as Record<string, unknown>)) {
-        if (!dayNode || typeof dayNode !== "object") continue;
+    if (routeListenIsos.length === 0) return;
+    const unsubs = routeListenIsos.map((iso) =>
+      onValue(ref(db, `routeAfectaciones/${iso}`), (snapshot) => {
+        const dayNode = snapshot.val();
         const list: RouteAfectacionEntry[] = [];
-        for (const [id, raw] of Object.entries(dayNode as Record<string, unknown>)) {
-          list.push(coerceRouteAfectacion(raw, id));
+        if (dayNode && typeof dayNode === "object") {
+          for (const [id, raw] of Object.entries(dayNode as Record<string, unknown>)) {
+            list.push(coerceRouteAfectacion(raw, id));
+          }
+          list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
         }
-        list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-        byDate[dateKey] = list;
-      }
-      setRouteAfectacionesByDate(byDate);
-    });
-    return () => unsub();
-  }, [currentUser]);
+        setRouteAfectacionesByDate((prev) => ({ ...prev, [iso]: list }));
+      }),
+    );
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [currentUser, routeListenKey, routeListenIsos]);
 
   useEffect(() => {
     if (!currentUser || !selectedDate) {
@@ -419,30 +551,36 @@ function App() {
     return () => unsub();
   }, [selectedDate, currentUser]);
 
+  const pernocteListenIsos = useMemo(() => {
+    const dates = new Set<string>();
+    if (isIsoDate(selectedDate)) dates.add(selectedDate);
+    if (isIsoDate(pernocteDateEffective)) dates.add(pernocteDateEffective);
+    return [...dates].sort();
+  }, [selectedDate, pernocteDateEffective]);
+  const pernocteListenKey = pernocteListenIsos.join("|");
+
   useEffect(() => {
     if (!currentUser) {
       setPernocteData({});
       return;
     }
-    const pernocteRef = ref(db, "pernocte");
-    const unsub = onValue(pernocteRef, (snapshot) => {
-      const v = snapshot.val();
-      if (!v || typeof v !== "object") {
-        setPernocteData({});
-        return;
-      }
-      const out: Record<string, Record<string, PernocteRowState>> = {};
-      for (const [dateKey, regs] of Object.entries(v as Record<string, unknown>)) {
-        if (!regs || typeof regs !== "object") continue;
-        out[dateKey] = {};
-        for (const [regKey, row] of Object.entries(regs as Record<string, unknown>)) {
-          out[dateKey][regKey] = coercePernocteRow(row);
+    if (pernocteListenIsos.length === 0) return;
+    const unsubs = pernocteListenIsos.map((iso) =>
+      onValue(ref(db, `pernocte/${iso}`), (snapshot) => {
+        const regs = snapshot.val();
+        const day: Record<string, PernocteRowState> = {};
+        if (regs && typeof regs === "object") {
+          for (const [regKey, row] of Object.entries(regs as Record<string, unknown>)) {
+            day[regKey] = coercePernocteRow(row);
+          }
         }
-      }
-      setPernocteData(out);
-    });
-    return () => unsub();
-  }, [currentUser]);
+        setPernocteData((prev) => ({ ...prev, [iso]: day }));
+      }),
+    );
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [currentUser, pernocteListenKey, pernocteListenIsos]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -494,9 +632,32 @@ function App() {
 
   const handleLoadFlights = async (newFlights: Flight[]) => {
     const normalized = newFlights.map(coerceFlightFromDb);
-    const toSave = flightsToSaveOnImport(flights, normalized);
+    const isos = [
+      ...new Set(normalized.map((f) => flightDateToIso(f)).filter((d) => isIsoDate(d))),
+    ];
+    await loadFlightIsos(isos);
+    const existing = isos.flatMap((iso) => flightsByIsoRef.current[iso] ?? []);
+    const toSave = flightsToSaveOnImport(existing, normalized);
     try {
       await saveFlightsBatch(toSave);
+      setFlightsByIso((prev) => {
+        let next = prev;
+        const grouped = new Map<string, Flight[]>();
+        for (const f of toSave) {
+          const iso = flightDateToIso(f);
+          if (!isIsoDate(iso)) continue;
+          const list = grouped.get(iso) ?? [];
+          list.push(f);
+          grouped.set(iso, list);
+        }
+        for (const [iso, saved] of grouped) {
+          const byId = new Map((next[iso] ?? []).map((f) => [String(f.id), f]));
+          for (const f of saved) byId.set(String(f.id), f);
+          next = setDayFlights(next, iso, [...byId.values()]);
+        }
+        flightsByIsoRef.current = next;
+        return next;
+      });
       setShowParser(false);
     } catch {
       alert("No se pudo cargar la programación. Revisá la conexión e intentá de nuevo.");
@@ -504,7 +665,8 @@ function App() {
   };
 
   const handleRemoveDuplicateFlights = async () => {
-    const { removedIds, removedCount, duplicateGroups } = removeDuplicateFlights(flights);
+    const dayOnly = flights.filter((f) => flightDateToIso(f) === selectedDate);
+    const { removedIds, removedCount, duplicateGroups } = removeDuplicateFlights(dayOnly);
     if (removedCount === 0) {
       alert("No se encontraron vuelos repetidos.");
       return;
@@ -811,10 +973,8 @@ function App() {
     try {
       await updateFlight(id, { qrfActive: true, qrfReason: trimmed, qrfHistory });
       setQrfModalFlight(null);
-      setFlights((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, qrfActive: true, qrfReason: trimmed, qrfHistory } : f,
-        ),
+      setFlightsByIso((prev) =>
+        mapFlightInCache(prev, id, { qrfActive: true, qrfReason: trimmed, qrfHistory }),
       );
       setSelectedFlight((prev) =>
         prev?.id === id ? { ...prev, qrfActive: true, qrfReason: trimmed, qrfHistory } : prev,
@@ -829,10 +989,8 @@ function App() {
     const qrfHistory = resolveLatestOpenQrfEvent(normalizeQrfHistory(existingFlight?.qrfHistory));
     try {
       await updateFlight(id, { qrfActive: false, qrfReason: "", qrfHistory });
-      setFlights((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, qrfActive: false, qrfReason: "", qrfHistory } : f,
-        ),
+      setFlightsByIso((prev) =>
+        mapFlightInCache(prev, id, { qrfActive: false, qrfReason: "", qrfHistory }),
       );
       setSelectedFlight((prev) =>
         prev?.id === id ? { ...prev, qrfActive: false, qrfReason: "", qrfHistory } : prev,
@@ -861,9 +1019,7 @@ function App() {
 
     try {
       await updateFlight(flightId, patch);
-      setFlights((prev) =>
-        prev.map((f) => (f.id === flightId ? { ...f, ...patch } : f)),
-      );
+      setFlightsByIso((prev) => mapFlightInCache(prev, flightId, patch));
       setSelectedFlight((prev) =>
         prev?.id === flightId ? { ...prev, ...patch } : prev,
       );
@@ -875,9 +1031,7 @@ function App() {
 
   const handleConfirmAlterno = async (id: string, ato: string, reason: string) => {
     setAlternoModalFlight(null);
-    setFlights((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, alternoArr: ato, alternoReason: reason } : f)),
-    );
+    setFlightsByIso((prev) => mapFlightInCache(prev, id, { alternoArr: ato, alternoReason: reason }));
     setSelectedFlight((prev) =>
       prev?.id === id ? { ...prev, alternoArr: ato, alternoReason: reason } : prev,
     );
@@ -891,8 +1045,8 @@ function App() {
 
   const handleClearAlterno = async (id: string) => {
     setAlternoModalFlight(null);
-    setFlights((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, alternoArr: undefined, alternoReason: undefined } : f)),
+    setFlightsByIso((prev) =>
+      mapFlightInCache(prev, id, { alternoArr: undefined, alternoReason: undefined }),
     );
     setSelectedFlight((prev) =>
       prev?.id === id ? { ...prev, alternoArr: undefined, alternoReason: undefined } : prev,
@@ -1022,7 +1176,7 @@ function App() {
     }
     try {
       await Promise.all(updates);
-      setFlights(next);
+      setFlightsByIso((prev) => replaceCachedFlights(prev, next));
       setSelectedFlight((prev) => (prev ? next.find((x) => x.id === prev.id) ?? prev : prev));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1195,6 +1349,18 @@ function App() {
     set(ref(db, `pernocte/${pernocteDateEffective}/${reg}`), next);
   };
 
+  const loadedFlightIsos = useMemo(() => new Set(Object.keys(flightsByIso)), [flightsByIso]);
+  const failedFlightIsoSet = useMemo(() => new Set(failedFlightIsos), [failedFlightIsos]);
+  const flightLoadApi = useMemo<FlightLoadApi>(
+    () => ({
+      loadedFlightIsos,
+      failedFlightIsos: failedFlightIsoSet,
+      ensureFlightRange,
+      ensureFlightIsos,
+    }),
+    [loadedFlightIsos, failedFlightIsoSet, ensureFlightRange, ensureFlightIsos],
+  );
+
   if (loadingAuth) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-12 h-12 text-cyan-400 animate-spin" /></div>;
   }
@@ -1215,7 +1381,10 @@ function App() {
     );
   }
 
+  const selectedDayReady = isIsoDate(selectedDate) && Object.prototype.hasOwnProperty.call(flightsByIso, selectedDate);
+
   return (
+    <FlightLoadProvider value={flightLoadApi}>
     <div className="min-h-screen bg-background text-foreground pb-12">
       <div className="sticky top-0 z-40 w-full mb-6 bg-background shadow-md">
         <header className="bg-slate-900 border-b border-slate-800 text-white py-3 px-4 md:px-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 w-full max-w-full min-w-0">
@@ -1554,6 +1723,7 @@ function App() {
                       </button>
                     </>
                   )}
+                  {false && (
                   <button
                     type="button"
                     onClick={() => setMainTab("ticketsHcc")}
@@ -1574,6 +1744,7 @@ function App() {
                       </span>
                     )}
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setMainTab("statusEquiposGRH")}
@@ -1626,6 +1797,7 @@ function App() {
                     <Wrench className="w-4 h-4 shrink-0" />
                     Status Equipos
                   </button>
+                  {false && (
                   <button
                     type="button"
                     onClick={() => setMainTab("ticketsHcc")}
@@ -1646,6 +1818,7 @@ function App() {
                       </span>
                     )}
                   </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1759,13 +1932,17 @@ function App() {
               }
             }}
           />
-        ) : mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "HCC" || userRole === "ADMIN") ? (
+        ) : false && mainTab === "ticketsHcc" && (userRole === "AJS" || userRole === "HCC" || userRole === "ADMIN") ? (
           <HccTicketsView
             flights={flightsForSelectedDate}
             currentUser={currentUser}
           />
         ) : mainTab === "statusEquiposGRH" ? (
           <StatusEquiposGRHView currentUser={currentUser} />
+        ) : !selectedDayReady ? (
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <Loader2 className="w-12 h-12 text-cyan-500 animate-spin" />
+          </div>
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
             {mainTab === "tablero" && canUseBoardCardToneFilters(userRole) && flightsForSelectedDate.length > 0 ? (
@@ -1777,12 +1954,10 @@ function App() {
               <PlaneTakeoff className="w-16 h-16 text-primary/60" />
             </div>
             <p className="text-xl font-bold text-secondary mb-2">
-              {flights.length === 0
-                ? "No hay vuelos cargados en el sistema."
-                : filteredFlights.length === 0 && searchQuery.trim()
-                  ? "No hay vuelos que coincidan con la búsqueda."
-                  : canUseBoardCardToneFilters(userRole) && cardToneFilters.size > 0 && filteredFlights.length > 0
-                    ? "Ningún vuelo coincide con los filtros de color seleccionados."
+              {filteredFlights.length === 0 && searchQuery.trim()
+                ? "No hay vuelos que coincidan con la búsqueda."
+                : canUseBoardCardToneFilters(userRole) && cardToneFilters.size > 0 && filteredFlights.length > 0
+                  ? "Ningún vuelo coincide con los filtros de color seleccionados."
                   : flightsForSelectedDate.length === 0
                     ? "Para esa fecha no hay vuelos cargados."
                     : isLimpiezaRole(userRole) && filteredFlights.length > 0
@@ -2532,6 +2707,7 @@ function App() {
         </div>
       ) : null}
     </div>
+    </FlightLoadProvider>
   );
 }
 

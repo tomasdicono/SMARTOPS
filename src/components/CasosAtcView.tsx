@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from "react";
+import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
 import { Download, ChevronDown, Check, Clock } from "lucide-react";
 import * as XLSX from "xlsx";
 import { type Flight } from "../types";
@@ -151,6 +152,8 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [otpDate, setOtpDate] = useState("");
+  useEnsureFlightRange(startDate, endDate);
+  useEnsureFlightRange(otpDate, otpDate);
   const [expandedFlightIds, setExpandedFlightIds] = useState<Record<string, boolean>>({});
   
   const toggleFlightExpanded = (flightId: string) => {
@@ -361,6 +364,7 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
         {activeTab === "buscador" && (
           <>
 
+        <FlightRangeStatus from={startDate} to={endDate} />
         <div className="bg-white p-4 rounded-xl shadow-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Desde</label>
@@ -462,6 +466,7 @@ export function CasosAtcView({ flights, onFlightSelect, onUpdatePlanDeAccion }: 
 
         {activeTab === "dailyOtp" && (
           <>
+            <FlightRangeStatus from={otpDate} to={otpDate} />
             <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de OTP</label>

@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useFlightLoad } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import {
     parseGestionesTable,
@@ -33,6 +34,17 @@ export function GestionesModal({ flights, onClose, onApply }: Props) {
         if (!text.trim()) return null;
         return parseGestionesTable(text);
     }, [text]);
+
+    const ensureFlightIsos = useFlightLoad()?.ensureFlightIsos;
+    useEffect(() => {
+        if (!parsed) return;
+        const isos: string[] = [];
+        for (const row of parsed.rows) {
+            const iso = row.raw.fecha ? parseDateToIso(row.raw.fecha) : null;
+            if (iso) isos.push(iso);
+        }
+        ensureFlightIsos?.(isos);
+    }, [parsed, ensureFlightIsos]);
 
     const hasEtdRows = parsed != null && parsedHasEtdRows(parsed);
     const motivoTrimmed = motivoOperativo.trim();

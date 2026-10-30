@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import {
     COST_CONTROLLING_CATEGORIES,
@@ -25,6 +26,9 @@ export function CostControllingView({ flights }: Props) {
     const parsed = parseYearMonth(monthValue);
     const year = parsed?.year ?? new Date().getFullYear();
     const month = parsed?.month ?? new Date().getMonth() + 1;
+    const monthFrom = `${year}-${String(month).padStart(2, "0")}-01`;
+    const monthTo = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+    useEnsureFlightRange(monthFrom, monthTo);
 
     const weeks = useMemo(() => getCostWeekPeriods(year, month), [year, month]);
     const defaultWeek =
@@ -61,6 +65,7 @@ export function CostControllingView({ flights }: Props) {
 
     return (
         <div className="space-y-5 animate-in fade-in duration-200 pb-12">
+            <FlightRangeStatus from={monthFrom} to={monthTo} />
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex flex-wrap items-start gap-3 min-w-0">
                     <Calculator className="w-8 h-8 text-emerald-600 shrink-0" aria-hidden />
