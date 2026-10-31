@@ -1,4 +1,4 @@
-import { equalTo, get, orderByPriority, query, ref } from "firebase/database";
+import { get, query, ref, orderByChild, equalTo } from "firebase/database";
 import { db } from "./firebase";
 import { parseFlightsSnapshot } from "./flightsDb";
 import { addDaysIso, countDaysInclusiveIso, flightDateToIso, normalizeIsoDateRange } from "./controlHelpers";
@@ -34,13 +34,8 @@ export function eachIsoInRange(from: string, to: string): string[] {
     return out;
 }
 
-/**
- * La prioridad del nodo es la fecha guardada (DD-MM-YYYY).
- * `orderByChild("date")` sin índice publicado baja TODO `flights` y filtra en el navegador.
- * Las prioridades ya vienen indexadas en Firebase.
- */
 export function flightsOnDateQuery(storedDate: string) {
-    return query(ref(db, "flights"), orderByPriority(), equalTo(storedDate));
+    return query(ref(db, "flights"), orderByChild("date"), equalTo(storedDate));
 }
 
 export async function fetchFlightsForIso(iso: string): Promise<Flight[]> {

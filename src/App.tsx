@@ -73,8 +73,6 @@ import {
   saveFlightsBatch,
   removeFlightsByIds,
   backupAndDeleteFlights,
-  ensureFlightDatePriorities,
-  flightWithBriefingPhoto,
 } from "./lib/flightsDb";
 import {
   eachIsoInRange,
@@ -159,8 +157,6 @@ function App() {
   const flightsByIsoRef = useRef(flightsByIso);
   flightsByIsoRef.current = flightsByIso;
   const [failedFlightIsos, setFailedFlightIsos] = useState<string[]>([]);
-  /** Hasta que cada vuelo tenga prioridad = fecha, una consulta de un día vuelve a bajar toda la base. */
-  const [flightIndexReady, setFlightIndexReady] = useState(false);
   const failedFlightIsosRef = useRef(new Set<string>());
   const inflightIsosRef = useRef(new Set<string>());
   const flights = useMemo(() => {
@@ -384,7 +380,6 @@ function App() {
   const liveFlightKey = liveFlightIsos.join("|");
 
   const loadFlightIsos = useCallback(async (isos: string[]) => {
-    await ensureFlightDatePriorities();
     const unique = [...new Set(isos)].filter(isIsoDate);
     const missing = unique.filter(
       (iso) => !(iso in flightsByIsoRef.current) && !inflightIsosRef.current.has(iso),
@@ -459,25 +454,6 @@ function App() {
     [clearFailedIsos, loadFlightIsos],
   );
 
-  useEffect(() => {
-    if (!currentUser) {
-      setFlightIndexReady(false);
-      return;
-    }
-    let cancelled = false;
-    ensureFlightDatePriorities()
-      .then(() => {
-        if (!cancelled) setFlightIndexReady(true);
-      })
-      .catch((error) => {
-        console.error("No se pudo ordenar los vuelos por fecha:", error);
-        if (!cancelled) setFlightIndexReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser]);
-
   // Día visible en vivo. Otros días se piden al abrir un período (informes, pernocte, etc.).
   useEffect(() => {
     if (!currentUser) {
@@ -488,7 +464,7 @@ function App() {
       setRouteRangeIsos([]);
       return;
     }
-    if (!flightIndexReady || liveFlightIsos.length === 0) return;
+    if (liveFlightIsos.length === 0) return;
     const unsubs = liveFlightIsos.map((iso) => {
       const stored = isoToStoredFlightDate(iso);
       return onValue(
@@ -508,7 +484,7 @@ function App() {
     return () => {
       for (const unsub of unsubs) unsub();
     };
-  }, [currentUser, flightIndexReady, liveFlightKey, liveFlightIsos]);
+  }, [currentUser, liveFlightKey, liveFlightIsos]);
 
   useEffect(() => {
     const sync = (prev: Flight | null): Flight | null => {
@@ -1964,13 +1940,8 @@ function App() {
         ) : mainTab === "statusEquiposGRH" ? (
           <StatusEquiposGRHView currentUser={currentUser} />
         ) : !selectedDayReady ? (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 px-6 text-center">
+          <div className="flex items-center justify-center min-h-[50vh]">
             <Loader2 className="w-12 h-12 text-cyan-500 animate-spin" />
-            <p className="max-w-md text-sm font-semibold text-slate-600">
-              {flightIndexReady
-                ? "Cargando los vuelos del día…"
-                : "La primera vez se ordena el historial por fecha y puede usar bastante red. Después cada día baja aparte."}
-            </p>
           </div>
         ) : boardFlights.length === 0 ? (
           <div className="bg-card border border-border border-dashed rounded-3xl p-16 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[50vh]">
@@ -2145,7 +2116,7 @@ function App() {
                           aria-label="Descargar imagen del briefing operacional"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void flightWithBriefingPhoto(flight).then((withPhoto) => downloadBriefingPhoto(withPhoto));
+                            downloadBriefingPhoto(flight);
                           }}
                           className="inline-flex items-center justify-center rounded-xl border-2 border-sky-600/40 bg-white/95 p-2 text-sky-800 shadow-md hover:bg-sky-50 hover:border-sky-500 transition-colors"
                         >
@@ -2159,7 +2130,7 @@ function App() {
                           aria-label="Descargar informe HTML de hitos operacionales y de tripulación"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void flightWithBriefingPhoto(flight).then((withPhoto) => downloadHitosSummary(withPhoto));
+                            downloadHitosSummary(flight);
                           }}
                           className="inline-flex items-center justify-center rounded-xl border-2 border-emerald-600/40 bg-white/95 p-2 text-emerald-800 shadow-md hover:bg-emerald-50 hover:border-emerald-500 transition-colors"
                         >

@@ -53,7 +53,6 @@ export function normalizeMvtData(raw?: Flight["mvtData"] | null): NonNullable<Fl
         supervisor: z(raw.supervisor),
         briefingPhoto: z(raw.briefingPhoto),
     };
-    if (raw.briefingOnFile === true) out.briefingOnFile = true;
     /** No asignar la clave si no hay valor: Firebase rechaza `undefined` en propiedades anidadas. */
     if (raw.mvtSentAt != null && String(raw.mvtSentAt).trim() !== "") {
         out.mvtSentAt = String(raw.mvtSentAt);

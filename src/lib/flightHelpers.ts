@@ -275,7 +275,6 @@ export function canDownloadBriefingPhotoRole(role: UserRole): boolean {
 
 /** Hay foto de briefing operacional adjunta al MVT. */
 export function hasBriefingPhoto(f: Flight): boolean {
-    if (f.mvtData?.briefingOnFile === true) return true;
     return String(f.mvtData?.briefingPhoto ?? "").trim() !== "";
 }
 

@@ -54,7 +54,6 @@ const MVT_DB_KEYS = [
     "mvtSentAt",
     "mvtEditedByHccAt",
     "briefingPhoto",
-    "briefingOnFile",
 ] as const;
 
 /**

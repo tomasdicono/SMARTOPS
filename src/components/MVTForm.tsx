@@ -17,7 +17,6 @@ import { isQrfActive } from "../lib/flightHelpers";
 import { clearMvtDraft, readLegacyMvtDraft } from "../lib/mvtDraftStorage";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 import { downloadBriefingPhoto } from "../lib/downloadHitosSummary";
-import { loadBriefingPhoto } from "../lib/flightsDb";
 
 interface Props {
     flight: Flight;
@@ -173,9 +172,7 @@ const compressImage = (file: File): Promise<string> => {
 
 export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, onSave, onPersistMvt }: Props) {
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
-    const [briefingSrc, setBriefingSrc] = useState("");
     const [isDirty, setIsDirty] = useState(false);
-    const briefingShown = String(data.briefingPhoto ?? "").trim() || briefingSrc;
     const mvtSent = hasMvtSent(flight);
     const qrfActive = isQrfActive(flight);
     const fullEditAfterSent = Boolean(canEditFullMvtAfterSent && (mvtSent || qrfActive));
@@ -207,19 +204,6 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
         setData(normalizeMvtData(flight.mvtData));
     }, [flight.mvtData, canPersist, isDirty, flight.id]);
 
-    useEffect(() => {
-        let cancelled = false;
-        setBriefingSrc("");
-        if (String(flight.mvtData?.briefingPhoto ?? "").trim()) return;
-        if (!flight.mvtData?.briefingOnFile) return;
-        void loadBriefingPhoto(flight.id).then((photo) => {
-            if (!cancelled && photo) setBriefingSrc(photo);
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [flight.id, flight.mvtData?.briefingOnFile, flight.mvtData?.briefingPhoto]);
-
     useDebouncedFlightPersist(data, canPersist ? onPersistMvt : undefined, {
         readOnly: !canPersist,
         flightId: flight.id,
@@ -238,7 +222,6 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
 
     const handleChange = (field: keyof typeof data, value: string) => {
         setIsDirty(true);
-        if (field === "briefingPhoto") setBriefingSrc(value);
         setData((prev) => ({ ...prev, [field]: value }));
     };
 
@@ -264,7 +247,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
     const sendGate = useMemo(
         () =>
             evaluateMvtSendGate({
-                mvt: { ...data, briefingPhoto: briefingShown },
+                mvt: data,
                 std: flight.std,
                 reg: flight.reg,
                 delayOnlyMode: false,
@@ -288,7 +271,6 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
             data.dlyCod2,
             data.dlyTime2,
             data.briefingPhoto,
-            briefingShown,
         ],
     );
     const canSendMvt = sendGate.ok;
@@ -435,10 +417,10 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
                         </label>
                     </div>
 
-                    {briefingShown ? (
+                    {data.briefingPhoto ? (
                         <div className="relative group max-w-sm rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
                             <img
-                                src={briefingShown}
+                                src={data.briefingPhoto}
                                 alt="Briefing Operacional"
                                 className="w-full h-auto max-h-60 object-contain rounded-lg"
                             />
@@ -446,7 +428,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
                                 {userRole && isHccDeskRole(userRole) && (
                                     <button
                                         type="button"
-                                        onClick={() => downloadBriefingPhoto(flight, briefingShown)}
+                                        onClick={() => downloadBriefingPhoto(flight, data.briefingPhoto)}
                                         className="p-2 bg-sky-600 hover:bg-sky-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
                                         title="Descargar imagen del briefing"
                                     >
