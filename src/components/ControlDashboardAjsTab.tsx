@@ -1,14 +1,10 @@
 import { useMemo, useState } from "react";
-import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
-import type { Flight } from "../types";
+import { FlightRangeStatus, useSummaryFlights } from "../lib/flightLoad";
+import { localTodayIso } from "../lib/flightsByDate";
 import { flightDateToIso } from "../lib/controlHelpers";
 import { getAirlinePrefix } from "../lib/flightHelpers";
 import { X, Download } from "lucide-react";
 import { utils, writeFile } from "xlsx";
-
-interface Props {
-    flights: Flight[];
-}
 
 const TARGET_CODES = [
     "2", "3", "6", "11", "12", "14", "15", "18", "19", "31", 
@@ -20,11 +16,13 @@ const MONTH_NAMES = [
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
-export function ControlDashboardAjsTab({ flights }: Props) {
+export function ControlDashboardAjsTab() {
     const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
     const [selectedCell, setSelectedCell] = useState<{ dep: string, year: number, month: number, code: string } | null>(null);
-    useEnsureFlightRange(`${selectedYear}-01-01`, `${selectedYear}-12-31`);
-    useEnsureFlightRange(`${selectedYear - 1}-12-01`, `${selectedYear - 1}-12-31`);
+    const today = localTodayIso();
+    const summaryFrom = `${selectedYear - 1}-12-01`;
+    const summaryTo = `${selectedYear}-12-31` > today ? today : `${selectedYear}-12-31`;
+    const flights = useSummaryFlights(summaryFrom, summaryTo);
 
     // Filter valid flights
     const validFlights = useMemo(() => flights.filter(f => !f.cancelled && f.mvtData), [flights]);
@@ -234,7 +232,11 @@ export function ControlDashboardAjsTab({ flights }: Props) {
     return (
         <div className="animate-in fade-in duration-200">
             <div className="px-5 pt-4">
-                <FlightRangeStatus from={`${selectedYear}-01-01`} to={`${selectedYear}-12-31`} />
+                <FlightRangeStatus
+                    source="summary"
+                    from={`${selectedYear - 1}-12-01`}
+                    to={summaryTo}
+                />
             </div>
             <div className="p-5 space-y-4 bg-slate-50 border-b border-slate-200">
                 <div className="flex items-center justify-between">

@@ -2,6 +2,9 @@ import { ref, set, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
 import { forFirebaseDb } from "./forFirebaseDb";
 import type { Flight } from "../types";
+import { flightDateToIso } from "./controlHelpers";
+import { flightToSummary } from "./flightSummary";
+import { briefingPhotoHash, briefingPhotoRef, saveBriefingPhoto } from "./briefingPhotoStore";
 import { coerceFlightFromDb, isQrfActive, mergeQrfHistory } from "./flightHelpers";
 import {
     mergeHitosDataUnion,
@@ -103,6 +106,65 @@ export function flightDbRef(flightId: string) {
     return ref(db, `flights/${flightId}`);
 }
 
+function summaryRef(iso: string, flightId: string) {
+    return ref(db, `flightSummaries/${iso}/${flightId}`);
+}
+
+/** Saca la foto del objeto que se escribe en `flights/{id}`. */
+export function flightWithoutInlinePhoto(flight: Flight): Flight {
+    const photo = String(flight.mvtData?.briefingPhoto ?? "").trim();
+    if (!photo) return flight;
+    return {
+        ...flight,
+        hasBriefingPhoto: true,
+        mvtData: flight.mvtData ? { ...flight.mvtData, briefingPhoto: "" } : flight.mvtData,
+    };
+}
+
+/**
+ * Deja la fecha ISO y el resumen al día.
+ * `photo` en `"save"` copia la imagen a `briefingPhotos`. `"clear"` la borra.
+ */
+export async function syncFlightReadModel(
+    flight: Flight,
+    photo: "keep" | "save" | "clear" = "keep",
+    photoValue = "",
+    prevIso = "",
+): Promise<void> {
+    const id = String(flight.id ?? "").trim();
+    const iso = flightDateToIso(flight);
+    if (!id || !iso) return;
+
+    let hasPhoto = Boolean(flight.hasBriefingPhoto);
+    let rev = flight.briefingPhotoRev;
+    const inline = photoValue.trim();
+    if (photo === "save" && inline) {
+        const nextRev = briefingPhotoHash(inline);
+        if (nextRev !== rev) await saveBriefingPhoto(id, inline);
+        hasPhoto = true;
+        rev = nextRev;
+    } else if (photo === "clear") {
+        await saveBriefingPhoto(id, "");
+        hasPhoto = false;
+        rev = undefined;
+    }
+
+    const indexed: Flight = {
+        ...flightWithoutInlinePhoto(flight),
+        dateIso: iso,
+        hasBriefingPhoto: hasPhoto || undefined,
+        briefingPhotoRev: rev,
+    };
+    await update(flightDbRef(id), {
+        dateIso: iso,
+        hasBriefingPhoto: hasPhoto ? true : null,
+        briefingPhotoRev: rev ?? null,
+        ...(photo !== "keep" ? { "mvtData/briefingPhoto": null } : {}),
+    });
+    if (prevIso && prevIso !== iso) await remove(summaryRef(prevIso, id));
+    await set(summaryRef(iso, id), forFirebaseDb(flightToSummary(indexed)));
+}
+
 /** Guarda un vuelo en `flights/{id}` fusionando con lo ya en servidor (no borra MVT/Hitos). */
 export async function saveFlight(flight: Flight): Promise<void> {
     const f = coerceFlightFromDb(flight);
@@ -110,14 +172,27 @@ export async function saveFlight(flight: Flight): Promise<void> {
     if (!id) throw new Error("Vuelo sin id");
     const snap = await get(flightDbRef(id));
     const existing = snap.val();
-    if (existing != null && typeof existing === "object") {
-        const existingFlight = coerceFlightFromDb(existing as Flight);
-        /** Unir MVT/Hitos sin perder datos; el guardado entrante gana en campos de programación (reg, ETD, ruta, etc.). */
-        const merged = mergeFlightPatch(mergeFlightRecords(existingFlight, f), f);
-        await set(flightDbRef(id), forFirebaseDb(merged));
-    } else {
-        await set(flightDbRef(id), forFirebaseDb(f));
+    const existingFlight =
+        existing != null && typeof existing === "object" ? coerceFlightFromDb(existing as Flight) : null;
+    const merged = existingFlight ? mergeFlightPatch(mergeFlightRecords(existingFlight, f), f) : f;
+    const inlinePhoto = String(merged.mvtData?.briefingPhoto ?? "").trim();
+    const prevIso = existingFlight ? flightDateToIso(existingFlight) : "";
+    const iso = flightDateToIso(merged);
+    let rev = merged.briefingPhotoRev;
+    let hasPhoto = Boolean(inlinePhoto || merged.hasBriefingPhoto);
+    if (inlinePhoto) {
+        rev = briefingPhotoHash(inlinePhoto);
+        if (rev !== merged.briefingPhotoRev) await saveBriefingPhoto(id, inlinePhoto);
+        hasPhoto = true;
     }
+    const toStore = flightWithoutInlinePhoto({
+        ...merged,
+        dateIso: iso || undefined,
+        hasBriefingPhoto: hasPhoto || undefined,
+        briefingPhotoRev: rev,
+    });
+    await set(flightDbRef(id), forFirebaseDb(toStore));
+    await syncFlightReadModel(toStore, "keep", "", prevIso);
 }
 
 /**
@@ -135,10 +210,65 @@ export async function updateFlight(flightId: string, patch: Partial<Flight>): Pr
             : null;
 
     const updates = buildFlightRtdbUpdate(patch, existing);
+    const prevIso = existing ? flightDateToIso(existing) : "";
+    const merged = existing ? mergeFlightPatch(existing, patch) : coerceFlightFromDb(patch as Flight);
+    const iso = flightDateToIso(merged);
+    if (iso) updates.dateIso = iso;
+
+    const incomingPhoto =
+        patch.mvtData && Object.prototype.hasOwnProperty.call(patch.mvtData, "briefingPhoto")
+            ? String(patch.mvtData.briefingPhoto ?? "").trim()
+            : undefined;
+    if (incomingPhoto) {
+        const nextRev = briefingPhotoHash(incomingPhoto);
+        if (nextRev !== existing?.briefingPhotoRev) {
+            try {
+                await saveBriefingPhoto(id, incomingPhoto);
+                updates.briefingPhotoRev = nextRev;
+                updates.hasBriefingPhoto = true;
+                updates["mvtData/briefingPhoto"] = null;
+                merged.hasBriefingPhoto = true;
+                merged.briefingPhotoRev = nextRev;
+            } catch (err) {
+                console.error("No se pudo guardar la foto del briefing aparte", err);
+            }
+        } else {
+            updates.hasBriefingPhoto = true;
+            updates["mvtData/briefingPhoto"] = null;
+            merged.hasBriefingPhoto = true;
+            merged.briefingPhotoRev = nextRev;
+        }
+    } else if (incomingPhoto === "") {
+        try {
+            await saveBriefingPhoto(id, "");
+            updates.hasBriefingPhoto = null;
+            updates.briefingPhotoRev = null;
+            updates["mvtData/briefingPhoto"] = null;
+            merged.hasBriefingPhoto = undefined;
+            merged.briefingPhotoRev = undefined;
+        } catch (err) {
+            console.error("No se pudo quitar la foto del briefing", err);
+        }
+    }
+
     console.log("flightsDb.ts updateFlight updates=", updates);
     if (Object.keys(updates).length === 0) return;
 
     await update(flightDbRef(id), updates);
+    if (iso) {
+        if (prevIso && prevIso !== iso) {
+            try {
+                await remove(summaryRef(prevIso, id));
+            } catch (err) {
+                console.error("No se pudo mover el resumen de fecha", err);
+            }
+        }
+        try {
+            await set(summaryRef(iso, id), forFirebaseDb(flightToSummary({ ...merged, dateIso: iso })));
+        } catch (err) {
+            console.error("No se pudo actualizar el resumen del vuelo", err);
+        }
+    }
 }
 
 export async function saveFlightsBatch(flights: Flight[]): Promise<void> {
@@ -147,7 +277,19 @@ export async function saveFlightsBatch(flights: Flight[]): Promise<void> {
 
 export async function removeFlightsByIds(ids: string[]): Promise<void> {
     const unique = [...new Set(ids.map((id) => String(id).trim()).filter(Boolean))];
-    await Promise.all(unique.map((id) => remove(flightDbRef(id))));
+    await Promise.all(
+        unique.map(async (id) => {
+            const snap = await get(flightDbRef(id));
+            const raw = snap.val();
+            const iso =
+                raw && typeof raw === "object"
+                    ? String((raw as Flight).dateIso ?? "") || flightDateToIso(coerceFlightFromDb(raw as Flight))
+                    : "";
+            await remove(flightDbRef(id));
+            await remove(briefingPhotoRef(id));
+            if (iso) await remove(summaryRef(iso, id));
+        }),
+    );
 }
 
 /**

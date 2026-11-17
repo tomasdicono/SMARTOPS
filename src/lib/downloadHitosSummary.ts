@@ -3,6 +3,7 @@ import { GANTT_CHARTS } from "./hitosData";
 import { getMvtPaxOnly, gpuUsageDurationMinutesFromFlight } from "./controlHelpers";
 import { getAircraftInfo } from "./fleetData";
 import { normalizeHitosData } from "./flightDataNormalize";
+import { fetchBriefingPhoto } from "./briefingPhotoStore";
 import { formatMinutesToHHMM, parseTimeToMinutes } from "./mvtTime";
 import {
     parseToMins,
@@ -609,8 +610,13 @@ function safeFilePart(s: string): string {
     return s.replace(/[^\w.-]+/g, "_").slice(0, 40) || "vuelo";
 }
 
-export function downloadHitosSummary(flight: Flight): void {
-    const html = buildHitosSummaryHtml(flight);
+export async function downloadHitosSummary(flight: Flight): Promise<void> {
+    let photo = String(flight.mvtData?.briefingPhoto ?? "").trim();
+    if (!photo && flight.hasBriefingPhoto) photo = await fetchBriefingPhoto(flight.id);
+    const withPhoto: Flight = photo
+        ? { ...flight, mvtData: { ...(flight.mvtData ?? { atd: "", off: "", eta: "", dlyCod1: "", dlyTime1: "", dlyCod2: "", dlyTime2: "", observaciones: "", paxActual: "", inf: "", totalBags: "", totalCarga: "", load: "", fob: "", ssee: [], infoSup: "", supervisor: "" }), briefingPhoto: photo } }
+        : flight;
+    const html = buildHitosSummaryHtml(withPhoto);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -625,11 +631,12 @@ export function downloadHitosSummary(flight: Flight): void {
 }
 
 /** Descarga la foto del briefing operacional (código 66) adjunta al MVT. */
-export function downloadBriefingPhoto(
+export async function downloadBriefingPhoto(
     flight: Flight,
     photoOverride?: string | null,
-): void {
-    const photo = String(photoOverride ?? flight.mvtData?.briefingPhoto ?? "").trim();
+): Promise<void> {
+    let photo = String(photoOverride ?? flight.mvtData?.briefingPhoto ?? "").trim();
+    if (!photo && flight.hasBriefingPhoto) photo = await fetchBriefingPhoto(flight.id);
     if (!photo) return;
 
     let href = photo;

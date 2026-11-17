@@ -76,7 +76,7 @@ import {
 } from "./lib/flightsDb";
 import {
   eachIsoInRange,
-  fetchFlightsForIso,
+  clampIsoRangeToToday,
   flightsOnDateQuery,
   isIsoDate,
   isoToStoredFlightDate,
@@ -85,6 +85,15 @@ import {
   setDayFlights,
 } from "./lib/flightsByDate";
 import { FlightLoadProvider, type FlightLoadApi } from "./lib/flightLoad";
+import {
+  fetchSummaryFlights,
+  ensureLightDays,
+  loadOperationalDays,
+  subscribeLightPrep,
+  touchFlightLight,
+  type LightPrep,
+} from "./lib/flightLight";
+import { flightToSummary, summaryToFlight } from "./lib/flightSummary";
 import { loadUserProfile } from "./lib/loadUserProfile";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Login } from "./components/Login";
@@ -156,6 +165,13 @@ function App() {
   const [flightsByIso, setFlightsByIso] = useState<Record<string, Flight[]>>({});
   const flightsByIsoRef = useRef(flightsByIso);
   flightsByIsoRef.current = flightsByIso;
+  const [summaryByIso, setSummaryByIso] = useState<Record<string, Flight[]>>({});
+  const summaryByIsoRef = useRef(summaryByIso);
+  summaryByIsoRef.current = summaryByIso;
+  const loadedSummaryRef = useRef(new Set<string>());
+  const summaryInflightRef = useRef(new Set<string>());
+  const [loadedSummaryIsos, setLoadedSummaryIsos] = useState<string[]>([]);
+  const [lightPrep, setLightPrep] = useState<LightPrep | null>(null);
   const [failedFlightIsos, setFailedFlightIsos] = useState<string[]>([]);
   const failedFlightIsosRef = useRef(new Set<string>());
   const inflightIsosRef = useRef(new Set<string>());
@@ -380,47 +396,44 @@ function App() {
   const liveFlightKey = liveFlightIsos.join("|");
 
   const loadFlightIsos = useCallback(async (isos: string[]) => {
-    const unique = [...new Set(isos)].filter(isIsoDate);
+    const { lo, hi } = clampIsoRangeToToday(
+      [...isos].sort()[0] ?? "",
+      [...isos].sort().at(-1) ?? "",
+    );
+    const unique = [...new Set(isos)].filter((iso) => isIsoDate(iso) && lo && hi && iso >= lo && iso <= hi);
     const missing = unique.filter(
       (iso) => !(iso in flightsByIsoRef.current) && !inflightIsosRef.current.has(iso),
     );
+    if (missing.length === 0) return;
     for (const iso of missing) inflightIsosRef.current.add(iso);
     try {
-      for (let i = 0; i < missing.length; i += 12) {
-        const chunk = missing.slice(i, i + 12);
-        const pairs = await Promise.all(
-          chunk.map(async (iso) => {
-            try {
-              return { iso, list: await fetchFlightsForIso(iso), ok: true as const };
-            } catch (e) {
-              console.error("Error al cargar vuelos del día", iso, e);
-              return { iso, list: [] as Flight[], ok: false as const };
-            }
-          }),
-        );
-        const failed = pairs.filter((p) => !p.ok).map((p) => p.iso);
-        if (failed.length > 0) {
-          for (const iso of failed) failedFlightIsosRef.current.add(iso);
-          setFailedFlightIsos([...failedFlightIsosRef.current]);
-        }
-        const okPairs = pairs.filter((p) => p.ok);
-        if (okPairs.length > 0) {
-          let clearedFailure = false;
-          for (const { iso } of okPairs) {
-            if (failedFlightIsosRef.current.delete(iso)) clearedFailure = true;
-          }
-          if (clearedFailure) setFailedFlightIsos([...failedFlightIsosRef.current]);
-          setFlightsByIso((prev) => {
-            let next = prev;
-            for (const { iso, list } of okPairs) {
-              if (iso in next) continue;
-              next = setDayFlights(next, iso, list);
-            }
-            flightsByIsoRef.current = next;
-            return next === prev ? prev : next;
-          });
-        }
+      const grouped = await loadOperationalDays(missing);
+      const failed = missing.filter((iso) => !(iso in grouped));
+      if (failed.length > 0) {
+        for (const iso of failed) failedFlightIsosRef.current.add(iso);
+        setFailedFlightIsos([...failedFlightIsosRef.current]);
       }
+      const okIsos = missing.filter((iso) => iso in grouped);
+      if (okIsos.length > 0) {
+        let clearedFailure = false;
+        for (const iso of okIsos) {
+          if (failedFlightIsosRef.current.delete(iso)) clearedFailure = true;
+        }
+        if (clearedFailure) setFailedFlightIsos([...failedFlightIsosRef.current]);
+        setFlightsByIso((prev) => {
+          let next = prev;
+          for (const iso of okIsos) {
+            if (iso in next) continue;
+            next = setDayFlights(next, iso, grouped[iso] ?? []);
+          }
+          flightsByIsoRef.current = next;
+          return next === prev ? prev : next;
+        });
+      }
+    } catch (err) {
+      console.error("No se pudo cargar el período", err);
+      for (const iso of missing) failedFlightIsosRef.current.add(iso);
+      setFailedFlightIsos([...failedFlightIsosRef.current]);
     } finally {
       for (const iso of missing) inflightIsosRef.current.delete(iso);
     }
@@ -454,11 +467,76 @@ function App() {
     [clearFailedIsos, loadFlightIsos],
   );
 
+  const rememberSummaryDay = useCallback((iso: string, list: Flight[]) => {
+    loadedSummaryRef.current.add(iso);
+    setSummaryByIso((prev) => {
+      const next = { ...prev, [iso]: list };
+      summaryByIsoRef.current = next;
+      return next;
+    });
+    setLoadedSummaryIsos([...loadedSummaryRef.current]);
+  }, []);
+
+  const ensureSummaryRange = useCallback(
+    (fromIso: string, toIso: string) => {
+      const { lo, hi } = clampIsoRangeToToday(fromIso, toIso);
+      if (!lo || !hi) return;
+      const days = eachIsoInRange(lo, hi).filter(
+        (iso) => !loadedSummaryRef.current.has(iso) && !summaryInflightRef.current.has(iso),
+      );
+      if (days.length === 0) return;
+      for (const iso of days) summaryInflightRef.current.add(iso);
+      clearFailedIsos(days);
+      void (async () => {
+        try {
+          const existing = await fetchSummaryFlights(lo, hi);
+          if (Object.keys(existing).length > 0) {
+            setSummaryByIso((prev) => {
+              const next = { ...prev };
+              for (const [iso, list] of Object.entries(existing)) {
+                if (!loadedSummaryRef.current.has(iso)) next[iso] = list;
+              }
+              summaryByIsoRef.current = next;
+              return next;
+            });
+          }
+          const { ready, failed } = await ensureLightDays(days, (iso, flights) => {
+            rememberSummaryDay(
+              iso,
+              flights.map((flight) => summaryToFlight(flightToSummary(flight))),
+            );
+          });
+          if (failed.length > 0) {
+            for (const iso of failed) failedFlightIsosRef.current.add(iso);
+            setFailedFlightIsos([...failedFlightIsosRef.current]);
+          }
+          const failedSet = new Set(failed);
+          const fresh = await fetchSummaryFlights(lo, hi);
+          for (const iso of days) {
+            if (failedSet.has(iso) || ready.has(iso) || loadedSummaryRef.current.has(iso)) continue;
+            rememberSummaryDay(iso, fresh[iso] ?? []);
+          }
+        } catch (err) {
+          console.error("No se pudo cargar el resumen del período", err);
+        } finally {
+          for (const iso of days) summaryInflightRef.current.delete(iso);
+        }
+      })();
+    },
+    [clearFailedIsos, rememberSummaryDay],
+  );
+
+  useEffect(() => subscribeLightPrep(setLightPrep), []);
+
   // Día visible en vivo. Otros días se piden al abrir un período (informes, pernocte, etc.).
   useEffect(() => {
     if (!currentUser) {
       setFlightsByIso({});
       flightsByIsoRef.current = {};
+      setSummaryByIso({});
+      summaryByIsoRef.current = {};
+      loadedSummaryRef.current.clear();
+      setLoadedSummaryIsos([]);
       failedFlightIsosRef.current.clear();
       setFailedFlightIsos([]);
       setRouteRangeIsos([]);
@@ -471,7 +549,11 @@ function App() {
         flightsOnDateQuery(stored),
         (snapshot) => {
           setFlightsByIso((prev) => {
-            const next = setDayFlights(prev, iso, parseFlightsSnapshot(snapshot.val()));
+            const next = setDayFlights(
+              prev,
+              iso,
+              parseFlightsSnapshot(snapshot.val()).map(touchFlightLight),
+            );
             flightsByIsoRef.current = next;
             return next;
           });
@@ -737,6 +819,11 @@ function App() {
     const existingFlight = flights.find((x) => x.id === id);
     const prevMvt = normalizeMvtData(existingFlight?.mvtData);
     let payload = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
+    if (mvtData && Object.prototype.hasOwnProperty.call(mvtData, "briefingPhoto")) {
+      payload.briefingPhoto = mvtData.briefingPhoto ?? "";
+    } else {
+      delete payload.briefingPhoto;
+    }
     payload = sanitizeMvtDelaysIfOnTime(payload, existingFlight?.std ?? "");
     const alreadySent = prevMvt.mvtSentAt != null && String(prevMvt.mvtSentAt).trim() !== "";
     const qrfResubmit = existingFlight?.qrfActive && canSubmitMvtAfterQrf(userRole);
@@ -770,10 +857,13 @@ function App() {
       return;
     }
 
-    let payload = sanitizeMvtDelaysIfOnTime(
-      mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData)),
-      existingFlight?.std ?? "",
-    );
+    let payload = mergeMvtDataForPersist(prevMvt, normalizeMvtData(mvtData));
+    if (mvtData && Object.prototype.hasOwnProperty.call(mvtData, "briefingPhoto")) {
+      payload.briefingPhoto = mvtData.briefingPhoto ?? "";
+    } else {
+      delete payload.briefingPhoto;
+    }
+    payload = sanitizeMvtDelaysIfOnTime(payload, existingFlight?.std ?? "");
 
     if (qrfResubmit) {
       const sendGate = evaluateMvtSendGate({
@@ -1350,6 +1440,7 @@ function App() {
   };
 
   const loadedFlightIsos = useMemo(() => new Set(Object.keys(flightsByIso)), [flightsByIso]);
+  const loadedSummaryIsoSet = useMemo(() => new Set(loadedSummaryIsos), [loadedSummaryIsos]);
   const failedFlightIsoSet = useMemo(() => new Set(failedFlightIsos), [failedFlightIsos]);
   const flightLoadApi = useMemo<FlightLoadApi>(
     () => ({
@@ -1357,8 +1448,21 @@ function App() {
       failedFlightIsos: failedFlightIsoSet,
       ensureFlightRange,
       ensureFlightIsos,
+      summaryByIso,
+      loadedSummaryIsos: loadedSummaryIsoSet,
+      lightPrep,
+      ensureSummaryRange,
     }),
-    [loadedFlightIsos, failedFlightIsoSet, ensureFlightRange, ensureFlightIsos],
+    [
+      loadedFlightIsos,
+      failedFlightIsoSet,
+      ensureFlightRange,
+      ensureFlightIsos,
+      summaryByIso,
+      loadedSummaryIsoSet,
+      lightPrep,
+      ensureSummaryRange,
+    ],
   );
 
   if (loadingAuth) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
+import { FlightRangeStatus, useSummaryFlights } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import {
     computeUsageControlByBase,
@@ -53,7 +53,6 @@ function UsageTableRow({ row, isTotal }: { row: UsageControlBaseRow; isTotal?: b
 }
 
 export function ControlUsageTab({
-    flights,
     selectedDate,
     selectedAirports,
     onAirportsChange,
@@ -71,23 +70,23 @@ export function ControlUsageTab({
         return { dateFrom: lo, dateTo: hi };
     }, [usageDateFrom, usageDateTo]);
 
-    useEnsureFlightRange(dateFrom, dateTo);
+    const periodFlights = useSummaryFlights(dateFrom, dateTo);
 
     const airportFilter: StatsAirportFilter = selectedAirports;
 
     const usageAirportOptions = useMemo(() => {
         if (!dateFrom || !dateTo) return airportOptions;
-        const inRange = flights.filter((f) => {
+        const inRange = periodFlights.filter((f) => {
             const iso = flightDateToIso(f);
             return iso >= dateFrom && iso <= dateTo;
         });
         const fromRange = uniqueAirportsFromFlights(inRange);
         return fromRange.length > 0 ? fromRange : airportOptions;
-    }, [flights, dateFrom, dateTo, airportOptions]);
+    }, [periodFlights, dateFrom, dateTo, airportOptions]);
 
     const usageData = useMemo(
-        () => computeUsageControlByBase(flights, dateFrom, dateTo, airportFilter, usageAirportOptions),
-        [flights, dateFrom, dateTo, airportFilter, selectedAirports, usageAirportOptions],
+        () => computeUsageControlByBase(periodFlights, dateFrom, dateTo, airportFilter, usageAirportOptions),
+        [periodFlights, dateFrom, dateTo, airportFilter, selectedAirports, usageAirportOptions],
     );
 
     const periodLabel = useMemo(() => {
@@ -104,7 +103,7 @@ export function ControlUsageTab({
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-5">
-                <FlightRangeStatus from={dateFrom} to={dateTo} />
+                <FlightRangeStatus source="summary" from={dateFrom} to={dateTo} />
                 <div className="flex flex-wrap items-end gap-3 pb-1">
                     <div className="shrink-0">
                         <label className="block text-xs font-black uppercase text-slate-500 mb-1">Desde</label>

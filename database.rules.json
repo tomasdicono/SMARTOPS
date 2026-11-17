@@ -10,7 +10,7 @@
     "flights": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["date"],
+      ".indexOn": ["date", "dateIso"],
       "$flightId": {
         ".read": "auth != null",
         ".write": "auth != null"
@@ -41,6 +41,18 @@
       ".write": "auth != null"
     },
     "historialEquipos": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "briefingPhotos": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "flightSummaries": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "flightLightDays": {
       ".read": "auth != null",
       ".write": "auth != null"
     },

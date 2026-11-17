@@ -126,7 +126,11 @@ export function ControlView({
         setStatsDateTo(selectedDate);
     }, [selectedDate]);
 
-    useEnsureFlightRange(statsDateFrom, statsDateTo, true);
+    useEnsureFlightRange(
+        subTab === "stats" ? statsDateFrom : selectedDate,
+        subTab === "stats" ? statsDateTo : selectedDate,
+        subTab === "stats",
+    );
 
     useEffect(() => {
         if (!SHOW_TIMELINE_TAB && subTab === "timeline") {
@@ -512,7 +516,7 @@ export function ControlView({
                 )}
 
                 {subTab === "dashboard" && (
-                    <ControlDashboardAjsTab flights={flights} />
+                    <ControlDashboardAjsTab />
                 )}
 
                 {subTab === "limpieza" && (

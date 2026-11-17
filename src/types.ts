@@ -95,6 +95,12 @@ export interface HitosData {
 export interface Flight {
     id: string;
     date: string;
+    /** YYYY-MM-DD. Permite pedir un período en una sola lectura. */
+    dateIso?: string;
+    /** La imagen vive en `briefingPhotos/{id}`, no dentro del vuelo. */
+    hasBriefingPhoto?: boolean;
+    /** Huella de la foto ya guardada, para no re-subirla en cada auto-guardado. */
+    briefingPhotoRev?: string;
     route: string;
     flt: string;
     reg: string;

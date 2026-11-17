@@ -146,15 +146,16 @@ export function applyMvtDelayPatch(
     existing: NonNullable<Flight["mvtData"]>,
     patch: NonNullable<Flight["mvtData"]>,
 ): NonNullable<Flight["mvtData"]> {
-    return {
+    const out: NonNullable<Flight["mvtData"]> = {
         ...existing,
         dlyCod1: patch.dlyCod1,
         dlyTime1: patch.dlyTime1,
         dlyCod2: patch.dlyCod2,
         dlyTime2: patch.dlyTime2,
         observaciones: patch.observaciones,
-        briefingPhoto: patch.briefingPhoto,
     };
+    if (patch.briefingPhoto?.trim()) out.briefingPhoto = patch.briefingPhoto;
+    return out;
 }
 
 export function emptyHitosData(): HitosData {

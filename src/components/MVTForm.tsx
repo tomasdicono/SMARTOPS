@@ -17,6 +17,7 @@ import { isQrfActive } from "../lib/flightHelpers";
 import { clearMvtDraft, readLegacyMvtDraft } from "../lib/mvtDraftStorage";
 import { useDebouncedFlightPersist } from "../lib/useDebouncedFlightPersist";
 import { downloadBriefingPhoto } from "../lib/downloadHitosSummary";
+import { fetchBriefingPhoto } from "../lib/briefingPhotoStore";
 
 interface Props {
     flight: Flight;
@@ -173,6 +174,7 @@ const compressImage = (file: File): Promise<string> => {
 export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, onSave, onPersistMvt }: Props) {
     const [data, setData] = useState<NonNullable<Flight["mvtData"]>>(() => normalizeMvtData(flight.mvtData));
     const [isDirty, setIsDirty] = useState(false);
+    const [photoReady, setPhotoReady] = useState(false);
     const mvtSent = hasMvtSent(flight);
     const qrfActive = isQrfActive(flight);
     const fullEditAfterSent = Boolean(canEditFullMvtAfterSent && (mvtSent || qrfActive));
@@ -182,6 +184,24 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
     useEffect(() => {
         onPersistRef.current = onPersistMvt;
     });
+
+    useEffect(() => {
+        let cancel = false;
+        setPhotoReady(false);
+        const inline = String(flight.mvtData?.briefingPhoto ?? "").trim();
+        if (inline || !flight.hasBriefingPhoto) {
+            setPhotoReady(true);
+            return;
+        }
+        void fetchBriefingPhoto(flight.id).then((photo) => {
+            if (cancel) return;
+            if (photo) setData((prev) => ({ ...prev, briefingPhoto: photo }));
+            setPhotoReady(true);
+        });
+        return () => {
+            cancel = true;
+        };
+    }, [flight.id, flight.hasBriefingPhoto, flight.mvtData?.briefingPhoto]);
 
     useEffect(() => {
         setIsDirty(false);
@@ -201,10 +221,33 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
     /** MVT enviado, solo lectura, o formulario no modificado aún: reflejar Firebase sin resetear a vacío al abrir la tarjeta. */
     useEffect(() => {
         if (canPersist && isDirty) return;
-        setData(normalizeMvtData(flight.mvtData));
+        setData((prev) => {
+            const next = normalizeMvtData(flight.mvtData);
+            if (!next.briefingPhoto?.trim() && prev.briefingPhoto?.trim()) {
+                next.briefingPhoto = prev.briefingPhoto;
+            }
+            return next;
+        });
     }, [flight.mvtData, canPersist, isDirty, flight.id]);
 
-    useDebouncedFlightPersist(data, canPersist ? onPersistMvt : undefined, {
+    const photoClearedRef = useRef(false);
+    useEffect(() => {
+        photoClearedRef.current = false;
+    }, [flight.id]);
+
+    const mvtForServer = (payload: NonNullable<Flight["mvtData"]>): NonNullable<Flight["mvtData"]> => {
+        if (!photoClearedRef.current && !String(payload.briefingPhoto ?? "").trim()) {
+            const next = { ...payload };
+            delete next.briefingPhoto;
+            return next;
+        }
+        return payload;
+    };
+
+    useDebouncedFlightPersist(
+        data,
+        canPersist && photoReady ? (payload) => onPersistMvt?.(mvtForServer(payload)) : undefined,
+        {
         readOnly: !canPersist,
         flightId: flight.id,
     });
@@ -311,7 +354,7 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
             window.alert(sendBlockMessage ?? "Revisá los datos del MVT antes de enviar.");
             return;
         }
-        onSave(data);
+        onSave(mvtForServer(data));
         clearMvtDraft(flight.id);
     };
 
@@ -438,7 +481,10 @@ export function MVTForm({ flight, readOnly, canEditFullMvtAfterSent, userRole, o
                                 {!fieldDisabled(true) && (
                                     <button
                                         type="button"
-                                        onClick={() => handleChange("briefingPhoto", "")}
+                                        onClick={() => {
+                                            photoClearedRef.current = true;
+                                            handleChange("briefingPhoto", "");
+                                        }}
                                         className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow-md flex items-center justify-center cursor-pointer"
                                         title="Eliminar foto"
                                     >

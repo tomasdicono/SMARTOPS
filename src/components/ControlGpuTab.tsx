@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
+import { FlightRangeStatus, useSummaryFlights } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import { getAirlinePrefix } from "../lib/flightHelpers";
 import {
@@ -95,7 +95,6 @@ function GpuFlightTable({
 }
 
 export function ControlGpuTab({
-    flights,
     selectedDate,
     selectedAirports,
     onAirportsChange,
@@ -115,24 +114,24 @@ export function ControlGpuTab({
         return { dateFrom: lo, dateTo: hi };
     }, [gpuDateFrom, gpuDateTo]);
 
-    useEnsureFlightRange(dateFrom, dateTo);
+    const periodFlights = useSummaryFlights(dateFrom, dateTo);
 
     const airportFilter: StatsAirportFilter = selectedAirports;
 
     const gpuAirportOptions = useMemo(() => {
         if (!dateFrom || !dateTo) return airportOptions;
-        const inRange = flights.filter((f) => {
+        const inRange = periodFlights.filter((f) => {
             const iso = flightDateToIso(f);
             return iso >= dateFrom && iso <= dateTo;
         });
         const fromRange = uniqueAirportsFromFlights(inRange);
         return fromRange.length > 0 ? fromRange : airportOptions;
-    }, [flights, dateFrom, dateTo, airportOptions]);
+    }, [periodFlights, dateFrom, dateTo, airportOptions]);
 
     const gpuFlights = useMemo(() => {
-        const inRange = filterFlightsForStats(flights, dateFrom, dateTo, airportFilter);
+        const inRange = filterFlightsForStats(periodFlights, dateFrom, dateTo, airportFilter);
         return inRange.filter((f) => !f.cancelled);
-    }, [flights, dateFrom, dateTo, airportFilter, selectedAirports]);
+    }, [periodFlights, dateFrom, dateTo, airportFilter, selectedAirports]);
 
     const avgGpu = useMemo(() => computeAverageGpuUsageMinutes(gpuFlights), [gpuFlights]);
     const avgGpuWait = useMemo(() => computeAverageGpuConnectionWaitMinutes(gpuFlights), [gpuFlights]);
@@ -158,7 +157,7 @@ export function ControlGpuTab({
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-6">
-                <FlightRangeStatus from={dateFrom} to={dateTo} />
+                <FlightRangeStatus source="summary" from={dateFrom} to={dateTo} />
                 <div className="flex flex-wrap items-end gap-3 pb-1">
                     <div className="shrink-0">
                         <label className="block text-xs font-black uppercase text-slate-500 mb-1">Desde</label>

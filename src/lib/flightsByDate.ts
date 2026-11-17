@@ -1,6 +1,6 @@
-import { get, query, ref, orderByChild, equalTo } from "firebase/database";
+import { get, query, ref, orderByChild, equalTo, startAt, endAt } from "firebase/database";
 import { db } from "./firebase";
-import { parseFlightsSnapshot } from "./flightsDb";
+import { parseFlightsSnapshot, flightWithoutInlinePhoto } from "./flightsDb";
 import { addDaysIso, countDaysInclusiveIso, flightDateToIso, normalizeIsoDateRange } from "./controlHelpers";
 import type { Flight } from "../types";
 
@@ -38,11 +38,35 @@ export function flightsOnDateQuery(storedDate: string) {
     return query(ref(db, "flights"), orderByChild("date"), equalTo(storedDate));
 }
 
+export function localTodayIso(): string {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Recorta el extremo futuro: no hay vuelos después de hoy. */
+export function clampIsoRangeToToday(from: string, to: string): { lo: string; hi: string } {
+    const { lo, hi } = normalizeIsoDateRange(from, to);
+    if (!lo || !hi || !isIsoDate(lo) || !isIsoDate(hi)) return { lo: "", hi: "" };
+    const today = localTodayIso();
+    if (lo > today) return { lo: "", hi: "" };
+    return { lo, hi: hi > today ? today : hi };
+}
+
 export async function fetchFlightsForIso(iso: string): Promise<Flight[]> {
     const stored = isoToStoredFlightDate(iso);
     if (!stored) return [];
     const snap = await get(flightsOnDateQuery(stored));
     return parseFlightsSnapshot(snap.val());
+}
+
+/** Un período completo, para vuelos que ya tienen `dateIso`. */
+export async function fetchFlightsByDateIso(from: string, to: string): Promise<Flight[]> {
+    const q = query(ref(db, "flights"), orderByChild("dateIso"), startAt(from), endAt(to));
+    const snap = await get(q);
+    return parseFlightsSnapshot(snap.val()).map(flightWithoutInlinePhoto);
 }
 
 /** Reemplaza los vuelos de un día y saca esos ids de otros días en caché. */

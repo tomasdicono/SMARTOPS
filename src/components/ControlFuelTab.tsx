@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlightRangeStatus, useEnsureFlightRange } from "../lib/flightLoad";
+import { FlightRangeStatus, useSummaryFlights } from "../lib/flightLoad";
 import type { Flight } from "../types";
 import {
     addDaysIso,
@@ -53,7 +53,7 @@ interface Props {
     airportOptions: string[];
 }
 
-export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirportsChange, airportOptions }: Props) {
+export function ControlFuelTab({ selectedDate, selectedAirports, onAirportsChange, airportOptions }: Props) {
     const [fuelDateFrom, setFuelDateFrom] = useState(selectedDate);
     const [fuelDateTo, setFuelDateTo] = useState(selectedDate);
     const [fuelRangePreset, setFuelRangePreset] = useState<FuelRangePreset>("day");
@@ -63,7 +63,7 @@ export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirp
         setFuelRangePreset("day");
     }, [selectedDate]);
 
-    useEnsureFlightRange(fuelDateFrom, fuelDateTo);
+    const periodFlights = useSummaryFlights(fuelDateFrom, fuelDateTo);
 
     const applyFuelRangePreset = (preset: Exclude<FuelRangePreset, null>) => {
         const anchor = selectedDate;
@@ -85,9 +85,9 @@ export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirp
     };
 
     const fuelScopeFlights = useMemo(() => {
-        const inRange = filterFlightsForStats(flights, fuelDateFrom, fuelDateTo, selectedAirports);
+        const inRange = filterFlightsForStats(periodFlights, fuelDateFrom, fuelDateTo, selectedAirports);
         return inRange.filter((f) => !f.cancelled);
-    }, [flights, fuelDateFrom, fuelDateTo, selectedAirports]);
+    }, [periodFlights, fuelDateFrom, fuelDateTo, selectedAirports]);
 
     const fuelByDestination = useMemo(
         () => computeAverageFobByDestination(fuelScopeFlights),
@@ -140,7 +140,7 @@ export function ControlFuelTab({ flights, selectedDate, selectedAirports, onAirp
     return (
         <div className="animate-in fade-in duration-200">
             <div className="p-5 space-y-5">
-                <FlightRangeStatus from={fuelDateFrom} to={fuelDateTo} />
+                <FlightRangeStatus source="summary" from={fuelDateFrom} to={fuelDateTo} />
                 <div className="flex flex-wrap gap-2">
                     {(
                         [
